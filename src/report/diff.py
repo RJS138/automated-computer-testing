@@ -76,13 +76,13 @@ def _diff_results(before: dict, after: dict) -> list[dict]:
     return rows
 
 
-def generate_comparison(report_dir: Path, job: JobInfo) -> str | None:
+def generate_comparison(job_dir: Path, job: JobInfo) -> str | None:
     """
-    Read before.html and after.html from report_dir, generate comparison HTML.
+    Read before/before.html and after/after.html from job_dir, generate comparison HTML.
     Returns the HTML string, or None if either file is missing.
     """
-    before_path = report_dir / "before.html"
-    after_path = report_dir / "after.html"
+    before_path = job_dir / "before" / "before.html"
+    after_path = job_dir / "after" / "after.html"
 
     if not before_path.exists() or not after_path.exists():
         return None

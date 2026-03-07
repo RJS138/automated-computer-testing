@@ -26,7 +26,7 @@ class JobInfo:
     created_at: datetime = field(default_factory=datetime.now)
 
     def folder_name(self) -> str:
-        date_str = self.created_at.strftime("%Y%m%d_%H%M%S")
+        """Stable folder name for this job: CustomerName_WO#."""
         safe_customer = "".join(
             c if c.isalnum() or c in ("-", "_") else "_"
             for c in self.customer_name
@@ -35,7 +35,7 @@ class JobInfo:
             c if c.isalnum() or c in ("-", "_") else "_"
             for c in self.job_number
         )
-        return f"{safe_customer}_{safe_job}_{date_str}"
+        return f"{safe_customer}_{safe_job}"
 
     def display_name(self) -> str:
         return f"{self.customer_name} — {self.device_description} (Job #{self.job_number})"

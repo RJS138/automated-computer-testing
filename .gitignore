@@ -222,3 +222,4 @@ __marimo__/
 .Python
 env/
 .DS_Store
+reports/

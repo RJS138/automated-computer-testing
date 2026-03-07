@@ -73,17 +73,24 @@ def _find_usb_darwin() -> Path | None:
     return None
 
 
-def get_report_dir(job: JobInfo) -> Path:
+def get_job_dir(job: JobInfo) -> Path:
     """
-    Determine the output directory for this job's reports.
+    Return the top-level job folder: .../reports/{CustomerName_WO#}/
 
-    Priority:
-      1. USB drive /reports/{folder_name}/
-      2. Executable directory /reports/{folder_name}/
+    This is the stable per-job root that holds before/, after/, and comparison files.
     """
     usb = find_usb_drive()
     base = usb if usb else get_exe_dir()
     return base / REPORTS_DIR_NAME / job.folder_name()
+
+
+def get_report_dir(job: JobInfo) -> Path:
+    """
+    Return the type-specific subfolder for the current report:
+      .../reports/{CustomerName_WO#}/before/   or
+      .../reports/{CustomerName_WO#}/after/
+    """
+    return get_job_dir(job) / job.report_type.value
 
 
 def ensure_usb_marker(usb_path: Path) -> None:

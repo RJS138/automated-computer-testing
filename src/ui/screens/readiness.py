@@ -236,62 +236,29 @@ class MacOSTempCheck(BaseCheck):
 
 
 @register
-class MacOSPDFCheck(BaseCheck):
-    """Checks whether pango (required by WeasyPrint for PDF) is available on macOS."""
+class ReportLabCheck(BaseCheck):
+    """Checks whether reportlab is installed and can generate PDFs."""
 
     key = "pdf"
-    label = "PDF Generation (pango)"
-    description = "Enables PDF reports. Without pango, only HTML reports are saved."
-    platforms = ("Darwin",)
+    label = "PDF Generation (reportlab)"
+    description = "Enables PDF reports alongside HTML. Pure-Python, no system libraries required."
+    platforms = ()  # all platforms
     optional = True
 
     def run(self) -> CheckResult:
-        import ctypes
-
         try:
-            ctypes.cdll.LoadLibrary("libpango-1.0.0.dylib")
-            return CheckResult(status="ok", detail="pango available — PDF reports enabled")
-        except OSError:
+            from reportlab.platypus import SimpleDocTemplate  # noqa: F401
+
+            import reportlab
+
+            version = getattr(reportlab, "Version", "unknown")
+            return CheckResult(status="ok", detail=f"reportlab {version} — PDF reports enabled")
+        except ImportError:
             return CheckResult(
                 status="warn",
-                detail="pango not found — HTML reports only (PDF skipped)",
-                install_cmd=["brew", "install", "pango"],
-                install_label="brew install pango",
-            )
-        except Exception:
-            return CheckResult(
-                status="warn",
-                detail="PDF availability unknown — HTML reports will still be saved",
-            )
-
-
-@register
-class LinuxPDFCheck(BaseCheck):
-    """Checks whether pango (required by WeasyPrint for PDF) is available on Linux."""
-
-    key = "pdf"
-    label = "PDF Generation (pango)"
-    description = "Enables PDF reports. Without pango, only HTML reports are saved."
-    platforms = ("Linux",)
-    optional = True
-
-    def run(self) -> CheckResult:
-        import ctypes
-
-        try:
-            ctypes.cdll.LoadLibrary("libpango-1.0.so.0")
-            return CheckResult(status="ok", detail="pango available — PDF reports enabled")
-        except OSError:
-            return CheckResult(
-                status="warn",
-                detail="pango not found — HTML reports only (PDF skipped)",
-                install_cmd=["apt-get", "install", "-y", "libpango-1.0-0", "libpangoft2-1.0-0"],
-                install_label="apt install libpango",
-            )
-        except Exception:
-            return CheckResult(
-                status="warn",
-                detail="PDF availability unknown — HTML reports will still be saved",
+                detail="reportlab not installed — HTML reports only (PDF skipped)",
+                install_cmd=["pip", "install", "reportlab"],
+                install_label="pip install reportlab",
             )
 
 
