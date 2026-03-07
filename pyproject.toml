@@ -1,0 +1,39 @@
+[project]
+name = "pc-tester"
+version = "1.0.0"
+description = "Portable PC hardware diagnostic tool for repair technicians"
+requires-python = ">=3.11"
+dependencies = [
+    "textual>=0.47.0",
+    "psutil>=5.9.0",
+    "py-cpuinfo>=9.0.0",
+    "pySMART>=1.3.0",
+    "GPUtil>=1.4.0",
+    "pynvml>=11.5.0",
+    "jinja2>=3.1.0",
+    "reportlab>=4.0.0",
+    # Windows-only — UV installs this automatically on Windows, skips it elsewhere
+    "wmi>=1.5.1; sys_platform == 'win32'",
+]
+
+[project.scripts]
+# Run the app with: uv run pctester
+pctester = "src.cli:main"
+
+[dependency-groups]
+# Install build tools with: uv sync --group build
+build = [
+    "pyinstaller>=6.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+# Include src/ package and the Jinja2 templates inside it
+packages = ["src"]
+
+[tool.uv]
+# Keep the lockfile up to date with all dependency groups
+default-groups = []

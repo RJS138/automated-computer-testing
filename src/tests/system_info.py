@@ -1,0 +1,201 @@
+"""System info: BIOS version, board make/model/serial, OS info."""
+
+import asyncio
+import platform
+import subprocess
+from datetime import datetime
+
+from ..models.test_result import TestResult
+from .base import BaseTest
+
+
+def _get_info_windows() -> dict:
+    info: dict = {}
+    try:
+        import wmi  # type: ignore
+        c = wmi.WMI()
+
+        for bios in c.Win32_BIOS():
+            info["bios_vendor"] = bios.Manufacturer
+            info["bios_version"] = bios.SMBIOSBIOSVersion
+            info["bios_date"] = bios.ReleaseDate
+            info["board_serial"] = bios.SerialNumber
+
+        for board in c.Win32_BaseBoard():
+            info["board_manufacturer"] = board.Manufacturer
+            info["board_model"] = board.Product
+            info["board_serial"] = info.get("board_serial") or board.SerialNumber
+
+        for cs in c.Win32_ComputerSystem():
+            info["chassis_manufacturer"] = cs.Manufacturer
+            info["chassis_model"] = cs.Model
+
+        for sys in c.Win32_OperatingSystem():
+            info["os_name"] = sys.Caption
+            info["os_version"] = sys.Version
+            info["os_build"] = sys.BuildNumber
+            info["install_date"] = sys.InstallDate
+
+    except Exception as exc:
+        info["error"] = str(exc)
+    return info
+
+
+def _get_info_darwin() -> dict:
+    """Query system info on macOS using system_profiler, sw_vers, and sysctl."""
+    import re
+    info: dict = {}
+
+    # OS version
+    try:
+        result = subprocess.run(["sw_vers"], capture_output=True, text=True, timeout=5)
+        for line in result.stdout.splitlines():
+            if "ProductName:" in line:
+                info["os_name"] = line.split(":", 1)[1].strip()
+            elif "ProductVersion:" in line:
+                info["os_version"] = line.split(":", 1)[1].strip()
+            elif "BuildVersion:" in line:
+                info["os_build"] = line.split(":", 1)[1].strip()
+    except Exception:
+        pass
+
+    # Hardware info via system_profiler
+    try:
+        result = subprocess.run(
+            ["system_profiler", "SPHardwareDataType"],
+            capture_output=True, text=True, timeout=10,
+        )
+        for line in result.stdout.splitlines():
+            line = line.strip()
+            if line.startswith("Model Name:"):
+                info["chassis_model"] = line.split(":", 1)[1].strip()
+            elif line.startswith("Model Identifier:"):
+                info["board_model"] = line.split(":", 1)[1].strip()
+            elif "Serial Number" in line:
+                info["board_serial"] = line.split(":", 1)[1].strip()
+            elif line.startswith("Boot ROM Version:"):
+                # Intel Macs
+                info["bios_version"] = line.split(":", 1)[1].strip()
+            elif line.startswith("System Firmware Version:"):
+                # Apple Silicon Macs
+                info["bios_version"] = line.split(":", 1)[1].strip()
+            elif line.startswith("Chip:") or line.startswith("Processor Name:"):
+                info["processor_marketing"] = line.split(":", 1)[1].strip()
+    except Exception:
+        pass
+
+    # Firmware build date from kernel version string
+    # e.g. "Darwin Kernel Version 25.3.0: Wed Jan 28 20:56:35 PST 2026; ..."
+    try:
+        result = subprocess.run(
+            ["sysctl", "-n", "kern.version"],
+            capture_output=True, text=True, timeout=5,
+        )
+        kern = result.stdout.strip()
+        # Format: "... Wed Jan 28 20:56:35 PST 2026; ..."
+        match = re.search(r":\s+\w+\s+(\w{3}\s+\d{1,2})\s+[\d:]+\s+\w+\s+(\d{4})", kern)
+        if match:
+            info["bios_date"] = f"{match.group(1)} {match.group(2)}"  # e.g. "Jan 28 2026"
+    except Exception:
+        pass
+
+    # Regulatory model number (A-number printed on device, e.g. "A2992")
+    # Found in ioreg as a hex-encoded ASCII string.
+    # ioreg -l can emit non-UTF-8 bytes, so decode with errors="ignore".
+    try:
+        result = subprocess.run(
+            ["ioreg", "-l"],
+            capture_output=True, timeout=8,
+        )
+        stdout = result.stdout.decode("utf-8", errors="ignore")
+        match = re.search(r'"regulatory-model-number"\s*=\s*<([0-9a-fA-F]+)>', stdout)
+        if match:
+            raw = bytes.fromhex(match.group(1)).rstrip(b"\x00").decode("ascii", errors="ignore")
+            if re.match(r"^A\d{4}$", raw):
+                info["apple_model_number"] = raw
+    except Exception:
+        pass
+
+    info["bios_vendor"] = "Apple"
+    info["board_manufacturer"] = "Apple"
+    info["chassis_manufacturer"] = "Apple"
+    return info
+
+
+def _get_info_linux() -> dict:
+    """Read DMI info from /sys/class/dmi/id/ and dmidecode."""
+    from pathlib import Path
+    info: dict = {}
+    dmi_base = Path("/sys/class/dmi/id")
+
+    def read_dmi(name: str) -> str | None:
+        p = dmi_base / name
+        try:
+            return p.read_text().strip() or None
+        except Exception:
+            return None
+
+    info["bios_vendor"] = read_dmi("bios_vendor")
+    info["bios_version"] = read_dmi("bios_version")
+    info["bios_date"] = read_dmi("bios_date")
+    info["board_manufacturer"] = read_dmi("board_vendor")
+    info["board_model"] = read_dmi("board_name")
+    info["board_serial"] = read_dmi("board_serial")
+    info["chassis_manufacturer"] = read_dmi("chassis_vendor")
+    info["chassis_model"] = read_dmi("chassis_type")
+
+    # OS info
+    try:
+        result = subprocess.run(
+            ["cat", "/etc/os-release"],
+            capture_output=True, text=True, timeout=3
+        )
+        for line in result.stdout.splitlines():
+            if line.startswith("PRETTY_NAME="):
+                info["os_name"] = line.split("=", 1)[1].strip('"')
+    except Exception:
+        pass
+
+    info["os_version"] = platform.release()
+    info["os_build"] = platform.version()
+
+    return info
+
+
+class SystemInfoTest(BaseTest):
+    async def run(self) -> TestResult:
+        self.result.mark_running()
+        loop = asyncio.get_event_loop()
+
+        sys = platform.system()
+        if sys == "Windows":
+            info = await loop.run_in_executor(None, _get_info_windows)
+        elif sys == "Linux":
+            info = await loop.run_in_executor(None, _get_info_linux)
+        elif sys == "Darwin":
+            info = await loop.run_in_executor(None, _get_info_darwin)
+        else:
+            info = {}
+
+        # Always available via Python
+        info["python_platform"] = platform.platform()
+        info["hostname"] = platform.node()
+        info["machine_arch"] = platform.machine()
+        info["processor"] = platform.processor()
+
+        data = info
+
+        if "error" in info:
+            self.result.mark_warn(
+                summary=f"Partial system info (error: {info['error']})",
+                data=data,
+            )
+        else:
+            board = info.get("chassis_model") or info.get("board_model") or "Unknown"
+            bios = info.get("bios_version") or "Unknown"
+            self.result.mark_pass(
+                summary=f"Board: {board} — BIOS: {bios}",
+                data=data,
+            )
+
+        return self.result

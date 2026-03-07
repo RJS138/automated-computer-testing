@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PC Diagnostic Report — {{ report.job.customer_name }}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 13px;
+      color: #1a1a1a;
+      background: #f5f5f5;
+      padding: 24px;
+    }
+    .page { max-width: 900px; margin: 0 auto; background: #fff; border-radius: 8px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.10); overflow: hidden; }
+
+    /* Header */
+    .header {
+      background: #1e3a5f;
+      color: #fff;
+      padding: 24px 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    .header h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+    .header .meta { font-size: 12px; opacity: 0.8; line-height: 1.6; }
+    .report-type-badge {
+      background: rgba(255,255,255,0.15);
+      border-radius: 20px;
+      padding: 6px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    /* Summary banner */
+    .summary-banner {
+      display: flex;
+      align-items: center;
+      padding: 14px 32px;
+      font-weight: 700;
+      font-size: 15px;
+      gap: 12px;
+    }
+    .summary-banner.pass    { background: #e8f5e9; color: #2e7d32; border-left: 5px solid #43a047; }
+    .summary-banner.warn    { background: #fff8e1; color: #f57f17; border-left: 5px solid #ffb300; }
+    .summary-banner.fail    { background: #ffebee; color: #c62828; border-left: 5px solid #e53935; }
+    .summary-banner .counts { font-weight: 400; font-size: 13px; margin-left: auto; }
+
+    /* Job info */
+    .job-info {
+      padding: 16px 32px;
+      border-bottom: 1px solid #e0e0e0;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+    }
+    .job-info .field label { font-size: 11px; text-transform: uppercase; color: #888; display: block; }
+    .job-info .field span  { font-size: 13px; font-weight: 600; }
+
+    /* Notes */
+    .notes-section {
+      padding: 12px 32px;
+      border-bottom: 1px solid #e0e0e0;
+      background: #fafafa;
+    }
+    .notes-section label { font-size: 11px; text-transform: uppercase; color: #888; display: block; margin-bottom: 4px; }
+    .notes-section p { font-size: 13px; white-space: pre-wrap; }
+
+    /* Test results */
+    .results-section { padding: 24px 32px; }
+    .results-section h2 { font-size: 16px; font-weight: 700; margin-bottom: 16px; color: #1e3a5f; }
+    .test-result {
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+    .test-result-header {
+      display: flex;
+      align-items: center;
+      padding: 10px 16px;
+      gap: 12px;
+      cursor: default;
+    }
+    .test-result-header.pass    { background: #f1f8f1; border-left: 4px solid #43a047; }
+    .test-result-header.warn    { background: #fffde7; border-left: 4px solid #ffb300; }
+    .test-result-header.fail    { background: #fff5f5; border-left: 4px solid #e53935; }
+    .test-result-header.skip    { background: #fafafa; border-left: 4px solid #bdbdbd; }
+    .test-result-header.error   { background: #fff5f5; border-left: 4px solid #e53935; }
+    .test-result-header.waiting { background: #fafafa; border-left: 4px solid #bdbdbd; }
+
+    .status-badge {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: 12px;
+      min-width: 52px;
+      text-align: center;
+    }
+    .status-badge.pass    { background: #c8e6c9; color: #2e7d32; }
+    .status-badge.warn    { background: #fff9c4; color: #f57f17; }
+    .status-badge.fail    { background: #ffcdd2; color: #c62828; }
+    .status-badge.skip    { background: #eeeeee; color: #757575; }
+    .status-badge.error   { background: #ffcdd2; color: #c62828; }
+    .status-badge.waiting { background: #eeeeee; color: #757575; }
+
+    .test-name   { font-weight: 600; font-size: 14px; flex: 1; }
+    .test-summary { font-size: 12px; color: #555; }
+
+    .test-result-body {
+      padding: 12px 16px;
+      border-top: 1px solid #e0e0e0;
+      background: #fafafa;
+    }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .data-table th { text-align: left; padding: 4px 8px; background: #f0f0f0; color: #555;
+                     font-weight: 600; text-transform: uppercase; font-size: 11px; }
+    .data-table td { padding: 4px 8px; border-top: 1px solid #e8e8e8; vertical-align: top; }
+    .data-table tr:nth-child(even) td { background: #f5f5f5; }
+    .data-key { color: #444; font-weight: 600; white-space: nowrap; }
+    .data-value { color: #222; word-break: break-word; }
+
+    /* GPU sub-table */
+    .gpu-card { margin-bottom: 8px; padding: 8px; background: #f0f4f8; border-radius: 4px; }
+    .gpu-card .gpu-name { font-weight: 700; margin-bottom: 4px; }
+
+    /* Footer */
+    .footer {
+      padding: 16px 32px;
+      background: #fafafa;
+      border-top: 1px solid #e0e0e0;
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: #888;
+    }
+
+    /* Print */
+    @media print {
+      body { background: #fff; padding: 0; }
+      .page { box-shadow: none; border-radius: 0; }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <h1>PC Diagnostic Report</h1>
+      <div class="meta">
+        Generated: {{ report.generated_at.strftime('%Y-%m-%d %H:%M:%S') }}<br>
+        Mode: {{ report.job.test_mode.value | upper }}
+      </div>
+    </div>
+    <div class="report-type-badge">{{ report.job.report_type.value | upper }} REPAIR</div>
+  </div>
+
+  <!-- Summary -->
+  {% set overall = report.overall_status() %}
+  <div class="summary-banner {{ overall.value }}">
+    <span>Overall: {{ overall.value | upper }}</span>
+    <span class="counts">
+      {{ report.pass_count() }} passed &nbsp;|&nbsp;
+      {{ report.warn_count() }} warnings &nbsp;|&nbsp;
+      {{ report.fail_count() }} failed
+    </span>
+  </div>
+
+  <!-- Job info -->
+  <div class="job-info">
+    <div class="field"><label>Customer</label><span>{{ report.job.customer_name }}</span></div>
+    <div class="field"><label>Device</label><span>{{ report.job.device_description }}</span></div>
+    <div class="field"><label>Job #</label><span>{{ report.job.job_number }}</span></div>
+  </div>
+
+  {% if report.job.notes %}
+  <div class="notes-section">
+    <label>Notes</label>
+    <p>{{ report.job.notes }}</p>
+  </div>
+  {% endif %}
+
+  <!-- Test Results -->
+  <div class="results-section">
+    <h2>Test Results</h2>
+
+    {% for result in report.results %}
+    <div class="test-result">
+      <div class="test-result-header {{ result.status.value }}">
+        <span class="status-badge {{ result.status.value }}">{{ result.status.value | upper }}</span>
+        <span class="test-name">{{ result.display_name }}</span>
+        <span class="test-summary">{{ result.summary }}</span>
+      </div>
+
+      {% if result.data or result.error_message %}
+      <div class="test-result-body">
+        {% if result.error_message %}
+          <p style="color:#c62828">Error: {{ result.error_message }}</p>
+        {% endif %}
+
+        {% if result.data %}
+          {# CPU #}
+          {% if result.name == 'cpu' %}
+            <table class="data-table">
+              <tr><th>Field</th><th>Value</th></tr>
+              <tr><td class="data-key">CPU</td><td class="data-value">{{ result.data.get('brand','—') }}</td></tr>
+              <tr><td class="data-key">Architecture</td><td class="data-value">{{ result.data.get('arch','—') }}</td></tr>
+              <tr><td class="data-key">Clock Speed</td><td class="data-value">{{ result.data.get('hz_advertised','—') }}</td></tr>
+              <tr><td class="data-key">Physical Cores</td><td class="data-value">{{ result.data.get('physical_cores','—') }}</td></tr>
+              <tr><td class="data-key">Logical Threads</td><td class="data-value">{{ result.data.get('logical_cores','—') }}</td></tr>
+              <tr><td class="data-key">Idle Temp</td><td class="data-value">{% if result.data.get('temp_idle') %}{{ result.data.temp_idle }}°C{% else %}N/A{% endif %}</td></tr>
+              <tr><td class="data-key">Peak Temp (stress)</td><td class="data-value">{% if result.data.get('temp_peak') %}{{ result.data.temp_peak }}°C{% else %}N/A{% endif %}</td></tr>
+              {% if result.data.get('gpu_temp') %}
+              <tr><td class="data-key">GPU Temp (post-stress)</td><td class="data-value">{{ result.data.gpu_temp }}°C</td></tr>
+              {% endif %}
+              {% if result.data.get('cpu_power_w') %}
+              <tr><td class="data-key">CPU Power (post-stress)</td><td class="data-value">{{ result.data.cpu_power_w }} W</td></tr>
+              {% endif %}
+              {% if result.data.get('total_power_w') %}
+              <tr><td class="data-key">Total SoC Power (post-stress)</td><td class="data-value">{{ result.data.total_power_w }} W</td></tr>
+              {% endif %}
+              <tr><td class="data-key">Stress Duration</td><td class="data-value">{{ result.data.get('stress_duration_s','—') }}s</td></tr>
+            </table>
+            {% if result.data.get('temp_note') %}
+            <p style="margin-top:8px;padding:6px 10px;background:#fff8e1;border-left:3px solid #f9a825;font-size:11px;color:#5d4037;white-space:pre-wrap;">&#9888; {{ result.data.temp_note }}</p>
+            {% endif %}
+
+          {# RAM #}
+          {% elif result.name == 'ram' %}
+            <table class="data-table">
+              <tr><th>Field</th><th>Value</th></tr>
+              <tr><td class="data-key">Total RAM</td><td class="data-value">{{ result.data.get('total_gb','—') }} GB</td></tr>
+              <tr><td class="data-key">Available</td><td class="data-value">{{ result.data.get('available_gb','—') }} GB</td></tr>
+              <tr><td class="data-key">Used</td><td class="data-value">{{ result.data.get('used_percent','—') }}%</td></tr>
+              <tr><td class="data-key">Speed</td><td class="data-value">{{ result.data.get('speed_mhz','Unknown') }}</td></tr>
+              <tr><td class="data-key">Swap Total</td><td class="data-value">{{ result.data.get('swap_total_gb','—') }} GB</td></tr>
+              <tr><td class="data-key">Pattern Scan</td><td class="data-value">{{ result.data.get('scan_mb','—') }} MB — {{ result.data.get('scan_message','—') }}</td></tr>
+            </table>
+            <p style="margin-top:8px;font-size:11px;color:#888;">
+              Note: Userspace pattern scan detects functional errors. For deep hardware faults, use MemTest86.
+            </p>
+
+          {# Storage #}
+          {% elif result.name == 'storage' %}
+            {% for drive in result.data.get('drives', []) %}
+            <div style="margin-bottom:14px;padding:10px;background:#f4f4f4;border-radius:4px;">
+              <strong>{{ drive.get('model','Unknown') }}</strong>
+              <span style="color:#555;font-size:11px;">&nbsp;({{ drive.get('device','') }})</span><br>
+              <small>
+                <b>Serial:</b> {{ drive.get('serial','—') }} &nbsp;|&nbsp;
+                <b>Interface:</b> {{ drive.get('interface','—') }} &nbsp;|&nbsp;
+                <b>Type:</b> {{ drive.get('medium_type','—') }}
+                {% if drive.get('firmware') and drive.firmware != 'Unknown' %}
+                  &nbsp;|&nbsp; <b>Firmware:</b> {{ drive.firmware }}
+                {% endif %}
+              </small><br>
+              <small>
+                {% if drive.get('total_gb') %}
+                  <b>Capacity:</b> {{ drive.total_gb }} GB &nbsp;|&nbsp;
+                  <b>Used:</b> {{ drive.get('used_gb', '—') }} GB &nbsp;|&nbsp;
+                  <b>Free:</b> {{ drive.get('free_gb', '—') }} GB
+                {% endif %}
+              </small><br>
+              <small>
+                <b>SMART:</b>
+                <strong style="color:{% if drive.get('smart_status') == 'PASSED' or drive.get('smart_status') == 'Verified' %}green{% elif drive.get('smart_status') == 'FAILED' %}red{% else %}#888{% endif %}">
+                  {{ drive.get('smart_status','Unknown') }}
+                </strong>
+                {% if drive.get('power_on_hours') is not none %}
+                  &nbsp;|&nbsp; <b>Power-On Hours:</b> {{ drive.power_on_hours }}h
+                {% endif %}
+                {% if drive.get('temp_c') is not none %}
+                  &nbsp;|&nbsp; <b>Temp:</b> {{ drive.temp_c }}°C
+                {% endif %}
+                {% if drive.get('percentage_used') is not none %}
+                  &nbsp;|&nbsp; <b>NVMe Wear:</b> {{ drive.percentage_used }}% used
+                {% endif %}
+                {% if drive.get('available_spare_pct') is not none %}
+                  &nbsp;|&nbsp; <b>Spare:</b> {{ drive.available_spare_pct }}%
+                {% endif %}
+                {% if drive.get('reallocated_sectors') is not none and drive.reallocated_sectors not in (0, '0') %}
+                  &nbsp;|&nbsp; <b style="color:red;">Reallocated Sectors:</b> {{ drive.reallocated_sectors }}
+                {% endif %}
+                {% if drive.get('power_cycles') is not none %}
+                  &nbsp;|&nbsp; <b>Power Cycles:</b> {{ drive.power_cycles }}
+                {% endif %}
+                {% if drive.get('unsafe_shutdowns') is not none %}
+                  &nbsp;|&nbsp; <b>Unsafe Shutdowns:</b> {{ drive.unsafe_shutdowns }}
+                {% endif %}
+              </small>
+            </div>
+            {% else %}
+            <p>No drive data available.</p>
+            {% endfor %}
+            <table class="data-table">
+              <tr><th>Speed Test ({{ result.data.get('speed_test_mb','?') }} MB)</th><th>Value</th></tr>
+              <tr><td class="data-key">Read Speed</td><td class="data-value">{{ result.data.get('read_mb_s','—') }} MB/s</td></tr>
+              <tr><td class="data-key">Write Speed</td><td class="data-value">{{ result.data.get('write_mb_s','—') }} MB/s</td></tr>
+              {% if result.data.get('speed_error') %}
+              <tr><td class="data-key" colspan="2" style="color:red;">{{ result.data.speed_error }}</td></tr>
+              {% endif %}
+            </table>
+
+          {# GPU #}
+          {% elif result.name == 'gpu' %}
+            {% for gpu in result.data.get('gpus', []) %}
+            <div class="gpu-card">
+              <div class="gpu-name">{{ gpu.get('name','Unknown') }}</div>
+              <small>
+                Vendor: {{ gpu.get('vendor','—') }}
+                {% if gpu.get('gpu_cores') %}&nbsp;|&nbsp; GPU Cores: {{ gpu.gpu_cores }}{% endif %}
+                &nbsp;|&nbsp;
+                {% if gpu.get('vram_total_mb') %}
+                  VRAM: {{ gpu.vram_total_mb }} MB
+                  {% if gpu.get('vram_used_mb') %} ({{ gpu.vram_used_mb }} MB used){% endif %}
+                {% elif gpu.get('vram_note') %}
+                  {{ gpu.vram_note }}
+                {% else %}
+                  VRAM: Unknown
+                {% endif %}
+                {% if gpu.get('metal_support') %}&nbsp;|&nbsp; {{ gpu.metal_support }}{% endif %}
+                {% if gpu.get('temp_c') %}&nbsp;|&nbsp; Temp: {{ gpu.temp_c }}°C{% endif %}
+                {% if gpu.get('fan_pct') %}&nbsp;|&nbsp; Fan: {{ gpu.fan_pct }}%{% endif %}
+                {% if gpu.get('driver_version') %}&nbsp;|&nbsp; Driver: {{ gpu.driver_version }}{% endif %}
+              </small>
+            </div>
+            {% else %}
+            <p>No GPU data available.</p>
+            {% endfor %}
+
+          {# Network #}
+          {% elif result.name == 'network' %}
+            {% set wifi = result.data.get('wifi', {}) %}
+            {% set bt   = result.data.get('bluetooth', {}) %}
+
+            {# ── Wi-Fi ────────────────────────────────────────────── #}
+            <div style="margin-bottom:14px;">
+              <strong style="font-size:13px;">Wi-Fi</strong>
+              {% if wifi.get('connected') %}
+                <span style="margin-left:8px;background:#c8e6c9;color:#2e7d32;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">CONNECTED</span>
+              {% else %}
+                <span style="margin-left:8px;background:#ffe0b2;color:#e65100;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">NOT CONNECTED</span>
+              {% endif %}
+            </div>
+
+            {% if wifi.get('connected') %}
+            <table class="data-table" style="margin-bottom:12px;">
+              <tr><th colspan="2">Access Point</th></tr>
+              <tr><td class="data-key">SSID (Network Name)</td><td class="data-value"><strong>{{ wifi.ssid if wifi.get('ssid') else '(redacted by OS privacy)' }}</strong></td></tr>
+              {% if wifi.get('bssid') %}
+              <tr><td class="data-key">BSSID (AP Address)</td><td class="data-value" style="font-family:monospace">{{ wifi.bssid }}</td></tr>
+              {% endif %}
+              {% if wifi.get('signal_dbm') is not none %}
+              <tr>
+                <td class="data-key">Signal Strength</td>
+                <td class="data-value">
+                  {{ wifi.signal_dbm }} dBm —
+                  <span style="color:{% if wifi.signal_dbm >= -60 %}#2e7d32{% elif wifi.signal_dbm >= -70 %}#f57f17{% else %}#c62828{% endif %}">
+                    {% if wifi.signal_dbm >= -60 %}Excellent{% elif wifi.signal_dbm >= -70 %}Good{% elif wifi.signal_dbm >= -80 %}Fair{% else %}Poor{% endif %}
+                  </span>
+                </td>
+              </tr>
+              {% elif wifi.get('signal_pct') is not none %}
+              <tr>
+                <td class="data-key">Signal Strength</td>
+                <td class="data-value">
+                  {{ wifi.signal_pct }}% —
+                  <span style="color:{% if wifi.signal_pct >= 70 %}#2e7d32{% elif wifi.signal_pct >= 40 %}#f57f17{% else %}#c62828{% endif %}">
+                    {% if wifi.signal_pct >= 70 %}Excellent{% elif wifi.signal_pct >= 40 %}Good{% else %}Fair{% endif %}
+                  </span>
+                </td>
+              </tr>
+              {% endif %}
+              {% if wifi.get('channel') %}
+              <tr><td class="data-key">Channel</td><td class="data-value">{{ wifi.channel }}</td></tr>
+              {% endif %}
+              {% if wifi.get('standard') %}
+              <tr><td class="data-key">Wi-Fi Standard</td><td class="data-value">{{ wifi.standard }}</td></tr>
+              {% endif %}
+              {% if wifi.get('security') %}
+              <tr><td class="data-key">Security</td><td class="data-value">{{ wifi.security }}</td></tr>
+              {% endif %}
+              {% if wifi.get('tx_rate_mbps') %}
+              <tr><td class="data-key">Link Rate</td><td class="data-value">{{ wifi.tx_rate_mbps }} Mbps{% if wifi.get('rx_rate_mbps') %} Tx / {{ wifi.rx_rate_mbps }} Mbps Rx{% endif %}</td></tr>
+              {% endif %}
+
+              <tr><th colspan="2">Tx / Rx Test</th></tr>
+              <tr>
+                <td class="data-key">Transmit (Tx)</td>
+                <td class="data-value">
+                  {% if wifi.get('ping_ok') %}
+                    <span style="color:#2e7d32">✓ OK</span> — ICMP ping sent to {{ result.data.get('ping_target') }}
+                  {% else %}
+                    <span style="color:#c62828">✗ Failed</span> — Could not reach {{ result.data.get('ping_target') }}
+                  {% endif %}
+                </td>
+              </tr>
+              <tr>
+                <td class="data-key">Receive (Rx)</td>
+                <td class="data-value">
+                  {% if wifi.get('ping_ok') %}
+                    <span style="color:#2e7d32">✓ OK</span> — Reply received in {{ wifi.get('ping_rtt_ms','?') }} ms
+                  {% else %}
+                    <span style="color:#c62828">✗ Failed</span> — No reply received
+                  {% endif %}
+                </td>
+              </tr>
+
+              <tr><th colspan="2">Speed Test</th></tr>
+              {% if wifi.get('download_mbps') %}
+              <tr>
+                <td class="data-key">Download Speed</td>
+                <td class="data-value">
+                  <strong>{{ wifi.download_mbps }} Mbps</strong>
+                  <span style="color:{% if wifi.download_mbps >= 50 %}#2e7d32{% elif wifi.download_mbps >= 10 %}#f57f17{% else %}#c62828{% endif %}">
+                    ({% if wifi.download_mbps >= 50 %}Fast{% elif wifi.download_mbps >= 10 %}Moderate{% else %}Slow{% endif %})
+                  </span>
+                </td>
+              </tr>
+              {% elif wifi.get('speed_error') %}
+              <tr><td class="data-key">Speed Test</td><td class="data-value" style="color:#c62828">{{ wifi.speed_error }}</td></tr>
+              {% else %}
+              <tr><td class="data-key">Speed Test</td><td class="data-value" style="color:#888">Not run (no internet)</td></tr>
+              {% endif %}
+            </table>
+            {% endif %}
+
+            {# Available Networks #}
+            {% if wifi.get('available_networks') %}
+            <div style="margin-bottom:12px;">
+              <strong>Available Networks ({{ wifi.available_networks | length }})</strong>
+              {% if not wifi.get('connected') %}
+              <span style="margin-left:8px;font-size:11px;color:#e65100;">← Connect to one of these networks and re-run to test Wi-Fi</span>
+              {% endif %}
+              <table class="data-table" style="margin-top:6px;">
+                <tr>
+                  <th>SSID</th><th>Signal</th><th>Channel</th><th>Security</th>
+                </tr>
+                {% for net in wifi.available_networks %}
+                <tr>
+                  <td class="data-key">{{ net.ssid if net.ssid else '(hidden / redacted)' }}</td>
+                  <td>
+                    {% if net.get('signal_dbm') is not none %}
+                      <span style="color:{% if net.signal_dbm >= -60 %}#2e7d32{% elif net.signal_dbm >= -70 %}#f57f17{% else %}#888{% endif %}">
+                        {{ net.signal_dbm }} dBm
+                      </span>
+                    {% elif net.get('signal_pct') is not none %}
+                      <span style="color:{% if net.signal_pct >= 70 %}#2e7d32{% elif net.signal_pct >= 40 %}#f57f17{% else %}#888{% endif %}">
+                        {{ net.signal_pct }}%
+                      </span>
+                    {% else %}—{% endif %}
+                  </td>
+                  <td>{{ net.get('channel','—') }}</td>
+                  <td>{{ net.get('security','—') }}</td>
+                </tr>
+                {% endfor %}
+              </table>
+            </div>
+            {% endif %}
+
+            {# Bluetooth #}
+            <div style="margin-bottom:12px;">
+              <strong style="font-size:13px;">Bluetooth</strong>
+              {% if bt.get('available') %}
+                {% if bt.get('enabled') %}
+                  <span style="margin-left:8px;background:#c8e6c9;color:#2e7d32;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">ON</span>
+                {% else %}
+                  <span style="margin-left:8px;background:#eeeeee;color:#757575;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">OFF</span>
+                {% endif %}
+              {% else %}
+                <span style="margin-left:8px;background:#eeeeee;color:#757575;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">NOT DETECTED</span>
+              {% endif %}
+              {% if bt.get('available') %}
+              <table class="data-table" style="margin-top:6px;">
+                {% if bt.get('version') %}
+                <tr><td class="data-key">Version</td><td class="data-value">Bluetooth {{ bt.version }}</td></tr>
+                {% endif %}
+                {% if bt.get('address') %}
+                <tr><td class="data-key">Address</td><td class="data-value" style="font-family:monospace">{{ bt.address }}</td></tr>
+                {% endif %}
+                {% if bt.get('name') %}
+                <tr><td class="data-key">Device Name</td><td class="data-value">{{ bt.name }}</td></tr>
+                {% endif %}
+                {% if bt.get('chipset') %}
+                <tr><td class="data-key">Chipset</td><td class="data-value">{{ bt.chipset }}</td></tr>
+                {% endif %}
+                {% if bt.get('devices_connected') is not none %}
+                <tr><td class="data-key">Devices Connected</td><td class="data-value">{{ bt.devices_connected }}</td></tr>
+                {% endif %}
+              </table>
+              {% endif %}
+            </div>
+
+            {# Adapters #}
+            <div>
+              <strong style="font-size:13px;">Network Adapters</strong>
+              <table class="data-table" style="margin-top:6px;">
+                <tr><th>Adapter</th><th>Status</th><th>IP Address</th><th>MAC</th></tr>
+                {% for adapter in result.data.get('adapters', []) %}
+                <tr>
+                  <td class="data-key">{{ adapter.name }}</td>
+                  <td>{% if adapter.is_up %}<span style="color:#2e7d32">Up</span>{% else %}<span style="color:#888">Down</span>{% endif %}</td>
+                  <td>{{ adapter.ipv4 or '—' }}</td>
+                  <td style="font-family:monospace;font-size:11px;">{{ adapter.mac or '—' }}</td>
+                </tr>
+                {% endfor %}
+              </table>
+            </div>
+
+          {# Battery #}
+          {% elif result.name == 'battery' %}
+            <table class="data-table">
+              <tr><th>Field</th><th>Value</th></tr>
+              <tr><td class="data-key">Charge Level</td><td class="data-value">{{ result.data.get('percent_charged','—') }}%</td></tr>
+              <tr>
+                <td class="data-key">Plugged In</td>
+                <td class="data-value">
+                  {{ 'Yes' if result.data.get('plugged_in') else 'No' }}
+                  {% if result.data.get('charger_watts') %}&nbsp;({{ result.data.charger_watts }}W charger){% endif %}
+                </td>
+              </tr>
+              <tr>
+                <td class="data-key">Health</td>
+                <td class="data-value">
+                  {% if result.data.get('health_pct') is not none %}
+                    <strong style="color:{% if result.data.health_pct >= 80 %}#2e7d32{% elif result.data.health_pct >= 50 %}#f57f17{% else %}#c62828{% endif %}">
+                      {{ result.data.health_pct }}%
+                    </strong>
+                    {% if result.data.get('condition') %}&nbsp;— {{ result.data.condition }}{% endif %}
+                  {% else %}Unknown{% endif %}
+                </td>
+              </tr>
+              {% if result.data.get('design_capacity_mah') %}
+              <tr><td class="data-key">Design Capacity</td><td class="data-value">{{ result.data.design_capacity_mah }} mAh</td></tr>
+              {% elif result.data.get('design_capacity_mwh') %}
+              <tr><td class="data-key">Design Capacity</td><td class="data-value">{{ result.data.design_capacity_mwh }} mWh</td></tr>
+              {% endif %}
+              {% if result.data.get('full_charge_capacity_mah') %}
+              <tr><td class="data-key">Full Charge Capacity</td><td class="data-value">{{ result.data.full_charge_capacity_mah }} mAh</td></tr>
+              {% elif result.data.get('full_charge_capacity_mwh') %}
+              <tr><td class="data-key">Full Charge Capacity</td><td class="data-value">{{ result.data.full_charge_capacity_mwh }} mWh</td></tr>
+              {% endif %}
+              <tr><td class="data-key">Cycle Count</td><td class="data-value">{{ result.data.get('cycle_count') if result.data.get('cycle_count') is not none else 'Unknown' }}</td></tr>
+              {% if result.data.get('chemistry') %}
+              <tr><td class="data-key">Chemistry</td><td class="data-value">{{ result.data.chemistry }}</td></tr>
+              {% endif %}
+              {% if result.data.get('temp_c') is not none %}
+              <tr><td class="data-key">Battery Temp</td><td class="data-value">{{ result.data.temp_c }}°C</td></tr>
+              {% endif %}
+              {% if result.data.get('voltage_mv') %}
+              <tr><td class="data-key">Voltage</td><td class="data-value">{{ "%.2f"|format(result.data.voltage_mv / 1000) }} V</td></tr>
+              {% endif %}
+              {% if result.data.get('battery_serial') %}
+              <tr><td class="data-key">Battery Serial</td><td class="data-value">{{ result.data.battery_serial }}</td></tr>
+              {% endif %}
+            </table>
+
+          {# System Info #}
+          {% elif result.name == 'system_info' %}
+            <table class="data-table">
+              <tr><th>Field</th><th>Value</th></tr>
+              <tr><td class="data-key">OS</td><td class="data-value">{{ result.data.get('os_name','—') }}</td></tr>
+              <tr><td class="data-key">OS Version</td><td class="data-value">{{ result.data.get('os_version','—') }}</td></tr>
+              <tr><td class="data-key">Hostname</td><td class="data-value">{{ result.data.get('hostname','—') }}</td></tr>
+              <tr><td class="data-key">Architecture</td><td class="data-value">{{ result.data.get('machine_arch','—') }}</td></tr>
+              <tr><td class="data-key">Board Manufacturer</td><td class="data-value">{{ result.data.get('board_manufacturer','—') }}</td></tr>
+              <tr><td class="data-key">Board Model</td><td class="data-value">{{ result.data.get('board_model','—') }}</td></tr>
+              <tr><td class="data-key">Board Serial</td><td class="data-value">{{ result.data.get('board_serial','—') }}</td></tr>
+              <tr><td class="data-key">BIOS Vendor</td><td class="data-value">{{ result.data.get('bios_vendor','—') }}</td></tr>
+              <tr><td class="data-key">BIOS Version</td><td class="data-value">{{ result.data.get('bios_version','—') }}</td></tr>
+              <tr><td class="data-key">BIOS Date</td><td class="data-value">{{ result.data.get('bios_date','—') }}</td></tr>
+            </table>
+
+          {# Manual #}
+          {% elif result.name == 'manual' %}
+            <table class="data-table">
+              <tr><th>Check</th><th>Result</th><th>Notes</th></tr>
+              {% for item_id, item in result.data.get('items', {}).items() %}
+              <tr>
+                <td class="data-key">{{ item.label }}</td>
+                <td>
+                  <span class="status-badge {{ item.status }}">{{ item.status | upper }}</span>
+                </td>
+                <td class="data-value">{{ item.notes or '—' }}</td>
+              </tr>
+              {% endfor %}
+            </table>
+
+          {# Generic fallback #}
+          {% else %}
+            <table class="data-table">
+              <tr><th>Key</th><th>Value</th></tr>
+              {% for k, v in result.data.items() %}
+              <tr>
+                <td class="data-key">{{ k }}</td>
+                <td class="data-value">{{ v }}</td>
+              </tr>
+              {% endfor %}
+            </table>
+          {% endif %}
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <span>PC Tester — Automated Diagnostic Report</span>
+    <span>{{ report.generated_at.strftime('%Y-%m-%d %H:%M') }}</span>
+  </div>
+
+</div>
+
+<!-- Embedded JSON for comparison report generation -->
+<script id="report-data" type="application/json">
+{{ report_json | safe }}
+</script>
+</body>
+</html>
