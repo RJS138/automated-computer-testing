@@ -1,0 +1,14 @@
+#!/bin/sh
+# live-build auto/config
+# Sets all build options for the PC Tester live ISO.
+# Called automatically by lb config.
+
+lb config noauto \
+  --architectures amd64 \
+  --distribution bookworm \
+  --debian-installer none \
+  --bootappend-live "boot=live quiet" \
+  --binary-images iso-hybrid \
+  --memtest none \
+  --win32-loader false \
+  "${@}"

@@ -1,0 +1,3 @@
+#!/bin/sh
+# Ensure the PC Tester binary is executable inside the chroot.
+chmod +x /usr/local/bin/pctester

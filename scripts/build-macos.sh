@@ -21,20 +21,27 @@ echo "Repo root : $REPO_ROOT"
 echo "Arch      : $ARCH"
 echo "Output    : $DIST_DIR/$APP_NAME"
 
-cd "$REPO_ROOT"
+# Build in a temporary workspace to avoid touching any existing .venv or
+# PyInstaller artefacts in the repo (which may have different permissions).
+BUILD_ROOT="$(mktemp -d /tmp/pctester-macos-XXXXXX)"
+echo ""
+echo "Using temporary build directory: $BUILD_ROOT"
 
 echo ""
 echo "[1/3] Syncing dependencies (uv sync --group build)..."
+rsync -a --delete --exclude ".venv" "$REPO_ROOT"/ "$BUILD_ROOT"/
+cd "$BUILD_ROOT"
+
 uv sync --group build
 
 echo ""
 echo "[2/3] Running PyInstaller..."
+rm -rf .pyinstaller
 uv run pyinstaller \
   --onefile \
   --name "$APP_NAME" \
-  --distpath "$DIST_DIR" \
+  --distpath "dist/macos" \
   --workpath ".pyinstaller/work" \
-  --specpath ".pyinstaller/spec" \
   --add-data "src/report/templates:src/report/templates" \
   --hidden-import textual \
   --hidden-import psutil \
@@ -47,6 +54,9 @@ uv run pyinstaller \
   --collect-all textual \
   --collect-all reportlab \
   main.py
+
+mkdir -p "$DIST_DIR"
+cp "dist/macos/$APP_NAME" "$DIST_DIR/$APP_NAME"
 
 echo ""
 echo "[3/3] Done."
