@@ -1,5 +1,6 @@
 """Application-wide constants and configuration."""
 
+import sys
 from pathlib import Path
 
 APP_NAME = "PC Tester"
@@ -20,7 +21,7 @@ CPU_STRESS_WORK_MB_FULL = 500
 
 # RAM pattern scan: MB to test in quick/full mode
 RAM_SCAN_MB_QUICK = 256
-RAM_SCAN_MB_FULL = 1024
+RAM_SCAN_MB_FULL = 2048  # capped at 50% available RAM at runtime
 
 # Storage speed test file size (MB)
 STORAGE_TEST_SIZE_QUICK = 128
@@ -44,98 +45,14 @@ USB_MARKER = "pctester_usb.marker"
 REPORTS_DIR_NAME = "reports"
 
 # Paths resolved at runtime by file_manager.py
-BASE_DIR = Path(__file__).parent.parent  # pc-tester/
-SRC_DIR = Path(__file__).parent          # pc-tester/src/
-TEMPLATES_DIR = SRC_DIR / "report" / "templates"
+# In a PyInstaller --onefile bundle, data files added with --add-data are
+# extracted to sys._MEIPASS at runtime.  __file__ inside a frozen bundle is
+# not a reliable filesystem path, so we detect frozen execution explicitly.
+if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+    _BUNDLE_DIR = Path(sys._MEIPASS)
+    SRC_DIR = _BUNDLE_DIR / "src"
+else:
+    SRC_DIR = Path(__file__).parent          # pc-tester/src/
 
-# Manual test checklist items
-MANUAL_TEST_ITEMS = [
-    {
-        "id": "lcd",
-        "label": "LCD / Display",
-        "instructions": (
-            "Inspect the screen carefully:\n"
-            "  • Look for dead pixels (permanent black/bright dots)\n"
-            "  • Check for backlight bleed (bright patches at edges in a dark room)\n"
-            "  • Verify the display is bright and colours look correct\n"
-            "  • Check for cracks or pressure marks"
-        ),
-    },
-    {
-        "id": "speakers",
-        "label": "Speakers / Audio",
-        "instructions": (
-            "Test audio output:\n"
-            "  • Play a short audio clip or use the system sound test\n"
-            "  • Verify both left and right channels work\n"
-            "  • Check for distortion, buzzing, or static\n"
-            "  • Test headphone jack if present"
-        ),
-    },
-    {
-        "id": "keyboard",
-        "label": "Keyboard",
-        "instructions": (
-            "Test the keyboard:\n"
-            "  • Open a text editor and press every key\n"
-            "  • Check for stuck, missing, or non-registering keys\n"
-            "  • Test function keys (Fn row)\n"
-            "  • Test special keys: Caps Lock, Num Lock, Insert, Delete"
-        ),
-    },
-    {
-        "id": "touchpad",
-        "label": "Touchpad / Trackpad",
-        "instructions": (
-            "Test the touchpad:\n"
-            "  • Move cursor across the full surface\n"
-            "  • Test left and right click buttons (physical or tap)\n"
-            "  • Test two-finger scroll\n"
-            "  • Check for dead zones or erratic movement"
-        ),
-    },
-    {
-        "id": "usb_a",
-        "label": "USB-A Ports",
-        "instructions": (
-            "Test each USB-A port:\n"
-            "  • Plug a known-good USB device into each port\n"
-            "  • Verify the device is detected in the OS\n"
-            "  • Check for loose or damaged connectors\n"
-            "  • Note: test USB 2.0 and USB 3.0 ports separately if present"
-        ),
-    },
-    {
-        "id": "usb_c",
-        "label": "USB-C Ports",
-        "instructions": (
-            "Test each USB-C port:\n"
-            "  • Plug a known-good USB-C device into each port\n"
-            "  • Verify the device is detected\n"
-            "  • If Thunderbolt, test with a TB device if available\n"
-            "  • Check for charging functionality if applicable"
-        ),
-    },
-    {
-        "id": "hdmi",
-        "label": "HDMI / Video Out",
-        "instructions": (
-            "Test video output:\n"
-            "  • Connect an external monitor via HDMI (or DisplayPort/VGA if present)\n"
-            "  • Verify image displays correctly on the external monitor\n"
-            "  • Test switching between display modes (mirror/extend)\n"
-            "  • Check connector is not loose or damaged"
-        ),
-    },
-    {
-        "id": "webcam",
-        "label": "Webcam",
-        "instructions": (
-            "Test the built-in webcam:\n"
-            "  • Open Camera app or use a video call app\n"
-            "  • Verify live video feed is clear and not distorted\n"
-            "  • Check microphone input while testing camera\n"
-            "  • Verify privacy shutter works (if present)"
-        ),
-    },
-]
+BASE_DIR = SRC_DIR.parent                    # pc-tester/
+TEMPLATES_DIR = SRC_DIR / "report" / "templates"

@@ -19,8 +19,16 @@ SCRIPTS_DIR="$REPO_ROOT/scripts"
 ISO_CONFIG_DIR="$SCRIPTS_DIR/iso-config"
 DIST_LINUX_DIR="$REPO_ROOT/dist/linux"
 DIST_ISO_DIR="$REPO_ROOT/dist/iso"
-LINUX_BINARY="$DIST_LINUX_DIR/pctester_x86_64"
 BINARY_STAGE_PATH="$ISO_CONFIG_DIR/config/includes.chroot/usr/local/bin/pctester"
+
+# Accept either the user-facing name or the legacy internal name
+if [ -f "$DIST_LINUX_DIR/PC Tester (Linux x86_64)" ]; then
+    LINUX_BINARY="$DIST_LINUX_DIR/PC Tester (Linux x86_64)"
+elif [ -f "$DIST_LINUX_DIR/pctester_x86_64" ]; then
+    LINUX_BINARY="$DIST_LINUX_DIR/pctester_x86_64"
+else
+    LINUX_BINARY=""
+fi
 
 # On Apple Silicon and other non-x86_64 hosts, force Docker to run an
 # x86_64 (linux/amd64) Debian image so live-build produces a proper amd64 ISO.
@@ -50,39 +58,43 @@ fi
 echo ""
 echo "[1/4] Checking for Linux x86_64 binary..."
 
-if [ ! -f "$LINUX_BINARY" ]; then
+if [ -z "$LINUX_BINARY" ]; then
     echo "  Binary not found — building inside Docker (debian:bookworm + UV + PyInstaller)..."
     mkdir -p "$DIST_LINUX_DIR"
 
+    # Mount the workspace READ-ONLY to prevent Docker (running as root) from
+    # ever touching the host .venv or any other host-owned files.
+    # The output binary is written directly to the separately mounted $DIST_LINUX_DIR.
     docker run --rm $DOCKER_PLATFORM_FLAG \
-        -v "$REPO_ROOT:/workspace" \
+        -v "$REPO_ROOT:/workspace:ro" \
+        -v "$DIST_LINUX_DIR:/output" \
         debian:bookworm bash -c "
             set -euo pipefail
             apt-get update -qq
-            apt-get install -y -qq curl ca-certificates rsync binutils
+            apt-get install -y -qq curl ca-certificates rsync binutils smartmontools
 
-            # Install uv (Python/package manager)
             curl -LsSf https://astral.sh/uv/install.sh | sh
             export PATH=\"\$HOME/.local/bin:\$PATH\"
 
-            # Work from a copy of the repo inside the container so we don't
-            # touch the host's virtual environment (/.venv) or permissions.
-            mkdir -p /tmp/workspace
-            rsync -a --delete --exclude '.venv' /workspace/ /tmp/workspace/
+            # Copy workspace to a fully writable build dir (excludes .venv, __pycache__)
+            rsync -a \
+                --exclude '.venv' \
+                --exclude '__pycache__' \
+                --exclude '*.pyc' \
+                --exclude '.pyinstaller' \
+                --exclude 'dist' \
+                /workspace/ /build/
 
-            cd /tmp/workspace
+            cd /build
             uv sync --group build
 
-            # Start from a clean PyInstaller state inside the container to avoid
-            # reusing any host-generated spec or build artefacts.
-            rm -rf .pyinstaller
-
-            uv run pyinstaller \\
+            .venv/bin/pyinstaller \\
                 --onefile \\
                 --name pctester_x86_64 \\
-                --distpath dist/linux \\
-                --workpath .pyinstaller/work \\
+                --distpath /output \\
+                --workpath /tmp/pyinstaller-work \\
                 --add-data 'src/report/templates:src/report/templates' \\
+                --add-binary \"\$(which smartctl):.\" \\
                 --hidden-import textual \\
                 --hidden-import psutil \\
                 --hidden-import cpuinfo \\
@@ -93,12 +105,15 @@ if [ ! -f "$LINUX_BINARY" ]; then
                 --hidden-import reportlab \\
                 --collect-all textual \\
                 --collect-all reportlab \\
+                --collect-submodules src.tests \\
+                --collect-submodules src.ui \\
+                --collect-submodules src.report \\
+                --collect-submodules src.models \\
+                --collect-submodules src.utils \\
                 main.py
-
-            # Copy the resulting binary back to the mounted workspace
-            mkdir -p /workspace/dist/linux
-            cp dist/linux/pctester_x86_64 /workspace/dist/linux/pctester_x86_64
         "
+    # Point LINUX_BINARY at the freshly built output
+    LINUX_BINARY="$DIST_LINUX_DIR/pctester_x86_64"
     echo "  Binary built: $LINUX_BINARY"
 else
     echo "  Found: $LINUX_BINARY"

@@ -14,7 +14,12 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DIST_DIR="$REPO_ROOT/dist/macos"
 ARCH="$(uname -m)"
-APP_NAME="pctester_${ARCH}"
+
+if [ "$ARCH" = "arm64" ]; then
+    APP_NAME="PC Tester (Apple Silicon)"
+else
+    APP_NAME="PC Tester (Intel)"
+fi
 
 echo "=== PC Tester — macOS Build ==="
 echo "Repo root : $REPO_ROOT"
@@ -37,12 +42,31 @@ uv sync --group build
 echo ""
 echo "[2/3] Running PyInstaller..."
 rm -rf .pyinstaller
-uv run pyinstaller \
+
+# Bundle smartctl — auto-install via Homebrew if not already present
+SMARTCTL_PATH="$(command -v smartctl 2>/dev/null || true)"
+if [ -z "$SMARTCTL_PATH" ]; then
+    echo "  smartctl not found — installing via Homebrew..."
+    brew install smartmontools
+    SMARTCTL_PATH="$(command -v smartctl 2>/dev/null || true)"
+fi
+
+SMARTCTL_FLAG=""
+if [ -n "$SMARTCTL_PATH" ]; then
+    echo "  Bundling smartctl: $SMARTCTL_PATH"
+    SMARTCTL_FLAG="--add-binary ${SMARTCTL_PATH}:."
+else
+    echo "  WARNING: smartctl unavailable — SMART data will not be bundled"
+fi
+
+# shellcheck disable=SC2086
+.venv/bin/pyinstaller \
   --onefile \
   --name "$APP_NAME" \
   --distpath "dist/macos" \
   --workpath ".pyinstaller/work" \
   --add-data "src/report/templates:src/report/templates" \
+  $SMARTCTL_FLAG \
   --hidden-import textual \
   --hidden-import psutil \
   --hidden-import cpuinfo \
@@ -53,6 +77,11 @@ uv run pyinstaller \
   --hidden-import reportlab \
   --collect-all textual \
   --collect-all reportlab \
+  --collect-submodules src.tests \
+  --collect-submodules src.ui \
+  --collect-submodules src.report \
+  --collect-submodules src.models \
+  --collect-submodules src.utils \
   main.py
 
 mkdir -p "$DIST_DIR"

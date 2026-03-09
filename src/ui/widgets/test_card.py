@@ -1,5 +1,6 @@
 """Test status card widget with animated progress bar."""
 
+import os
 import time
 
 from textual.app import ComposeResult
@@ -7,16 +8,31 @@ from textual.widgets import Label, Static
 
 from ...models.test_result import TestResult, TestStatus
 
+_SIMPLE = os.environ.get("PCTESTER_SIMPLE_UI") == "1"
 
-STATUS_ICONS = {
-    TestStatus.WAITING: "○",
-    TestStatus.PASS:    "✓",
-    TestStatus.WARN:    "⚠",
-    TestStatus.FAIL:    "✗",
-    TestStatus.SKIP:    "—",
-    TestStatus.ERROR:   "!",
-    TestStatus.RUNNING: "◐",
-}
+# Unicode icons for capable terminals; ASCII fallbacks for limited ones
+if _SIMPLE:
+    STATUS_ICONS = {
+        TestStatus.WAITING: ".",
+        TestStatus.PASS:    "*",
+        TestStatus.WARN:    "!",
+        TestStatus.FAIL:    "X",
+        TestStatus.SKIP:    "-",
+        TestStatus.ERROR:   "!",
+        TestStatus.RUNNING: ">",
+    }
+    _SPINNERS = r"-\|/"
+else:
+    STATUS_ICONS = {
+        TestStatus.WAITING: "○",
+        TestStatus.PASS:    "✓",
+        TestStatus.WARN:    "⚠",
+        TestStatus.FAIL:    "✗",
+        TestStatus.SKIP:    "—",
+        TestStatus.ERROR:   "!",
+        TestStatus.RUNNING: "◐",
+    }
+    _SPINNERS = "◐◓◑◒"
 
 STATUS_CLASSES = {
     TestStatus.WAITING: "status-waiting",
@@ -28,7 +44,6 @@ STATUS_CLASSES = {
     TestStatus.ERROR:   "status-error",
 }
 
-_SPINNERS = "◐◓◑◒"
 _BAR_WIDTH = 34
 
 
@@ -199,6 +214,8 @@ def _render_bar(elapsed: float, expected: float | None) -> str:
     else:
         ratio = elapsed / (elapsed + 6)          # asymptotic, never reaches 1
     filled = round(ratio * _BAR_WIDTH)
+    if _SIMPLE:
+        return "#" * filled + "." * (_BAR_WIDTH - filled)
     return "▓" * filled + "░" * (_BAR_WIDTH - filled)
 
 

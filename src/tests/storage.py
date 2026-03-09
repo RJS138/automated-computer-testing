@@ -4,7 +4,9 @@ import asyncio
 import json as _json
 import os
 import platform
+import random as _random
 import subprocess
+import sys as _sys
 import tempfile
 import time
 from pathlib import Path
@@ -13,6 +15,7 @@ import psutil
 
 from ..config import STORAGE_TEST_SIZE_FULL, STORAGE_TEST_SIZE_QUICK
 from ..models.test_result import TestResult
+from ..thresholds import get_storage_thresholds
 from .base import BaseTest
 
 
@@ -20,11 +23,20 @@ from .base import BaseTest
 # smartctl JSON helper
 # ---------------------------------------------------------------------------
 
+def _get_smartctl_bin() -> str:
+    """Return path to smartctl: bundled copy inside PyInstaller _MEIPASS, or system PATH."""
+    if getattr(_sys, "frozen", False) and hasattr(_sys, "_MEIPASS"):
+        bundled = os.path.join(_sys._MEIPASS, "smartctl")
+        if os.path.isfile(bundled):
+            return bundled
+    return "smartctl"
+
+
 def _smartctl_json(device: str) -> dict:
     """Run `smartctl -a --json <device>` and return parsed output or {}."""
     try:
         r = subprocess.run(
-            ["smartctl", "-a", "--json", device],
+            [_get_smartctl_bin(), "-a", "--json", device],
             capture_output=True, text=True, timeout=15,
         )
         return _json.loads(r.stdout)
@@ -265,31 +277,79 @@ def _fill_usage_from_psutil(drives: list[dict]) -> None:
 # Speed test
 # ---------------------------------------------------------------------------
 
-def _disk_speed_test(size_mb: int) -> dict:
-    """Measure sequential read/write speed using a temp file."""
-    block_size = 1024 * 1024
+def _nocache_fd(fd: int, plat: str) -> None:
+    """Best-effort: disable OS read cache for file descriptor fd."""
+    if plat == "Darwin":
+        try:
+            import fcntl as _fcntl
+            _fcntl.fcntl(fd, 48, 1)  # F_NOCACHE = 48
+        except Exception:
+            pass
+
+
+def _disk_speed_test(size_mb: int, full: bool = False) -> dict:
+    """
+    Measure storage speed using a temp file.
+
+    Quick mode: sequential write (fsync) + sequential read (cache-bypassed).
+    Full mode: same + random 4 KiB reads for up to 5 seconds to measure IOPS.
+
+    macOS: F_NOCACHE (fcntl 48) bypasses page cache on reads — no alignment needed.
+    """
+    block_size = 1024 * 1024          # 1 MiB sequential blocks
+    rand_block = 4096                  # 4 KiB random reads
+    rand_duration = 5.0                # seconds to run random IO phase
     total_bytes = size_mb * 1024 * 1024
     results: dict = {}
     tmp_path: str | None = None
+    _plat = platform.system()
+
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".tmp") as f:
             tmp_path = f.name
-        data = b"\xFF" * block_size
+
+        # --- Sequential write (fsync to flush write cache) ---
+        buf = b"\xFF" * block_size
         start = time.monotonic()
         with open(tmp_path, "wb", buffering=0) as f:
             written = 0
             while written < total_bytes:
                 chunk = min(block_size, total_bytes - written)
-                f.write(data[:chunk])
+                f.write(buf[:chunk])
                 written += chunk
             f.flush()
             os.fsync(f.fileno())
         results["write_mb_s"] = round(size_mb / (time.monotonic() - start), 1)
+
+        # --- Sequential read (bypass page cache for honest measurement) ---
         start = time.monotonic()
         with open(tmp_path, "rb", buffering=0) as f:
+            _nocache_fd(f.fileno(), _plat)
             while f.read(block_size):
                 pass
         results["read_mb_s"] = round(size_mb / (time.monotonic() - start), 1)
+
+        # --- Full mode: random 4 KiB read IOPS ---
+        if full:
+            max_offset = (total_bytes - rand_block) // rand_block  # in blocks
+            rng = _random.Random()
+            ops = 0
+            rand_start = time.monotonic()
+            with open(tmp_path, "rb", buffering=0) as f:
+                _nocache_fd(f.fileno(), _plat)
+                while time.monotonic() - rand_start < rand_duration:
+                    f.seek(rng.randrange(0, max_offset) * rand_block)
+                    f.read(rand_block)
+                    ops += 1
+            elapsed = time.monotonic() - rand_start
+            if elapsed > 0 and ops > 0:
+                results["rand_read_iops"] = round(ops / elapsed)
+                results["rand_read_mb_s"] = round(
+                    (ops * rand_block / (1024 ** 2)) / elapsed, 1
+                )
+                results["rand_read_ops"] = ops
+                results["rand_read_duration_s"] = round(elapsed, 1)
+
     except Exception as exc:
         results["speed_error"] = str(exc)
     finally:
@@ -325,7 +385,59 @@ class StorageTest(BaseTest):
 
         # 3. Speed test
         size_mb = STORAGE_TEST_SIZE_QUICK if self.is_quick() else STORAGE_TEST_SIZE_FULL
-        speed = await loop.run_in_executor(None, _disk_speed_test, size_mb)
+        import functools as _functools
+        speed_fn = _functools.partial(_disk_speed_test, full=not self.is_quick())
+        speed = await loop.run_in_executor(None, speed_fn, size_mb)
+
+        # 4. Evaluate drive temperatures against thresholds
+        drive_temp_fail = False
+        drive_temp_warn = False
+        for drv in drives:
+            temp_thresh, _ = get_storage_thresholds(
+                drv.get("interface", "Unknown"),
+                drv.get("medium_type", "Unknown"),
+            )
+            drv["temp_warn_threshold"] = temp_thresh["warn"]
+            drv["temp_fail_threshold"] = temp_thresh["fail"]
+            if temp_thresh.get("note"):
+                drv["temp_note"] = temp_thresh["note"]
+            temp = drv.get("temp_c")
+            if temp is not None:
+                if temp >= temp_thresh["fail"]:
+                    drive_temp_fail = True
+                elif temp >= temp_thresh["warn"]:
+                    drive_temp_warn = True
+
+        # 5. Evaluate speed against thresholds for the boot drive
+        read_mb_s = speed.get("read_mb_s")
+        write_mb_s = speed.get("write_mb_s")
+        speed_status = "pass"
+        speed_note = ""
+        if drives:
+            boot = drives[0]
+            _, speed_thresh = get_storage_thresholds(
+                boot.get("interface", "Unknown"),
+                boot.get("medium_type", "Unknown"),
+                read_mb_s,
+            )
+            speed["speed_warn_read"] = speed_thresh["warn_read"]
+            speed["speed_fail_read"] = speed_thresh["fail_read"]
+            speed["speed_warn_write"] = speed_thresh["warn_write"]
+            speed["speed_fail_write"] = speed_thresh["fail_write"]
+            speed["speed_expected_read"] = speed_thresh["expected_read"]
+            speed["speed_expected_write"] = speed_thresh["expected_write"]
+            if read_mb_s and read_mb_s < speed_thresh["fail_read"]:
+                speed_status = "fail"
+                speed_note = f"Read {read_mb_s} MB/s — expected ≥{speed_thresh['expected_read']} MB/s"
+            elif write_mb_s and write_mb_s < speed_thresh["fail_write"]:
+                speed_status = "fail"
+                speed_note = f"Write {write_mb_s} MB/s — expected ≥{speed_thresh['expected_write']} MB/s"
+            elif read_mb_s and read_mb_s < speed_thresh["warn_read"]:
+                speed_status = "warn"
+                speed_note = f"Read {read_mb_s} MB/s below expected {speed_thresh['expected_read']} MB/s"
+            elif write_mb_s and write_mb_s < speed_thresh["warn_write"]:
+                speed_status = "warn"
+                speed_note = f"Write {write_mb_s} MB/s below expected {speed_thresh['expected_write']} MB/s"
 
         data: dict = {
             "drives": drives,
@@ -333,7 +445,8 @@ class StorageTest(BaseTest):
             **speed,
         }
 
-        # 4. Determine status
+        # 6. Determine overall status — priority: SMART fail > temp fail > speed fail >
+        #    reallocated > temp warn > speed warn > no SMART > PASS
         failed = any(d.get("smart_status") == "FAILED" for d in drives)
         reallocated = any(
             d.get("reallocated_sectors") not in (None, 0, "0")
@@ -346,9 +459,29 @@ class StorageTest(BaseTest):
                 summary="SMART reports drive FAILURE — immediate backup recommended!",
                 data=data,
             )
+        elif drive_temp_fail:
+            self.result.mark_fail(
+                summary="Drive overheating — check cooling immediately",
+                data=data,
+            )
+        elif speed_status == "fail":
+            self.result.mark_fail(
+                summary=f"Storage performance critical: {speed_note}",
+                data=data,
+            )
         elif reallocated:
             self.result.mark_warn(
                 summary="Reallocated sectors detected — drive may be failing",
+                data=data,
+            )
+        elif drive_temp_warn:
+            self.result.mark_warn(
+                summary="Drive temperature elevated — check airflow",
+                data=data,
+            )
+        elif speed_status == "warn":
+            self.result.mark_warn(
+                summary=f"Storage underperforming: {speed_note}",
                 data=data,
             )
         elif no_smart:

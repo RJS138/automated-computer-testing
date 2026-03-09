@@ -46,11 +46,16 @@ else
     echo "  Live ISO present: $ISO_PATH"
 fi
 
+# Determine expected macOS binary name for this machine
 MACOS_DIR="$REPO_ROOT/dist/macos"
 MACOS_ARCH="$(uname -m)"
-MACOS_BIN="$MACOS_DIR/pctester_${MACOS_ARCH}"
+if [ "$MACOS_ARCH" = "arm64" ]; then
+    MACOS_BIN="$MACOS_DIR/PC Tester (Apple Silicon)"
+else
+    MACOS_BIN="$MACOS_DIR/PC Tester (Intel)"
+fi
 if [ ! -f "$MACOS_BIN" ]; then
-    echo "  macOS binary for arch ${MACOS_ARCH} missing — running scripts/build-macos.sh..."
+    echo "  macOS binary missing — running scripts/build-macos.sh..."
     bash "$REPO_ROOT/scripts/build-macos.sh"
 else
     echo "  macOS binary present: $MACOS_BIN"
@@ -76,39 +81,48 @@ echo "  Folders: win/ linux/ macos/ iso/ reports/"
 echo ""
 echo "[2/7] Copying Windows binaries..."
 WIN_SRC="$REPO_ROOT/dist/windows"
-if [ -d "$WIN_SRC" ] && ls "$WIN_SRC"/*.exe &>/dev/null 2>&1; then
-    cp "$WIN_SRC"/*.exe "$VENTOY_MOUNT/win/"
-    for f in "$WIN_SRC"/*.exe; do
+WIN_COUNT=0
+if [ -d "$WIN_SRC" ]; then
+    while IFS= read -r -d '' f; do
+        cp "$f" "$VENTOY_MOUNT/win/"
         echo "  Copied: win/$(basename "$f")"
-    done
-else
+        WIN_COUNT=$((WIN_COUNT + 1))
+    done < <(find "$WIN_SRC" -maxdepth 1 -name "PC Tester*.exe" -print0 2>/dev/null)
+fi
+if [ "$WIN_COUNT" -eq 0 ]; then
     warn "No Windows binaries found in dist/windows/. Run scripts/build-windows.bat on a Windows machine."
 fi
 
 echo ""
 echo "[3/7] Copying Linux binaries..."
 LINUX_SRC="$REPO_ROOT/dist/linux"
-if [ -d "$LINUX_SRC" ] && ls "$LINUX_SRC"/pctester_* &>/dev/null 2>&1; then
-    for f in "$LINUX_SRC"/pctester_*; do
+LINUX_COUNT=0
+if [ -d "$LINUX_SRC" ]; then
+    while IFS= read -r -d '' f; do
         cp "$f" "$VENTOY_MOUNT/linux/"
         chmod +x "$VENTOY_MOUNT/linux/$(basename "$f")"
         echo "  Copied: linux/$(basename "$f")"
-    done
-else
+        LINUX_COUNT=$((LINUX_COUNT + 1))
+    done < <(find "$LINUX_SRC" -maxdepth 1 -name "PC Tester (Linux*)" -print0 2>/dev/null)
+fi
+if [ "$LINUX_COUNT" -eq 0 ]; then
     warn "No Linux binaries found in dist/linux/. Run scripts/build-linux.sh on a Linux machine."
 fi
 
 echo ""
 echo "[4/7] Copying macOS binaries..."
 MAC_SRC="$REPO_ROOT/dist/macos"
-if [ -d "$MAC_SRC" ] && ls "$MAC_SRC"/pctester_* &>/dev/null 2>&1; then
-    for f in "$MAC_SRC"/pctester_*; do
+MAC_COUNT=0
+if [ -d "$MAC_SRC" ]; then
+    while IFS= read -r -d '' f; do
         cp "$f" "$VENTOY_MOUNT/macos/"
         chmod +x "$VENTOY_MOUNT/macos/$(basename "$f")"
         echo "  Copied: macos/$(basename "$f")"
-    done
-else
-    warn "No macOS binaries found in dist/macos/. Run scripts/build-macos.sh on each Mac architecture you care about."
+        MAC_COUNT=$((MAC_COUNT + 1))
+    done < <(find "$MAC_SRC" -maxdepth 1 \( -name "PC Tester (Apple Silicon)" -o -name "PC Tester (Intel)" \) -print0 2>/dev/null)
+fi
+if [ "$MAC_COUNT" -eq 0 ]; then
+    warn "No macOS binaries found in dist/macos/. Run scripts/build-macos.sh (Apple Silicon) and/or scripts/build-macos-intel.sh (Intel)."
 fi
 
 echo ""
@@ -136,29 +150,36 @@ This USB drive contains diagnostic tools for PC repair technicians.
 
 CONTENTS
 --------
-win/         Windows executables (x64, arm64)
-linux/       Linux binaries (x86_64)
-macos/       macOS binaries (x86_64, arm64)
-iso/         Bootable live ISO (boot via Ventoy menu)
-reports/     Saved diagnostic reports
+win/     Windows executables
+           PC Tester (Windows x64).exe
+           PC Tester (Windows ARM64).exe
+linux/   Linux binaries
+           PC Tester (Linux x86_64)
+           PC Tester (Linux ARM64)
+macos/   macOS binaries
+           PC Tester (Apple Silicon)
+           PC Tester (Intel)
+iso/     Bootable live ISO (boot via Ventoy menu)
+reports/ Saved diagnostic reports
 
 HOW TO USE
 ----------
 Windows:
   1. Plug in the USB drive.
-  2. Open win\ and run the appropriate .exe for your architecture.
+  2. Open win\ and run "PC Tester (Windows x64).exe" (or ARM64 for ARM devices).
   3. Reports are saved automatically to the reports\ folder on this drive.
 
 Linux (installed OS):
   1. Plug in the USB drive.
-  2. Open a terminal and run: chmod +x /path/to/linux/pctester_x86_64
-  3. Run: /path/to/linux/pctester_x86_64
+  2. Open a terminal, navigate to the linux/ folder on the USB drive.
+  3. Run:  chmod +x "PC Tester (Linux x86_64)"
+           ./"PC Tester (Linux x86_64)"
 
 macOS:
   1. Plug in the USB drive.
-  2. Open macos/ and run the binary that matches your architecture (x86_64 or arm64).
-  3. If macOS blocks it, you may need to remove the quarantine attribute:
-       xattr -d com.apple.quarantine /path/to/macos/pctester_*
+  2. Open macos/ and run "PC Tester (Apple Silicon)" or "PC Tester (Intel)".
+  3. If macOS blocks it, right-click → Open, or remove the quarantine attribute:
+       xattr -d com.apple.quarantine "/Volumes/Ventoy/macos/PC Tester (Apple Silicon)"
 
 Bootable (for machines that can't boot their own OS):
   1. Plug in the USB drive and boot from it (F12 / Del / F2 for boot menu).

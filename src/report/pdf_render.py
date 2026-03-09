@@ -258,6 +258,52 @@ def _rows_manual(d: dict) -> list[tuple[str, str]]:
     return rows
 
 
+def _rows_display(d: dict) -> list[tuple[str, str]]:
+    rows = []
+    for i, disp in enumerate(d.get("displays", []), 1):
+        label = disp.get("name", "Unknown Display")
+        tags = []
+        if disp.get("is_primary"):
+            tags.append("Primary")
+        if disp.get("is_internal"):
+            tags.append("Built-in")
+        if tags:
+            label += f" ({', '.join(tags)})"
+        rows.append((f"Display {i} — {label}", ""))
+        rows.append(("  Connection", disp.get("connection_type") or "—"))
+        if disp.get("panel_technology"):
+            rows.append(("  Panel Type", disp["panel_technology"]))
+        if disp.get("native_resolution"):
+            rows.append(("  Native Resolution", disp["native_resolution"]))
+        if disp.get("max_resolution") and disp.get("max_resolution") != disp.get("native_resolution"):
+            rows.append(("  Max Resolution", disp["max_resolution"]))
+        if disp.get("ui_resolution"):
+            hz = f" @ {int(disp['ui_refresh_hz'])} Hz" if disp.get("ui_refresh_hz") is not None else ""
+            rows.append(("  UI Resolution", f"{disp['ui_resolution']}{hz}"))
+        elif disp.get("current_resolution"):
+            hz = f" @ {int(disp['current_refresh_hz'])} Hz" if disp.get("current_refresh_hz") is not None else ""
+            rows.append(("  Resolution", f"{disp['current_resolution']}{hz}"))
+        if disp.get("max_refresh_hz") and disp.get("max_refresh_hz") not in (
+            disp.get("ui_refresh_hz"), disp.get("current_refresh_hz")
+        ):
+            rows.append(("  Max Refresh Rate", f"{int(disp['max_refresh_hz'])} Hz"))
+        if disp.get("inches"):
+            rows.append(("  Screen Size", f"{disp['inches']}\""))
+        if disp.get("physical_width_mm"):
+            rows.append(("  Physical Size", f"{disp['physical_width_mm']} × {disp['physical_height_mm']} mm"))
+        if disp.get("manufacturer"):
+            rows.append(("  Manufacturer", disp["manufacturer"]))
+        if disp.get("model"):
+            rows.append(("  Model", disp["model"]))
+        if disp.get("manufacturer_id"):
+            rows.append(("  Manufacturer ID", disp["manufacturer_id"]))
+        if disp.get("panel_serial"):
+            rows.append(("  Panel Serial", disp["panel_serial"]))
+        if disp.get("serial") and disp.get("serial") != disp.get("panel_serial"):
+            rows.append(("  Serial", disp["serial"]))
+    return rows
+
+
 def _rows_generic(d: dict) -> list[tuple[str, str]]:
     rows = []
     for k, v in d.items():
@@ -269,8 +315,8 @@ def _rows_generic(d: dict) -> list[tuple[str, str]]:
 
 _ROW_EXTRACTORS = {
     "cpu": _rows_cpu, "ram": _rows_ram, "storage": _rows_storage,
-    "gpu": _rows_gpu, "network": _rows_network, "battery": _rows_battery,
-    "system_info": _rows_system_info, "manual": _rows_manual,
+    "gpu": _rows_gpu, "display": _rows_display, "network": _rows_network,
+    "battery": _rows_battery, "system_info": _rows_system_info, "manual": _rows_manual,
 }
 
 

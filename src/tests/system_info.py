@@ -100,11 +100,11 @@ def _get_info_darwin() -> dict:
         pass
 
     # Regulatory model number (A-number printed on device, e.g. "A2992")
-    # Found in ioreg as a hex-encoded ASCII string.
-    # ioreg -l can emit non-UTF-8 bytes, so decode with errors="ignore".
+    # Stored as a zero-padded hex-encoded ASCII string in IOPlatformExpertDevice.
+    # Use the targeted class query — ioreg -l dumps the entire tree and is far too slow.
     try:
         result = subprocess.run(
-            ["ioreg", "-l"],
+            ["ioreg", "-c", "IOPlatformExpertDevice", "-r", "-d", "2"],
             capture_output=True, timeout=8,
         )
         stdout = result.stdout.decode("utf-8", errors="ignore")

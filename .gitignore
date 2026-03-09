@@ -221,3 +221,6 @@ __marimo__/
 env/
 .DS_Store
 reports/
+
+# ISO build — staged binary (built by build-iso.sh, not tracked in git)
+scripts/iso-config/config/includes.chroot/usr/

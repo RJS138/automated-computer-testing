@@ -23,7 +23,11 @@ set "ARCH=x64"
 if "%PROCESSOR_ARCHITECTURE%"=="ARM64" set "ARCH=arm64"
 if "%PROCESSOR_ARCHITEW6432%"=="ARM64" set "ARCH=arm64"
 
-set "APP_NAME=pctester_%ARCH%.exe"
+if "%ARCH%"=="arm64" (
+    set "APP_NAME=PC Tester (Windows ARM64).exe"
+) else (
+    set "APP_NAME=PC Tester (Windows x64).exe"
+)
 set "DIST_DIR=%REPO_ROOT%\dist\windows"
 
 echo === PC Tester - Windows Build ===
@@ -61,6 +65,11 @@ uv run pyinstaller ^
   --hidden-import reportlab ^
   --collect-all textual ^
   --collect-all reportlab ^
+  --collect-submodules src.tests ^
+  --collect-submodules src.ui ^
+  --collect-submodules src.report ^
+  --collect-submodules src.models ^
+  --collect-submodules src.utils ^
   main.py
 if %ERRORLEVEL% neq 0 (
     echo ERROR: PyInstaller failed.

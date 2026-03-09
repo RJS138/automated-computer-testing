@@ -7,6 +7,7 @@ import subprocess
 import psutil
 
 from ..models.test_result import TestResult
+from ..thresholds import BATTERY_HEALTH_GOOD, BATTERY_HEALTH_WARN, get_battery_cycle_thresholds
 from .base import BaseTest
 
 
@@ -258,20 +259,45 @@ class BatteryTest(BaseTest):
             data["design_capacity_mwh"] = details.get("design_capacity_mwh")
             data["full_charge_capacity_mwh"] = details.get("full_charge_capacity_mwh")
 
-        if health_pct is not None and health_pct < 50:
+        # Cycle count thresholds
+        cycle_thresh = get_battery_cycle_thresholds(sys, details.get("device_name", ""))
+        data["cycle_warn_threshold"] = cycle_thresh["warn"]
+        data["cycle_fail_threshold"] = cycle_thresh["fail"]
+
+        cycle_count = data.get("cycle_count")
+        cycle_issue: str | None = None
+        if cycle_count is not None:
+            if cycle_count >= cycle_thresh["fail"]:
+                cycle_issue = "fail"
+            elif cycle_count >= cycle_thresh["warn"]:
+                cycle_issue = "warn"
+
+        # Status — health_pct drives primary status; cycle count can escalate PASS→WARN
+        if health_pct is not None and health_pct < BATTERY_HEALTH_WARN:
             self.result.mark_fail(
                 summary=f"Battery health critically low: {health_pct}% of design capacity",
                 data=data,
             )
-        elif health_pct is not None and health_pct < 80:
+        elif health_pct is not None and health_pct < BATTERY_HEALTH_GOOD:
             self.result.mark_warn(
                 summary=f"Battery degraded: {health_pct}% of design capacity",
                 data=data,
             )
+        elif cycle_issue == "fail":
+            self.result.mark_warn(
+                summary=f"Battery cycle count very high: {cycle_count} cycles (≥{cycle_thresh['fail']}) — replace soon",
+                data=data,
+            )
+        elif cycle_issue == "warn":
+            self.result.mark_warn(
+                summary=f"Battery cycle count elevated: {cycle_count} cycles (≥{cycle_thresh['warn']})",
+                data=data,
+            )
         else:
             health_str = f"{health_pct}%" if health_pct is not None else "Unknown"
+            cycle_str = f" — {cycle_count} cycles" if cycle_count is not None else ""
             self.result.mark_pass(
-                summary=f"Battery {data['percent_charged']}% charged — health {health_str}",
+                summary=f"Battery {data['percent_charged']}% charged — health {health_str}{cycle_str}",
                 data=data,
             )
 

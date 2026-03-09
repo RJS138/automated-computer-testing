@@ -336,6 +336,113 @@
             <p>No GPU data available.</p>
             {% endfor %}
 
+          {# Displays #}
+          {% elif result.name == 'display' %}
+            {% for disp in result.data.get('displays', []) %}
+            <div class="gpu-card">
+              <div class="gpu-name">
+                {{ disp.get('name', 'Unknown Display') }}
+                {% if disp.get('is_primary') %}
+                  <span style="margin-left:6px;font-size:10px;background:#1e3a5f;color:#fff;padding:1px 6px;border-radius:8px;vertical-align:middle;">PRIMARY</span>
+                {% endif %}
+                {% if disp.get('is_internal') %}
+                  <span style="margin-left:4px;font-size:10px;background:#546e7a;color:#fff;padding:1px 6px;border-radius:8px;vertical-align:middle;">BUILT-IN</span>
+                {% endif %}
+              </div>
+              <table class="data-table" style="margin-top:6px;">
+                <tr>
+                  <td class="data-key" style="width:160px;">Connection</td>
+                  <td class="data-value">{{ disp.get('connection_type') or '—' }}</td>
+                </tr>
+                {% if disp.get('panel_technology') %}
+                <tr>
+                  <td class="data-key">Panel Type</td>
+                  <td class="data-value">{{ disp.panel_technology }}</td>
+                </tr>
+                {% endif %}
+                {% if disp.get('native_resolution') %}
+                <tr>
+                  <td class="data-key">Native Resolution</td>
+                  <td class="data-value">{{ disp.native_resolution }}</td>
+                </tr>
+                {% endif %}
+                {% if disp.get('max_resolution') and disp.get('max_resolution') != disp.get('native_resolution') %}
+                <tr>
+                  <td class="data-key">Max Resolution</td>
+                  <td class="data-value">{{ disp.max_resolution }}</td>
+                </tr>
+                {% endif %}
+                {% if disp.get('ui_resolution') %}
+                <tr>
+                  <td class="data-key">UI Resolution</td>
+                  <td class="data-value">{{ disp.ui_resolution }}{% if disp.get('ui_refresh_hz') is not none %} @ {{ disp.ui_refresh_hz | int }} Hz{% endif %}</td>
+                </tr>
+                {% elif disp.get('current_resolution') %}
+                <tr>
+                  <td class="data-key">Resolution</td>
+                  <td class="data-value">{{ disp.current_resolution }}{% if disp.get('current_refresh_hz') is not none %} @ {{ disp.current_refresh_hz | int }} Hz{% endif %}</td>
+                </tr>
+                {% endif %}
+                {% if not disp.get('ui_resolution') and not disp.get('current_resolution') and disp.get('current_refresh_hz') is not none %}
+                <tr>
+                  <td class="data-key">Refresh Rate</td>
+                  <td class="data-value">{{ disp.current_refresh_hz | int }} Hz</td>
+                </tr>
+                {% endif %}
+                {% if disp.get('max_refresh_hz') and disp.get('max_refresh_hz') != disp.get('ui_refresh_hz') and disp.get('max_refresh_hz') != disp.get('current_refresh_hz') %}
+                <tr>
+                  <td class="data-key">Max Refresh Rate</td>
+                  <td class="data-value">{{ disp.max_refresh_hz | int }} Hz</td>
+                </tr>
+                {% endif %}
+                {% if disp.get('inches') %}
+                <tr>
+                  <td class="data-key">Screen Size</td>
+                  <td class="data-value">{{ disp.inches }}"</td>
+                </tr>
+                {% endif %}
+                {% if disp.get('physical_width_mm') %}
+                <tr>
+                  <td class="data-key">Physical Size</td>
+                  <td class="data-value">{{ disp.physical_width_mm }} × {{ disp.physical_height_mm }} mm</td>
+                </tr>
+                {% endif %}
+                {% if disp.get('manufacturer') %}
+                <tr>
+                  <td class="data-key">Manufacturer</td>
+                  <td class="data-value">{{ disp.manufacturer }}</td>
+                </tr>
+                {% endif %}
+                {% if disp.get('model') %}
+                <tr>
+                  <td class="data-key">Model</td>
+                  <td class="data-value">{{ disp.model }}</td>
+                </tr>
+                {% endif %}
+                {% if disp.get('manufacturer_id') %}
+                <tr>
+                  <td class="data-key">Manufacturer ID</td>
+                  <td class="data-value">{{ disp.manufacturer_id }}</td>
+                </tr>
+                {% endif %}
+                {% if disp.get('panel_serial') %}
+                <tr>
+                  <td class="data-key">Panel Serial</td>
+                  <td class="data-value" style="font-family:monospace;">{{ disp.panel_serial }}</td>
+                </tr>
+                {% endif %}
+                {% if disp.get('serial') and disp.get('serial') != disp.get('panel_serial') %}
+                <tr>
+                  <td class="data-key">Serial Number</td>
+                  <td class="data-value" style="font-family:monospace;">{{ disp.serial }}</td>
+                </tr>
+                {% endif %}
+              </table>
+            </div>
+            {% else %}
+            <p>No display data available.</p>
+            {% endfor %}
+
           {# Network #}
           {% elif result.name == 'network' %}
             {% set wifi = result.data.get('wifi', {}) %}

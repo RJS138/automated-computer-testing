@@ -181,6 +181,12 @@ class SmartctlCheck(BaseCheck):
     }
 
     def run(self) -> CheckResult:
+        # When running as a PyInstaller bundle, smartctl is embedded — no system install needed
+        if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+            bundled = os.path.join(sys._MEIPASS, "smartctl")
+            if os.path.isfile(bundled):
+                return CheckResult(status="ok", detail="smartctl bundled in application")
+
         path = shutil.which("smartctl")
         if path:
             try:
@@ -204,32 +210,32 @@ class MacOSTempCheck(BaseCheck):
     """
     Checks whether CPU temperature data can be read on macOS.
 
-    Preferred: mactop (Apple Silicon + Intel, no root required).
-    Fallback:  osx-cpu-temp (Intel only).
+    Apple Silicon: requires mactop (brew install mactop) — reads SoC temps without root.
+    Intel Mac:     uses powermetrics (built-in macOS tool, needs root/sudo).
     """
 
     key = "macos_temp"
-    label = "CPU Temperature (mactop)"
+    label = "CPU Temperature"
     description = (
-        "mactop reads CPU/GPU temps and power on Apple Silicon and Intel Macs "
-        "without requiring sudo. Without it, temperature fields will be blank."
+        "Apple Silicon: mactop reads SoC temps without sudo. "
+        "Intel Mac: powermetrics is built-in (requires root/sudo for temp access)."
     )
     platforms = ("Darwin",)
     optional = True
 
     def run(self) -> CheckResult:
+        if platform.machine() != "arm64":
+            # Intel Mac — powermetrics is always present; elevation check covers sudo requirement
+            return CheckResult(
+                status="ok",
+                detail="Intel Mac — CPU temps via powermetrics (built-in, requires root/sudo)",
+            )
+        # Apple Silicon
         if shutil.which("mactop"):
             return CheckResult(status="ok", detail=f"mactop found: {shutil.which('mactop')}")
-        if shutil.which("osx-cpu-temp"):
-            return CheckResult(
-                status="warn",
-                detail="osx-cpu-temp found (Intel only) — install mactop for Apple Silicon support",
-                install_cmd=["brew", "install", "mactop"],
-                install_label="brew install mactop",
-            )
         return CheckResult(
             status="warn",
-            detail="No temperature tool found — install mactop for CPU/GPU temp in reports",
+            detail="mactop not found — install it for CPU/GPU temp and power data on Apple Silicon",
             install_cmd=["brew", "install", "mactop"],
             install_label="brew install mactop",
         )

@@ -45,6 +45,7 @@ TEST_REGISTRY = [
     ("ram",         "RAM",         "ram",         "RamTest"),
     ("storage",     "Storage",     "storage",     "StorageTest"),
     ("gpu",         "GPU",         "gpu",         "GpuTest"),
+    ("display",     "Displays",    "display",     "DisplayTest"),
     ("network",     "Network",     "network",     "NetworkTest"),
     ("battery",     "Battery",     "battery",     "BatteryTest"),
 ]
@@ -59,12 +60,13 @@ _EXPECTED_SECONDS: dict[str, dict[TestMode, float | None]] = {
     "storage":     {TestMode.QUICK: STORAGE_SPEED_QUICK + 5,  TestMode.FULL: STORAGE_SPEED_FULL + 10},
     "system_info": {TestMode.QUICK: None, TestMode.FULL: None},
     "gpu":         {TestMode.QUICK: None, TestMode.FULL: None},
+    "display":     {TestMode.QUICK: None, TestMode.FULL: None},
     "network":     {TestMode.QUICK: None, TestMode.FULL: None},
     "battery":     {TestMode.QUICK: None, TestMode.FULL: None},
 }
 
 # Tests that run simultaneously (fast, info-gathering)
-_PARALLEL = ["system_info", "network", "battery", "gpu"]
+_PARALLEL = ["system_info", "network", "battery", "gpu", "display"]
 
 # Tests that run one at a time after the parallel group (resource-intensive)
 _SEQUENTIAL = ["cpu", "ram", "storage"]

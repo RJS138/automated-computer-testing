@@ -5,6 +5,7 @@ import platform
 import subprocess
 
 from ..models.test_result import TestResult
+from ..thresholds import get_gpu_thresholds
 from .base import BaseTest
 
 
@@ -181,9 +182,18 @@ def _query_macos_system_profiler() -> list[dict]:
         entries = data.get("SPDisplaysDataType", [])
         for entry in entries:
             name = entry.get("sppci_model") or entry.get("_name", "Unknown GPU")
+            name_lower = name.lower()
             vendor = "Unknown"
-            for v in ("Apple", "NVIDIA", "AMD", "ATI", "Intel"):
-                if v.lower() in name.lower():
+            # Check explicit vendor strings first; "Radeon" without "AMD" prefix is still AMD
+            for v, keyword in (
+                ("Apple", "apple"),
+                ("NVIDIA", "nvidia"),
+                ("AMD", "amd"),
+                ("AMD", "radeon"),
+                ("ATI", "ati"),
+                ("Intel", "intel"),
+            ):
+                if keyword in name_lower:
                     vendor = v
                     break
 
@@ -206,8 +216,17 @@ def _query_macos_system_profiler() -> list[dict]:
             if metal:
                 gpu["metal_support"] = metal.replace("spdisplays_", "").replace("metal", "Metal ")
 
-            # VRAM — Intel discrete/integrated
-            vram_str = entry.get("spdisplays_vram") or entry.get("spdisplays_vram_shared_system_memory")
+            # VRAM — key name varies by GPU type and macOS version:
+            #   spdisplays_vram                     — discrete GPU
+            #   spdisplays_vram_shared_system_memory — Intel iGPU (shared)
+            #   other spdisplays_vram_* keys         — future/unknown variants
+            # Prefer spdisplays_vram (discrete); fall back to any other vram key.
+            vram_str = entry.get("spdisplays_vram")
+            if not vram_str:
+                for k, v in entry.items():
+                    if "vram" in k.lower() and v:
+                        vram_str = str(v)
+                        break
             if vram_str:
                 gpu["vram_total_mb"] = _parse_vram_to_mb(str(vram_str))
 
@@ -260,11 +279,38 @@ class GpuTest(BaseTest):
                 if g["name"] not in nvidia_names:
                     gpus.append(g)
 
+        # Annotate each GPU with temp thresholds and collect issues
+        temp_issues: list[tuple[str, str, float]] = []  # (severity, name, temp)
+        for g in gpus:
+            thresh = get_gpu_thresholds(g.get("vendor", ""), g.get("name", ""))
+            g["temp_warn_threshold"] = thresh["load_warn"]
+            g["temp_fail_threshold"] = thresh["fail"]
+            if thresh.get("note"):
+                g["temp_note"] = thresh["note"]
+            temp = g.get("temp_c")
+            if temp is not None:
+                if temp >= thresh["fail"]:
+                    temp_issues.append(("fail", g.get("name", "GPU"), float(temp)))
+                elif temp >= thresh["load_warn"]:
+                    temp_issues.append(("warn", g.get("name", "GPU"), float(temp)))
+
         data: dict = {"gpus": gpus}
 
         if not gpus:
             self.result.mark_warn(
                 summary="No GPU detected or query failed",
+                data=data,
+            )
+        elif any(sev == "fail" for sev, _, _ in temp_issues):
+            worst = next((n, t) for sev, n, t in temp_issues if sev == "fail")
+            self.result.mark_fail(
+                summary=f"GPU overheating: {worst[0]} at {worst[1]}°C",
+                data=data,
+            )
+        elif any(sev == "warn" for sev, _, _ in temp_issues):
+            worst = next((n, t) for sev, n, t in temp_issues if sev == "warn")
+            self.result.mark_warn(
+                summary=f"GPU running hot: {worst[0]} at {worst[1]}°C — see report",
                 data=data,
             )
         else:

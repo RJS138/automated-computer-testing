@@ -10,12 +10,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 import psutil
 
-from ..config import (
-    CPU_STRESS_FULL,
-    CPU_STRESS_QUICK,
-    CPU_TEMP_FAIL,
-    CPU_TEMP_WARN,
-)
+from ..config import CPU_STRESS_FULL, CPU_STRESS_QUICK
+from ..thresholds import get_cpu_thresholds
 from ..models.test_result import TestResult
 from .base import BaseTest
 
@@ -80,11 +76,34 @@ def _read_mactop_sample() -> dict:
     return {}
 
 
+def _get_cpu_temps_powermetrics() -> list[float]:
+    """
+    Intel Mac fallback: read CPU die temp via powermetrics (built-in macOS, needs root).
+    Tries running directly (works if already root), then sudo -n (passwordless sudo).
+    """
+    for cmd in (
+        ["powermetrics", "-n", "1", "-i", "500", "--samplers", "smc"],
+        ["sudo", "-n", "powermetrics", "-n", "1", "-i", "500", "--samplers", "smc"],
+    ):
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+            if r.returncode == 0:
+                m = re.search(r"CPU die temperature:\s*([\d.]+)", r.stdout, re.IGNORECASE)
+                if m:
+                    t = float(m.group(1))
+                    if t > 0:
+                        return [t]
+        except Exception:
+            pass
+    return []
+
+
 def _get_cpu_temps_macos() -> list[float]:
     """
     Read CPU temperature on macOS.
-    1. mactop  — Apple Silicon + Intel, no root required (brew install mactop).
-    2. osx-cpu-temp — Intel fallback (returns 0.0 on Apple Silicon, filtered out).
+    1. mactop        — Apple Silicon (no root required; brew install mactop).
+    2. powermetrics  — Intel Mac (built-in macOS, needs root/sudo).
+    3. osx-cpu-temp  — Intel legacy fallback binary.
     """
     sample = _read_mactop_sample()
     if sample:
@@ -93,7 +112,13 @@ def _get_cpu_temps_macos() -> list[float]:
         if cpu_temp and float(cpu_temp) > 0:
             return [float(cpu_temp)]
 
-    # Intel fallback
+    # Intel Mac — powermetrics is built-in
+    if platform.machine() != "arm64":
+        temps = _get_cpu_temps_powermetrics()
+        if temps:
+            return temps
+
+    # osx-cpu-temp legacy fallback
     try:
         pm = subprocess.run(
             ["osx-cpu-temp"], capture_output=True, text=True, timeout=5,
@@ -112,10 +137,27 @@ def _get_cpu_temps_macos() -> list[float]:
 
 
 def _temp_unavailable_note() -> str:
+    if platform.machine() == "arm64":
+        return (
+            "CPU temperature unavailable. Install mactop for Apple Silicon support:\n"
+            "  brew install mactop"
+        )
     return (
-        "CPU temperature unavailable. Install mactop for Apple Silicon support:\n"
-        "  brew install mactop"
+        "CPU temperature unavailable. Run as root for powermetrics temp access:\n"
+        "  sudo \"./PC Tester (Intel)\""
     )
+
+
+def _is_mac_fanless() -> bool:
+    """True if this Mac has no fan (MacBook Air)."""
+    try:
+        r = subprocess.run(
+            ["sysctl", "-n", "hw.model"],
+            capture_output=True, text=True, timeout=3,
+        )
+        return "air" in r.stdout.strip().lower()
+    except Exception:
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -244,16 +286,40 @@ class CpuTest(BaseTest):
             if total_power is not None:
                 data["total_power_w"] = round(float(total_power), 2)
 
+        # --- Determine thresholds for this CPU ---
+        has_battery = psutil.sensors_battery() is not None
+        is_fanless = _is_mac_fanless() if platform.system() == "Darwin" else False
+        thresh = get_cpu_thresholds(
+            data.get("brand", "Unknown"),
+            platform.system(),
+            has_battery,
+            is_fanless,
+        )
+        data["cpu_family"] = thresh["family"]
+        data["temp_thresh_idle_warn"] = thresh["idle_warn"]
+        data["temp_thresh_load_warn"] = thresh["load_warn"]
+        data["temp_thresh_fail"] = thresh["fail"]
+        if thresh.get("note"):
+            data["temp_thresh_note"] = thresh["note"]
+
         # --- Determine status ---
         peak = data["temp_peak"]
-        if peak is not None and peak >= CPU_TEMP_FAIL:
+        idle = data["temp_idle"]
+
+        if peak is not None and peak >= thresh["fail"]:
             self.result.mark_fail(
-                summary=f"CPU overheating: peak {peak}°C (threshold {CPU_TEMP_FAIL}°C)",
+                summary=f"CPU overheating: peak {peak}°C (limit {thresh['fail']}°C)",
                 data=data,
             )
-        elif peak is not None and peak >= CPU_TEMP_WARN:
+        elif peak is not None and peak >= thresh["load_warn"]:
+            note_suffix = " — see report for spec details" if thresh.get("note") else ""
             self.result.mark_warn(
-                summary=f"CPU running hot: peak {peak}°C (warn {CPU_TEMP_WARN}°C)",
+                summary=f"CPU running hot: peak {peak}°C (warn ≥{thresh['load_warn']}°C{note_suffix})",
+                data=data,
+            )
+        elif idle is not None and idle >= thresh["idle_warn"]:
+            self.result.mark_warn(
+                summary=f"CPU idle temp elevated: {idle}°C (warn ≥{thresh['idle_warn']}°C) — check cooling",
                 data=data,
             )
         else:
