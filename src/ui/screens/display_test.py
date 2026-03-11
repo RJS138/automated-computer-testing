@@ -102,12 +102,17 @@ class DisplayTestScreen(Screen):
 
     async def _try_external(self) -> bool | None:
         """
-        Launch _display_helper.py as a subprocess.
+        Launch the display helper as a subprocess.
+
+        In a frozen PyInstaller binary the exe re-invokes itself with
+        --run-helper display.  In dev mode the helper script is called
+        directly via the Python interpreter.
 
         Returns True/False on success, None if tkinter is unavailable
         (caller should fall back to terminal mode).
         """
-        if not _HELPER.exists():
+        frozen = hasattr(sys, "_MEIPASS")
+        if not frozen and not _HELPER.exists():
             return None
 
         self._external_running = True
@@ -120,9 +125,13 @@ class DisplayTestScreen(Screen):
             "  Full-screen display test in progress…  "
         )
 
+        if frozen:
+            cmd = [sys.executable, "--run-helper", "display"]
+        else:
+            cmd = [sys.executable, str(_HELPER)]
+
         proc = await asyncio.create_subprocess_exec(
-            sys.executable,
-            str(_HELPER),
+            *cmd,
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
         )

@@ -302,43 +302,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pc-tester"
-version = "1.0.0"
-source = { editable = "." }
-dependencies = [
-    { name = "gputil" },
-    { name = "jinja2" },
-    { name = "psutil" },
-    { name = "py-cpuinfo" },
-    { name = "pynvml" },
-    { name = "pysmart" },
-    { name = "reportlab" },
-    { name = "textual" },
-    { name = "wmi", marker = "sys_platform == 'win32'" },
-]
-
-[package.dev-dependencies]
-build = [
-    { name = "pyinstaller" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "gputil", specifier = ">=1.4.0" },
-    { name = "jinja2", specifier = ">=3.1.0" },
-    { name = "psutil", specifier = ">=5.9.0" },
-    { name = "py-cpuinfo", specifier = ">=9.0.0" },
-    { name = "pynvml", specifier = ">=11.5.0" },
-    { name = "pysmart", specifier = ">=1.3.0" },
-    { name = "reportlab", specifier = ">=4.0.0" },
-    { name = "textual", specifier = ">=0.47.0" },
-    { name = "wmi", marker = "sys_platform == 'win32'", specifier = ">=1.5.1" },
-]
-
-[package.metadata.requires-dev]
-build = [{ name = "pyinstaller", specifier = ">=6.0.0" }]
-
-[[package]]
 name = "pefile"
 version = "2024.8.26"
 source = { registry = "https://pypi.org/simple" }
@@ -643,6 +606,43 @@ sdist = { url = "https://files.pythonhosted.org/packages/be/08/c6bcb1e3c4c9528ec
 wheels = [
     { url = "https://files.pythonhosted.org/packages/77/bc/0cd17f96f00b6e8bfbca64c574088c85f3c614912b3030f313752e30a099/textual-8.0.2-py3-none-any.whl", hash = "sha256:4ceadbe0e8a30eb80f9995000f4d031f711420a31b02da38f3482957b7c50ce4", size = 719174, upload-time = "2026-03-03T20:23:50.46Z" },
 ]
+
+[[package]]
+name = "touchstone"
+version = "1.0.0"
+source = { editable = "." }
+dependencies = [
+    { name = "gputil" },
+    { name = "jinja2" },
+    { name = "psutil" },
+    { name = "py-cpuinfo" },
+    { name = "pynvml" },
+    { name = "pysmart" },
+    { name = "reportlab" },
+    { name = "textual" },
+    { name = "wmi", marker = "sys_platform == 'win32'" },
+]
+
+[package.dev-dependencies]
+build = [
+    { name = "pyinstaller" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "gputil", specifier = ">=1.4.0" },
+    { name = "jinja2", specifier = ">=3.1.0" },
+    { name = "psutil", specifier = ">=5.9.0" },
+    { name = "py-cpuinfo", specifier = ">=9.0.0" },
+    { name = "pynvml", specifier = ">=11.5.0" },
+    { name = "pysmart", specifier = ">=1.3.0" },
+    { name = "reportlab", specifier = ">=4.0.0" },
+    { name = "textual", specifier = ">=0.47.0" },
+    { name = "wmi", marker = "sys_platform == 'win32'", specifier = ">=1.5.1" },
+]
+
+[package.metadata.requires-dev]
+build = [{ name = "pyinstaller", specifier = ">=6.0.0" }]
 
 [[package]]
 name = "typing-extensions"

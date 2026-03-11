@@ -1,5 +1,5 @@
 [project]
-name = "pc-tester"
+name = "touchstone"
 version = "1.0.0"
 description = "Portable PC hardware diagnostic tool for repair technicians"
 requires-python = ">=3.11"
@@ -17,8 +17,8 @@ dependencies = [
 ]
 
 [project.scripts]
-# Run the app with: uv run pctester
-pctester = "src.cli:main"
+# Run the app with: uv run touchstone
+touchstone = "src.cli:main"
 
 [dependency-groups]
 # Install build tools with: uv sync --group build

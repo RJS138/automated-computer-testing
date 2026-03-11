@@ -127,6 +127,8 @@ class ManualTestsScreen(Screen):
         run_btn = self.query_one("#btn-run-test", Button)
         if test_type == "display_color":
             run_btn.label = "▶  Start Display Test"
+        elif test_type == "keyboard_test":
+            run_btn.label = "▶  Start Keyboard Test"
         else:
             run_btn.label = "▶  Run Test"
 
@@ -160,6 +162,9 @@ class ManualTestsScreen(Screen):
         if test_type == "display_color":
             from .display_test import DisplayTestScreen
             self.app.push_screen(DisplayTestScreen(), self._on_interactive_done)
+        elif test_type == "keyboard_test":
+            from .keyboard_test import KeyboardTestScreen
+            self.app.push_screen(KeyboardTestScreen(), self._on_keyboard_done)
 
     def _on_interactive_done(self, completed: bool) -> None:
         """Called when the interactive test screen is dismissed."""
@@ -171,6 +176,18 @@ class ManualTestsScreen(Screen):
         else:
             note.update("[yellow]⚠ Cycle ended early.[/yellow]  "
                         "Review what you observed and mark accordingly.")
+        self._apply_interactive_state()
+
+    def _on_keyboard_done(self, completed: bool) -> None:
+        """Called when the keyboard test screen is dismissed."""
+        self._interactive_done = True
+        note = self.query_one("#post-test-note", Label)
+        if completed:
+            note.update("[green]✓ All keys registered.[/green]  "
+                        "Mark pass/fail below.")
+        else:
+            note.update("[yellow]⚠ Not all keys tested.[/yellow]  "
+                        "Mark pass/fail below.")
         self._apply_interactive_state()
 
     # ------------------------------------------------------------------

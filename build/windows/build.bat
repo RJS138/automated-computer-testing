@@ -12,11 +12,11 @@ REM   - Build a single self-contained .exe
 
 setlocal
 
-set APP_NAME=pctester_x64
+set APP_NAME=touchstone_x64
 set REPO_ROOT=%~dp0..\..
 set DIST_DIR=%REPO_ROOT%\dist\windows
 
-echo === PC Tester — Windows Build ===
+echo === Touchstone — Windows Build ===
 echo Repo root: %REPO_ROOT%
 
 cd /d "%REPO_ROOT%"
@@ -40,6 +40,7 @@ uv run pyinstaller ^
   --workpath "build\_pyinstaller_work" ^
   --specpath "build\_pyinstaller_spec" ^
   --add-data "src\report\templates;src/report/templates" ^
+  --add-data "src\ui\keyboards;src/ui/keyboards" ^
   --hidden-import textual ^
   --hidden-import psutil ^
   --hidden-import cpuinfo ^
@@ -48,8 +49,9 @@ uv run pyinstaller ^
   --hidden-import GPUtil ^
   --hidden-import wmi ^
   --hidden-import jinja2 ^
-  --hidden-import weasyprint ^
+  --hidden-import tkinter ^
   --collect-all textual ^
+  --collect-all reportlab ^
   main.py
 
 if %ERRORLEVEL% neq 0 (
@@ -60,6 +62,5 @@ if %ERRORLEVEL% neq 0 (
 echo.
 echo [3/3] Done.
 echo Output: %DIST_DIR%\%APP_NAME%.exe
-echo Copy to USB drive at: win\%APP_NAME%.exe
 
 endlocal

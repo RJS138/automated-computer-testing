@@ -4,7 +4,7 @@ from textual.app import ComposeResult
 from textual.screen import Screen
 from textual.widgets import Button, Input, Label, Static, TextArea
 
-from ...config import APP_NAME, APP_VERSION, BUSINESS_NAME
+from ...config import APP_NAME, APP_VERSION
 from ...models.job import JobInfo
 
 
@@ -56,7 +56,6 @@ class WelcomeScreen(Screen):
     def compose(self) -> ComposeResult:
         with Static(id="welcome-panel"):
             yield Label(f"[bold]{APP_NAME} v{APP_VERSION}[/bold]", id="title")
-            yield Label(BUSINESS_NAME, id="subtitle")
             yield Label("Customer Name *", classes="field-label")
             yield Input(placeholder="e.g. John Smith", id="customer-name")
             yield Label("Device Description *", classes="field-label")

@@ -2,10 +2,11 @@
 # PC Tester — macOS Build Script
 #
 # Prerequisites:
-#   1. Install UV:        curl -LsSf https://astral.sh/uv/install.sh | sh
-#   2. Install Homebrew:  https://brew.sh
-#   3. Install Pango:     brew install pango
-#      (Required by WeasyPrint for PDF generation)
+#   1. Install UV:  curl -LsSf https://astral.sh/uv/install.sh | sh
+#
+# Optional (for tkinter display/keyboard helpers in frozen binary):
+#   2. Install Tcl/Tk:  brew install tcl-tk
+#      Without this, tkinter windows fall back to terminal mode.
 #
 # UV handles Python and all Python dependencies automatically.
 # Produces a native binary for the current architecture (x86_64 or arm64).
@@ -15,22 +16,12 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 DIST_DIR="$REPO_ROOT/dist/macos"
 ARCH="$(uname -m)"
-APP_NAME="pctester_${ARCH}"
+APP_NAME="touchstone_${ARCH}"
 
-echo "=== PC Tester — macOS Build ==="
+echo "=== Touchstone — macOS Build ==="
 echo "Repo root : $REPO_ROOT"
 echo "Arch      : $ARCH"
 echo "Output    : $DIST_DIR/$APP_NAME"
-
-# Check Pango is available (needed by WeasyPrint at build time)
-if ! brew list pango &>/dev/null 2>&1; then
-    echo ""
-    echo "WARNING: Pango not found via Homebrew."
-    echo "WeasyPrint (PDF generation) requires Pango. Install with:"
-    echo "  brew install pango"
-    echo ""
-    echo "Continuing build — PDF generation may fail at runtime."
-fi
 
 cd "$REPO_ROOT"
 
@@ -47,6 +38,7 @@ uv run pyinstaller \
   --workpath "build/_pyinstaller_work" \
   --specpath "build/_pyinstaller_spec" \
   --add-data "src/report/templates:src/report/templates" \
+  --add-data "src/ui/keyboards:src/ui/keyboards" \
   --hidden-import textual \
   --hidden-import psutil \
   --hidden-import cpuinfo \
@@ -54,8 +46,9 @@ uv run pyinstaller \
   --hidden-import pynvml \
   --hidden-import GPUtil \
   --hidden-import jinja2 \
-  --hidden-import weasyprint \
+  --hidden-import tkinter \
   --collect-all textual \
+  --collect-all reportlab \
   main.py
 
 echo ""

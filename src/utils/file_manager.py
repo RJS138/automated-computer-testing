@@ -98,6 +98,6 @@ def ensure_usb_marker(usb_path: Path) -> None:
     marker = usb_path / USB_MARKER
     if not marker.exists():
         marker.write_text(
-            "PC Tester USB Drive — do not delete this file.\n",
+            "Touchstone USB Drive — do not delete this file.\n",
             encoding="utf-8",
         )

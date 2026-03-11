@@ -11,8 +11,8 @@ Detection logic:
   Anything ambiguous defaults to simple mode (safe everywhere).
 
 Override env vars:
-  PCTESTER_FANCY=1   — force fancy mode regardless of detection
-  PCTESTER_SIMPLE=1  — force simple mode regardless of detection
+  TOUCHSTONE_FANCY=1   — force fancy mode regardless of detection
+  TOUCHSTONE_SIMPLE=1  — force simple mode regardless of detection
 """
 
 import os
@@ -53,12 +53,12 @@ def _utf8_capable() -> bool:
 def should_use_simple_ui() -> bool:
     """
     Return True if the UI should use simplified ASCII + basic-color rendering.
-    Called once at startup in cli.py; result stored in PCTESTER_SIMPLE env var.
+    Called once at startup in cli.py; result stored in TOUCHSTONE_SIMPLE env var.
     """
     # Explicit user overrides win
-    if os.environ.get("PCTESTER_FANCY") == "1":
+    if os.environ.get("TOUCHSTONE_FANCY") == "1":
         return False
-    if os.environ.get("PCTESTER_SIMPLE") == "1":
+    if os.environ.get("TOUCHSTONE_SIMPLE") == "1":
         return True
 
     # Dumb / no-colour terminal

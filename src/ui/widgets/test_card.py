@@ -8,7 +8,7 @@ from textual.widgets import Label, Static
 
 from ...models.test_result import TestResult, TestStatus
 
-_SIMPLE = os.environ.get("PCTESTER_SIMPLE_UI") == "1"
+_SIMPLE = os.environ.get("TOUCHSTONE_SIMPLE_UI") == "1"
 
 # Unicode icons for capable terminals; ASCII fallbacks for limited ones
 if _SIMPLE:

@@ -10,15 +10,16 @@
 #   - Build a single self-contained binary
 #
 # Run on an x86_64 machine for x64 binary, arm64 machine for arm64 binary.
+# For maximum glibc compatibility build on the oldest supported distro.
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 DIST_DIR="$REPO_ROOT/dist/linux"
 ARCH="$(uname -m)"
-APP_NAME="pctester_${ARCH}"
+APP_NAME="touchstone_${ARCH}"
 
-echo "=== PC Tester — Linux Build ==="
+echo "=== Touchstone — Linux Build ==="
 echo "Repo root : $REPO_ROOT"
 echo "Arch      : $ARCH"
 echo "Output    : $DIST_DIR/$APP_NAME"
@@ -39,6 +40,7 @@ uv run pyinstaller \
   --workpath "build/_pyinstaller_work" \
   --specpath "build/_pyinstaller_spec" \
   --add-data "src/report/templates:src/report/templates" \
+  --add-data "src/ui/keyboards:src/ui/keyboards" \
   --hidden-import textual \
   --hidden-import psutil \
   --hidden-import cpuinfo \
@@ -46,11 +48,11 @@ uv run pyinstaller \
   --hidden-import pynvml \
   --hidden-import GPUtil \
   --hidden-import jinja2 \
-  --hidden-import weasyprint \
+  --hidden-import tkinter \
   --collect-all textual \
+  --collect-all reportlab \
   main.py
 
 echo ""
 echo "[3/3] Done."
 echo "Output : $DIST_DIR/$APP_NAME"
-echo "Copy to USB drive at: linux/$APP_NAME"

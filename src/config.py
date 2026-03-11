@@ -3,9 +3,8 @@
 import sys
 from pathlib import Path
 
-APP_NAME = "PC Tester"
+APP_NAME = "Touchstone"
 APP_VERSION = "1.0.0"
-BUSINESS_NAME = "Your PC Repair Business"  # Change to your business name
 
 # Test durations (seconds)
 CPU_STRESS_QUICK = 30
@@ -39,7 +38,7 @@ CPU_TEMP_FAIL = 95
 REPORT_FOLDER_FORMAT = "{customer}_{job}_{date}"
 
 # USB drive detection: look for this marker file on removable drives
-USB_MARKER = "pctester_usb.marker"
+USB_MARKER = "touchstone_usb.marker"
 
 # Base directory for reports (relative to where the exe lives or USB root)
 REPORTS_DIR_NAME = "reports"
@@ -52,7 +51,7 @@ if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
     _BUNDLE_DIR = Path(sys._MEIPASS)
     SRC_DIR = _BUNDLE_DIR / "src"
 else:
-    SRC_DIR = Path(__file__).parent          # pc-tester/src/
+    SRC_DIR = Path(__file__).parent  # pc-tester/src/
 
-BASE_DIR = SRC_DIR.parent                    # pc-tester/
+BASE_DIR = SRC_DIR.parent  # pc-tester/
 TEMPLATES_DIR = SRC_DIR / "report" / "templates"

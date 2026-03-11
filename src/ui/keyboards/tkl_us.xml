@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<keyboard id="tkl_us" name="TKL (US)">
+  <!-- Row 0: Function row + nav cluster header -->
+  <row>
+    <key id="esc"    label="Esc"   key="escape"      width="1.0"/>
+    <gap width="0.5"/>
+    <key id="f1"     label="F1"    key="f1"          width="1.0"/>
+    <key id="f2"     label="F2"    key="f2"          width="1.0"/>
+    <key id="f3"     label="F3"    key="f3"          width="1.0"/>
+    <key id="f4"     label="F4"    key="f4"          width="1.0"/>
+    <gap width="0.5"/>
+    <key id="f5"     label="F5"    key="f5"          width="1.0"/>
+    <key id="f6"     label="F6"    key="f6"          width="1.0"/>
+    <key id="f7"     label="F7"    key="f7"          width="1.0"/>
+    <key id="f8"     label="F8"    key="f8"          width="1.0"/>
+    <gap width="0.5"/>
+    <key id="f9"     label="F9"    key="f9"          width="1.0"/>
+    <key id="f10"    label="F10"   key="f10"         width="1.0"/>
+    <key id="f11"    label="F11"   key="f11"         width="1.0"/>
+    <key id="f12"    label="F12"   key="f12"         width="1.0"/>
+    <gap width="1.0"/>
+    <key id="prtsc"  label="PrtSc" key="print_screen" width="1.25" capturable="false"/>
+    <key id="scrlk"  label="ScrLk" key="scroll_lock"  width="1.25" capturable="false"/>
+    <key id="pause"  label="Pause" key="pause"        width="1.25"/>
+  </row>
+
+  <!-- Row 1: Number row + Ins/Home/PgUp -->
+  <row>
+    <key id="grave"     label="`"   key="grave_accent"   width="1.0" also="tilde"/>
+    <key id="key1"      label="1"   key="1"              width="1.0" also="exclamation_mark"/>
+    <key id="key2"      label="2"   key="2"              width="1.0" also="at"/>
+    <key id="key3"      label="3"   key="3"              width="1.0" also="hash"/>
+    <key id="key4"      label="4"   key="4"              width="1.0" also="dollar_sign"/>
+    <key id="key5"      label="5"   key="5"              width="1.0" also="percent_sign"/>
+    <key id="key6"      label="6"   key="6"              width="1.0" also="caret"/>
+    <key id="key7"      label="7"   key="7"              width="1.0" also="ampersand"/>
+    <key id="key8"      label="8"   key="8"              width="1.0" also="asterisk"/>
+    <key id="key9"      label="9"   key="9"              width="1.0" also="left_parenthesis"/>
+    <key id="key0"      label="0"   key="0"              width="1.0" also="right_parenthesis"/>
+    <key id="minus"     label="-"   key="minus"          width="1.0" also="underscore"/>
+    <key id="equal"     label="="   key="equal"          width="1.0" also="plus"/>
+    <key id="backspace" label="Bksp" key="backspace"     width="2.0"/>
+    <gap width="1.0"/>
+    <key id="insert"    label="Ins" key="insert"         width="1.25"/>
+    <key id="home"      label="Hom" key="home"           width="1.25"/>
+    <key id="pageup"    label="PgU" key="pageup"         width="1.25"/>
+  </row>
+
+  <!-- Row 2: QWERTY + Del/End/PgDn -->
+  <row>
+    <key id="tab"        label="Tab" key="tab"           width="1.5"/>
+    <key id="q"          label="Q"   key="q"             width="1.0"/>
+    <key id="w"          label="W"   key="w"             width="1.0"/>
+    <key id="e"          label="E"   key="e"             width="1.0"/>
+    <key id="r"          label="R"   key="r"             width="1.0"/>
+    <key id="t"          label="T"   key="t"             width="1.0"/>
+    <key id="y"          label="Y"   key="y"             width="1.0"/>
+    <key id="u"          label="U"   key="u"             width="1.0"/>
+    <key id="i"          label="I"   key="i"             width="1.0"/>
+    <key id="o"          label="O"   key="o"             width="1.0"/>
+    <key id="p"          label="P"   key="p"             width="1.0"/>
+    <key id="lbracket"   label="["   key="left_bracket"  width="1.0" also="left_brace"/>
+    <key id="rbracket"   label="]"   key="right_bracket" width="1.0" also="right_brace"/>
+    <key id="backslash"  label="\"   key="backslash"     width="1.5" also="pipe"/>
+    <gap width="1.0"/>
+    <key id="del"        label="Del" key="delete"        width="1.25"/>
+    <key id="end"        label="End" key="end"           width="1.25"/>
+    <key id="pagedown"   label="PgD" key="pagedown"      width="1.25"/>
+  </row>
+
+  <!-- Row 3: Home row (no nav keys on this row) -->
+  <row>
+    <key id="caps"       label="Caps" key="caps_lock"    width="1.75"/>
+    <key id="a"          label="A"    key="a"            width="1.0"/>
+    <key id="s"          label="S"    key="s"            width="1.0"/>
+    <key id="d"          label="D"    key="d"            width="1.0"/>
+    <key id="f"          label="F"    key="f"            width="1.0"/>
+    <key id="g"          label="G"    key="g"            width="1.0"/>
+    <key id="h"          label="H"    key="h"            width="1.0"/>
+    <key id="j"          label="J"    key="j"            width="1.0"/>
+    <key id="k"          label="K"    key="k"            width="1.0"/>
+    <key id="l"          label="L"    key="l"            width="1.0"/>
+    <key id="semicolon"  label=";"    key="semicolon"    width="1.0" also="colon"/>
+    <key id="apostrophe" label="'"    key="apostrophe"   width="1.0" also="double_quote"/>
+    <key id="return"     label="Ret"  key="enter"        width="2.25" also="return"/>
+  </row>
+
+  <!-- Row 4: Shift row + Up arrow -->
+  <row>
+    <key id="lshift"  label="Shift"  key="shift"         width="2.25"/>
+    <key id="z"       label="Z"      key="z"             width="1.0"/>
+    <key id="x"       label="X"      key="x"             width="1.0"/>
+    <key id="c"       label="C"      key="c"             width="1.0"/>
+    <key id="v"       label="V"      key="v"             width="1.0"/>
+    <key id="b"       label="B"      key="b"             width="1.0"/>
+    <key id="n"       label="N"      key="n"             width="1.0"/>
+    <key id="m"       label="M"      key="m"             width="1.0"/>
+    <key id="comma"   label=","      key="comma"         width="1.0" also="less_than_sign"/>
+    <key id="period"  label="."      key="period"        width="1.0" also="greater_than_sign"/>
+    <key id="slash"   label="/"      key="slash"         width="1.0" also="question_mark"/>
+    <key id="rshift"  label="Shift"  key="shift"         width="2.75"/>
+    <gap width="1.0"/>
+    <gap width="1.25"/>
+    <key id="up"      label="↑"      key="up"            width="1.25"/>
+    <gap width="1.25"/>
+  </row>
+
+  <!-- Row 5: Bottom row + Left/Down/Right arrows -->
+  <row>
+    <key id="lctrl"   label="Ctrl"   key="ctrl"          width="1.25"/>
+    <key id="lwin"    label="Win"    key="meta"          width="1.25"/>
+    <key id="lalt"    label="Alt"    key="alt"           width="1.25"/>
+    <key id="space"   label="Space"  key="space"         width="6.25"/>
+    <key id="ralt"    label="Alt"    key="alt"           width="1.25"/>
+    <key id="fn"      label="Fn"     key="f"             width="1.25" capturable="false"/>
+    <key id="menu"    label="Menu"   key="menu"          width="1.25"/>
+    <key id="rctrl"   label="Ctrl"   key="ctrl"          width="1.25"/>
+    <gap width="1.0"/>
+    <key id="left"    label="←"      key="left"          width="1.25"/>
+    <key id="down"    label="↓"      key="down"          width="1.25"/>
+    <key id="right"   label="→"      key="right"         width="1.25"/>
+  </row>
+</keyboard>

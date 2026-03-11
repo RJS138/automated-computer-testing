@@ -38,8 +38,8 @@ Screen { background: $background; }
 class PCTesterApp(App):
     """PC Diagnostic Testing Application."""
 
-    TITLE = "PC Tester"
-    SIMPLE_UI: bool = os.environ.get("PCTESTER_SIMPLE_UI") == "1"
+    TITLE = "Touchstone"
+    SIMPLE_UI: bool = os.environ.get("TOUCHSTONE_SIMPLE_UI") == "1"
     CSS = _SIMPLE_CSS if SIMPLE_UI else _FANCY_CSS
 
     def __init__(self, dev_manual_item: str | None = None, **kwargs) -> None:
