@@ -3,11 +3,14 @@
 ITEM: dict = {
     "id": "webcam",
     "label": "Webcam",
+    "test_type": "webcam_test",
     "instructions": (
-        "Test the built-in webcam:\n"
-        "  • Open Camera app or use a video call app\n"
-        "  • Verify live video feed is clear and not distorted\n"
-        "  • Check microphone input while testing camera\n"
-        "  • Verify privacy shutter works (if present)"
+        "Click 'Start Webcam Test' to open the live camera preview.\n\n"
+        "The test shows a real-time preview from the selected camera.\n"
+        "Use the dropdown to switch between cameras if multiple are detected.\n\n"
+        "Verify:\n"
+        "  • Live feed is clear and not distorted\n"
+        "  • Correct camera is selected (front/rear if both present)\n"
+        "  • Privacy shutter works if present (blocks feed when closed)"
     ),
 }

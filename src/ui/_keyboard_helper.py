@@ -300,7 +300,6 @@ def run_keyboard_test() -> bool:
 
     active_id = [_default_id]
     pressed: dict[str, set[str]] = {lid: set() for lid in layouts}
-    completed = [False]
     key_rects: list[tuple[str, float, float, float, float]] = []  # (key_id, x1, y1, x2, y2)
 
     # ── Top bar ─────────────────────────────────────────────────────────────
@@ -391,7 +390,17 @@ def run_keyboard_test() -> bool:
         lbl.bind("<ButtonPress-1>",   lambda e: command())
         return lbl
 
-    _make_btn(btn_row, "Fail", "#8b1a1a", "white", root.destroy, "#a02020").pack(
+    result = ["fail"]   # "pass" | "fail" | "skip"
+
+    def _do_fail():
+        result[0] = "fail"
+        root.destroy()
+
+    def _do_skip():
+        result[0] = "skip"
+        root.destroy()
+
+    _make_btn(btn_row, "Fail", "#8b1a1a", "white", _do_fail, "#a02020").pack(
         side="left", padx=10
     )
 
@@ -407,14 +416,14 @@ def run_keyboard_test() -> bool:
     )
     pass_lbl.pack(side="left", padx=10)
 
-    _make_btn(btn_row, "Skip", "#3a3a3a", "#aaa", root.destroy, "#4a4a4a").pack(
+    _make_btn(btn_row, "Skip", "#3a3a3a", "#aaa", _do_skip, "#4a4a4a").pack(
         side="left", padx=10
     )
 
     # ── Helpers ──────────────────────────────────────────────────────────────
 
     def _do_done():
-        completed[0] = True
+        result[0] = "pass"
         root.destroy()
 
     def _update_title():
@@ -548,13 +557,13 @@ def run_keyboard_test() -> bool:
     root.after(100, _draw)   # draw after window geometry is known
 
     root.mainloop()
-    return completed[0]
+    return result[0]
 
 
 if __name__ == "__main__":
     try:
-        result = run_keyboard_test()
-        sys.exit(0 if result else 1)
+        r = run_keyboard_test()
+        sys.exit(0 if r == "pass" else (3 if r == "skip" else 1))
     except SystemExit:
         raise
     except Exception:

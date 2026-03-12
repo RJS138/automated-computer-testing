@@ -2,7 +2,7 @@
 
 from textual.app import ComposeResult
 from textual.screen import Screen
-from textual.widgets import Button, Label, Static, TextArea
+from textual.widgets import Button, Label, Static
 
 from ...tests.manual import ManualTestRunner
 
@@ -49,26 +49,6 @@ class ManualTestsScreen(Screen):
         color: $success;
         margin: 0 0 1 0;
     }
-    #notes-label {
-        color: $text-muted;
-        margin: 0 0 0 0;
-    }
-    #notes-input {
-        height: 3;
-        margin: 0 0 1 0;
-    }
-    #btn-row {
-        layout: horizontal;
-        margin: 0 0 0 0;
-    }
-    #btn-pass {
-        width: 1fr;
-        margin: 0 1 0 0;
-    }
-    #btn-fail {
-        width: 1fr;
-        margin: 0 1 0 0;
-    }
     #btn-skip {
         width: 1fr;
     }
@@ -79,7 +59,6 @@ class ManualTestsScreen(Screen):
         self._runner = ManualTestRunner()
         if start_item:
             self._runner.seek_to(start_item)
-        self._interactive_done = False  # tracks whether current item's test was run
 
     def compose(self) -> ComposeResult:
         with Static(id="manual-panel"):
@@ -87,16 +66,9 @@ class ManualTestsScreen(Screen):
             yield Label("", id="progress-line")
             yield Label("", id="item-label")
             yield Static("", id="instructions")
-            # "Start Display Test" (or similar) — only shown for interactive items
             yield Button("▶  Start Display Test", variant="primary", id="btn-run-test")
-            # Shown after an interactive test completes
             yield Label("", id="post-test-note")
-            yield Label("Notes (optional):", id="notes-label")
-            yield TextArea(id="notes-input")
-            with Static(id="btn-row"):
-                yield Button("P — Pass", variant="success", id="btn-pass")
-                yield Button("F — Fail", variant="error", id="btn-fail")
-                yield Button("S — Skip", variant="default", id="btn-skip")
+            yield Button("S — Skip", variant="default", id="btn-skip")
 
     def on_mount(self) -> None:
         self._refresh_item()
@@ -117,38 +89,22 @@ class ManualTestsScreen(Screen):
         self.query_one("#progress-line", Label).update(f"Item {idx + 1} of {total}")
         self.query_one("#item-label", Label).update(f"[bold]{item['label']}[/bold]")
         self.query_one("#instructions", Static).update(item["instructions"])
-        self.query_one("#notes-input", TextArea).clear()
         self.query_one("#post-test-note", Label).update("")
 
-        has_interactive = bool(item.get("test_type"))
-
-        # Run-test button label
         test_type = item.get("test_type", "")
         run_btn = self.query_one("#btn-run-test", Button)
-        if test_type == "display_color":
-            run_btn.label = "▶  Start Display Test"
-        elif test_type == "keyboard_test":
-            run_btn.label = "▶  Start Keyboard Test"
-        else:
-            run_btn.label = "▶  Run Test"
-
-        self._interactive_done = not has_interactive
-        self._apply_interactive_state()
-
-    def _apply_interactive_state(self) -> None:
-        """Enable/disable widgets based on whether the interactive test still needs to run."""
-        run_btn = self.query_one("#btn-run-test", Button)
-
-        item = self._runner.current_item
-        has_interactive_type = bool(item and item.get("test_type"))
-        waiting = has_interactive_type and not self._interactive_done
-
-        # Run-test button: visible only while waiting for interactive test
-        run_btn.display = waiting
-
-        # Pass/fail blocked until interactive test runs; skip is always allowed
-        self.query_one("#btn-pass", Button).disabled = waiting
-        self.query_one("#btn-fail", Button).disabled = waiting
+        _labels = {
+            "display_color":  "▶  Start Display Test",
+            "keyboard_test":  "▶  Start Keyboard Test",
+            "speakers_test":  "▶  Start Speaker Test",
+            "touchpad_test":  "▶  Start Touchpad Test",
+            "usb_test_a":     "▶  Start USB-A Test",
+            "usb_test_c":     "▶  Start USB-C Test",
+            "hdmi_test":      "▶  Start HDMI Test",
+            "webcam_test":    "▶  Start Webcam Test",
+        }
+        run_btn.label = _labels.get(test_type, "▶  Run Test")
+        run_btn.display = bool(test_type)
 
     # ------------------------------------------------------------------
     # Interactive test launcher
@@ -161,74 +117,105 @@ class ManualTestsScreen(Screen):
         test_type = item.get("test_type")
         if test_type == "display_color":
             from .display_test import DisplayTestScreen
-            self.app.push_screen(DisplayTestScreen(), self._on_interactive_done)
+            self.app.push_screen(DisplayTestScreen(), self._on_test_result)
         elif test_type == "keyboard_test":
             from .keyboard_test import KeyboardTestScreen
-            self.app.push_screen(KeyboardTestScreen(), self._on_keyboard_done)
+            self.app.push_screen(KeyboardTestScreen(), self._on_test_result)
+        elif test_type in ("speakers_test", "touchpad_test",
+                           "usb_test_a", "usb_test_c", "hdmi_test", "webcam_test"):
+            self._launch_helper(test_type)
 
-    def _on_interactive_done(self, completed: bool) -> None:
-        """Called when the interactive test screen is dismissed."""
-        self._interactive_done = True
-        note = self.query_one("#post-test-note", Label)
-        if completed:
-            note.update("[green]✓ Colour cycle complete.[/green]  "
-                        "Did the display pass all checks?")
+    def _on_test_result(self, result: str) -> None:
+        """Called when any interactive test screen or helper completes."""
+        if result == "pass":
+            self._runner.pass_current("")
+            self._refresh_item()
+        elif result == "fail":
+            self._runner.fail_current("")
+            self._refresh_item()
+        elif result == "skip":
+            self._runner.skip_current("")
+            self._refresh_item()
         else:
-            note.update("[yellow]⚠ Cycle ended early.[/yellow]  "
-                        "Review what you observed and mark accordingly.")
-        self._apply_interactive_state()
+            # Unavailable — show message, let user skip manually
+            self.query_one("#post-test-note", Label).update(
+                "[dim]Helper unavailable — press Skip to continue.[/dim]"
+            )
 
-    def _on_keyboard_done(self, completed: bool) -> None:
-        """Called when the keyboard test screen is dismissed."""
-        self._interactive_done = True
-        note = self.query_one("#post-test-note", Label)
-        if completed:
-            note.update("[green]✓ All keys registered.[/green]  "
-                        "Mark pass/fail below.")
-        else:
-            note.update("[yellow]⚠ Not all keys tested.[/yellow]  "
-                        "Mark pass/fail below.")
-        self._apply_interactive_state()
+    # ------------------------------------------------------------------
+    # Generic helper launcher (speakers, touchpad, USB, HDMI, webcam)
+    # ------------------------------------------------------------------
+
+    def _launch_helper(self, test_type: str) -> None:
+        """Launch a tkinter helper subprocess for the given test type."""
+        import asyncio
+        import sys
+        from pathlib import Path
+
+        _HELPER_MAP = {
+            "speakers_test": "_speakers_helper.py",
+            "touchpad_test": "_touchpad_helper.py",
+            "usb_test_a":    "_usb_helper.py",
+            "usb_test_c":    "_usb_helper.py",
+            "hdmi_test":     "_hdmi_helper.py",
+            "webcam_test":   "_webcam_helper.py",
+        }
+        _HELPER_NAME_MAP = {
+            "speakers_test": "speakers",
+            "touchpad_test": "touchpad",
+            "usb_test_a":    "usb_a",
+            "usb_test_c":    "usb_c",
+            "hdmi_test":     "hdmi",
+            "webcam_test":   "webcam",
+        }
+        helper_name = _HELPER_NAME_MAP[test_type]
+        helper_file = _HELPER_MAP[test_type]
+        helper_path = Path(__file__).parent.parent / helper_file
+
+        async def _run():
+            frozen = hasattr(sys, "_MEIPASS")
+            if not frozen and not helper_path.exists():
+                self._on_test_result("unavailable")
+                return
+
+            if frozen:
+                cmd = [sys.executable, "--run-helper", helper_name]
+            else:
+                cmd = [sys.executable, str(helper_path)]
+
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            rc = await proc.wait()
+            if rc == 0:
+                result = "pass"
+            elif rc == 3:
+                result = "skip"
+            elif rc == 2:
+                result = "unavailable"
+            else:
+                result = "fail"
+            self._on_test_result(result)
+
+        self.run_worker(_run(), exclusive=True)
 
     # ------------------------------------------------------------------
     # Button and keyboard handling
     # ------------------------------------------------------------------
 
-    def _get_notes(self) -> str:
-        return self.query_one("#notes-input", TextArea).text.strip()
-
     def on_button_pressed(self, event: Button.Pressed) -> None:
         btn = event.button.id
         if btn == "btn-run-test":
             self._launch_interactive()
-            return
-        notes = self._get_notes()
-        if btn == "btn-skip":
-            self._runner.skip_current(notes)
+        elif btn == "btn-skip":
+            self._runner.skip_current("")
             self._refresh_item()
-            return
-        if not self._interactive_done:
-            return  # block pass/fail until interactive test is run
-        if btn == "btn-pass":
-            self._runner.pass_current(notes)
-        elif btn == "btn-fail":
-            self._runner.fail_current(notes)
-        self._refresh_item()
 
     def on_key(self, event) -> None:
-        notes = self._get_notes()
-        key = event.key.lower()
-        if key == "s":
-            self._runner.skip_current(notes)
-            self._refresh_item()
-            return
-        if not self._interactive_done:
-            return  # block p/f shortcuts until interactive test is run
-        if key == "p":
-            self._runner.pass_current(notes)
-            self._refresh_item()
-        elif key == "f":
-            self._runner.fail_current(notes)
+        if event.key.lower() == "s":
+            self._runner.skip_current("")
             self._refresh_item()
 
     # ------------------------------------------------------------------

@@ -39,8 +39,8 @@ uv run pyinstaller \
   --distpath "$DIST_DIR" \
   --workpath "build/_pyinstaller_work" \
   --specpath "build/_pyinstaller_spec" \
-  --add-data "src/report/templates:src/report/templates" \
-  --add-data "src/ui/keyboards:src/ui/keyboards" \
+  --add-data "$REPO_ROOT/src/report/templates:src/report/templates" \
+  --add-data "$REPO_ROOT/src/ui/keyboards:src/ui/keyboards" \
   --hidden-import textual \
   --hidden-import psutil \
   --hidden-import cpuinfo \
@@ -49,8 +49,11 @@ uv run pyinstaller \
   --hidden-import GPUtil \
   --hidden-import jinja2 \
   --hidden-import tkinter \
+  --hidden-import PIL \
   --collect-all textual \
   --collect-all reportlab \
+  --collect-all cv2 \
+  --collect-all PIL \
   main.py
 
 echo ""

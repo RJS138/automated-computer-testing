@@ -3,13 +3,8 @@ name: Build and Release Touchstone
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
     tags:
       - "v*.*.*"
-  pull_request:
-    branches:
-      - main
 
 jobs:
   # ── Linux x86_64 ─────────────────────────────────────────────────────────

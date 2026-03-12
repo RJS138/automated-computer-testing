@@ -197,7 +197,11 @@ class KeyboardTestScreen(Screen):
             self.query_one("#btn-row", Static).display = True
             return None
 
-        return rc == 0
+        if rc == 0:
+            return "pass"
+        if rc == 3:
+            return "skip"
+        return "fail"
 
     # ------------------------------------------------------------------
     # Key marking
@@ -265,11 +269,11 @@ class KeyboardTestScreen(Screen):
         btn_id = event.button.id or ""
 
         if btn_id == "btn-exit":
-            self.dismiss(False)
+            self.dismiss("skip")
             return
 
         if btn_id == "btn-done":
-            self.dismiss(True)
+            self.dismiss("pass")
             return
 
         if btn_id.startswith("layout-btn-"):

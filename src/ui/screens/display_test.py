@@ -146,7 +146,11 @@ class DisplayTestScreen(Screen):
             )
             return None
 
-        return rc == 0
+        if rc == 0:
+            return "pass"
+        if rc == 3:
+            return "skip"
+        return "fail"
 
     # ------------------------------------------------------------------
     # Terminal fallback
@@ -156,7 +160,7 @@ class DisplayTestScreen(Screen):
         if self._external_running:
             return
         if event.key == "escape":
-            self.dismiss(False)
+            self.dismiss("skip")
         else:
             self._advance()
 
@@ -168,7 +172,7 @@ class DisplayTestScreen(Screen):
     def _advance(self) -> None:
         self._phase += 1
         if self._phase >= _N:
-            self.dismiss(True)
+            self.dismiss("pass")
             return
 
         name, bg = _COLORS[self._phase]

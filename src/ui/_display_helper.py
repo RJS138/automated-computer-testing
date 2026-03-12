@@ -35,15 +35,21 @@ _INSTRUCTIONS = (
 )
 
 
-def run_display_test() -> bool:
-    """Show full-screen colour cycle. Returns True if completed, False if skipped."""
+_BG_DARK  = "#0d0d0d"
+_BG_BTN_F = "#8b1a1a"
+_BG_BTN_P = "#1a6b1a"
+_BG_BTN_S = "#3a3a3a"
+
+
+def run_display_test() -> str:
+    """Show full-screen colour cycle then Pass/Fail/Skip. Returns 'pass'/'fail'/'skip'."""
     try:
         import tkinter as tk
     except ImportError:
         sys.exit(2)
 
-    completed = [False]
-    phase = [-1]
+    result = ["skip"]
+    phase  = [-1]
 
     try:
         root = tk.Tk()
@@ -52,33 +58,73 @@ def run_display_test() -> bool:
 
     root.title("Display Test")
     root.attributes("-fullscreen", True)
-    root.configure(bg="#0d0d0d", cursor="none")
+    root.configure(bg=_BG_DARK, cursor="none")
 
     instr = tk.Label(
-        root,
-        text=_INSTRUCTIONS,
-        bg="#0d0d0d",
-        fg="#e0e0e0",
-        font=("Courier", 14),
-        justify="left",
+        root, text=_INSTRUCTIONS,
+        bg=_BG_DARK, fg="#e0e0e0",
+        font=("Courier", 14), justify="left",
     )
     instr.place(relx=0.5, rely=0.45, anchor="center")
 
-    hint_var = tk.StringVar(value="  Press any key or click to begin   |   ESC to skip  ")
-    hint = tk.Label(
-        root,
-        textvariable=hint_var,
-        bg="#1a1a1a",
-        fg="#cccccc",
-        font=("Courier", 11),
-    )
+    hint_var = tk.StringVar(value="  Press any key or click to begin   |   ESC to end cycle  ")
+    hint = tk.Label(root, textvariable=hint_var, bg="#1a1a1a", fg="#cccccc", font=("Courier", 11))
     hint.place(relx=0.0, rely=1.0, anchor="sw", relwidth=1.0)
+
+    def _make_btn(parent, text, bg, command, hover_bg):
+        lbl = tk.Label(parent, text=text, bg=bg, fg="white",
+                       font=("Courier", 13, "bold"), padx=28, pady=10, cursor="hand2")
+        lbl.bind("<Enter>",         lambda e, w=lbl, c=hover_bg: w.configure(bg=c))
+        lbl.bind("<Leave>",         lambda e, w=lbl, c=bg:       w.configure(bg=c))
+        lbl.bind("<ButtonPress-1>", lambda e: command())
+        return lbl
+
+    def _show_judgment(cycle_complete: bool):
+        """Replace full-screen colour with dark background and Pass/Fail/Skip buttons."""
+        root.unbind("<Key>")
+        root.unbind("<Button-1>")
+        root.configure(bg=_BG_DARK, cursor="")
+
+        def _judgment_key(event):
+            k = event.keysym.lower()
+            if k == "p":
+                _do("pass")
+            elif k == "f":
+                _do("fail")
+            elif k == "s":
+                _do("skip")
+
+        root.bind("<Key>", _judgment_key)
+
+        if instr.winfo_ismapped():
+            instr.place_forget()
+
+        msg = (
+            "Colour cycle complete.\nDid the display pass all checks?"
+            if cycle_complete else
+            "Cycle ended early.\nReview what you observed and mark below."
+        )
+        tk.Label(root, text=msg, bg=_BG_DARK, fg="#cccccc",
+                 font=("Courier", 14), justify="center").place(relx=0.5, rely=0.4, anchor="center")
+
+        btn_frame = tk.Frame(root, bg=_BG_DARK)
+        btn_frame.place(relx=0.5, rely=0.6, anchor="center")
+
+        def _do(r):
+            result[0] = r
+            root.destroy()
+
+        _make_btn(btn_frame, "Fail", _BG_BTN_F, lambda: _do("fail"), "#a02020").pack(side="left", padx=14)
+        _make_btn(btn_frame, "Pass", _BG_BTN_P, lambda: _do("pass"), "#228822").pack(side="left", padx=14)
+        _make_btn(btn_frame, "Skip", _BG_BTN_S, lambda: _do("skip"), "#4a4a4a").pack(side="left", padx=14)
+
+        hint_var.set("  Mark the result above  ")
+        hint.configure(bg="#1a1a1a")
 
     def advance(_event=None):
         phase[0] += 1
         if phase[0] >= _N:
-            completed[0] = True
-            root.destroy()
+            _show_judgment(cycle_complete=True)
             return
         name, bg = _COLORS[phase[0]]
         root.configure(bg=bg)
@@ -89,7 +135,7 @@ def run_display_test() -> bool:
 
     def on_key(event):
         if event.keysym == "Escape":
-            root.destroy()
+            _show_judgment(cycle_complete=False)
         else:
             advance()
 
@@ -97,13 +143,13 @@ def run_display_test() -> bool:
     root.bind("<Button-1>", advance)
     root.focus_force()
     root.mainloop()
-    return completed[0]
+    return result[0]
 
 
 if __name__ == "__main__":
     try:
-        result = run_display_test()
-        sys.exit(0 if result else 1)
+        r = run_display_test()
+        sys.exit(0 if r == "pass" else (3 if r == "skip" else 1))
     except SystemExit:
         raise
     except Exception:

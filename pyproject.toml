@@ -14,6 +14,9 @@ dependencies = [
     "reportlab>=4.0.0",
     # Windows-only — UV installs this automatically on Windows, skips it elsewhere
     "wmi>=1.5.1; sys_platform == 'win32'",
+    # Webcam helper — live camera preview in tkinter
+    "pillow>=10.0.0",
+    "opencv-python>=4.8.0",
 ]
 
 [project.scripts]
