@@ -26,14 +26,19 @@ echo "Output    : $DIST_DIR/$APP_NAME"
 cd "$REPO_ROOT"
 
 echo ""
-echo "[1/3] Syncing dependencies (uv sync --group build)..."
+echo "[1/4] Syncing dependencies (uv sync --group build)..."
 uv sync --group build
 
 echo ""
-echo "[2/3] Running PyInstaller..."
+echo "[2/4] Generating icons..."
+uv run python scripts/generate_icon.py
+
+echo ""
+echo "[3/4] Running PyInstaller..."
 uv run pyinstaller \
   --onefile \
   --name "$APP_NAME" \
+  --icon "$REPO_ROOT/assets/icon.icns" \
   --distpath "$DIST_DIR" \
   --workpath "build/_pyinstaller_work" \
   --specpath "build/_pyinstaller_spec" \
@@ -55,7 +60,7 @@ uv run pyinstaller \
   main.py
 
 echo ""
-echo "[3/3] Done."
+echo "[4/4] Done."
 echo "Output : $DIST_DIR/$APP_NAME"
 echo ""
 echo "NOTE: The macOS binary is not codesigned. To run it:"

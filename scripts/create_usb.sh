@@ -157,12 +157,18 @@ if [[ "$SKIP_VENTOY" == false ]]; then
     # Mount the Ventoy data partition (partition 1 — the large exFAT partition)
     if [[ "$OS" == "Darwin" ]]; then
         info "Waiting for VENTOY partition to mount..."
-        for i in {1..20}; do
+        for i in {1..10}; do
             [[ -d "/Volumes/VENTOY" ]] && break
             sleep 1
         done
+        # macOS doesn't always automount after a write — force it
+        if [[ ! -d "/Volumes/VENTOY" ]]; then
+            info "Automount didn't fire — mounting ${DRIVE}s1 manually..."
+            diskutil mount "${DRIVE}s1" &>/dev/null || true
+            sleep 3
+        fi
         [[ -d "/Volumes/VENTOY" ]] \
-            || die "VENTOY partition didn't mount automatically. Try: diskutil mount ${DRIVE}s1"
+            || die "Could not mount VENTOY partition. Try manually: diskutil mount ${DRIVE}s1"
         MOUNT_POINT="/Volumes/VENTOY"
     else
         # nvme/mmcblk use p1 suffix; everything else uses 1

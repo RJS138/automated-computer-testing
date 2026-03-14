@@ -99,20 +99,28 @@ def _get_info_darwin() -> dict:
     except Exception:
         pass
 
-    # Regulatory model number (A-number printed on device, e.g. "A2992")
-    # Stored as a zero-padded hex-encoded ASCII string in IOPlatformExpertDevice.
-    # Use the targeted class query — ioreg -l dumps the entire tree and is far too slow.
+    # Regulatory model number (A-number printed on device, e.g. "A1502")
+    # Apple Silicon stores it as hex-encoded bytes: <413135303200>
+    # Intel Macs store it as a plain string: "A1502"
     try:
         result = subprocess.run(
             ["ioreg", "-c", "IOPlatformExpertDevice", "-r", "-d", "2"],
             capture_output=True, timeout=8,
         )
         stdout = result.stdout.decode("utf-8", errors="ignore")
-        match = re.search(r'"regulatory-model-number"\s*=\s*<([0-9a-fA-F]+)>', stdout)
-        if match:
-            raw = bytes.fromhex(match.group(1)).rstrip(b"\x00").decode("ascii", errors="ignore")
-            if re.match(r"^A\d{4}$", raw):
-                info["apple_model_number"] = raw
+
+        # Try plain string format first (Intel Macs)
+        m = re.search(r'"regulatory-model-number"\s*=\s*"([^"]+)"', stdout)
+        if m:
+            raw = m.group(1).strip()
+        else:
+            # Hex-encoded format (Apple Silicon)
+            m = re.search(r'"regulatory-model-number"\s*=\s*<([0-9a-fA-F]+)>', stdout)
+            raw = (bytes.fromhex(m.group(1)).rstrip(b"\x00").decode("ascii", errors="ignore")
+                   if m else "")
+
+        if re.match(r"^A\d{4}$", raw):
+            info["apple_model_number"] = raw
     except Exception:
         pass
 

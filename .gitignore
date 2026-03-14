@@ -30,6 +30,9 @@ MANIFEST
 *.manifest
 build/_pyinstaller_work/
 build/_pyinstaller_spec/
+
+# Icon generation temp directory
+assets/icon.iconset/
 *.spec
 
 # Installer logs

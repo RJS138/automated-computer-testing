@@ -1,4 +1,4 @@
-.PHONY: build run dev clean
+.PHONY: build run dev clean icon
 
 # Build a local binary for the current machine (macOS arm64 on an M-series Mac).
 # Output: dist/macos/touchstone_arm64
@@ -12,6 +12,10 @@ run:
 # Jump straight to the manual tests screen
 dev:
 	uv run touchstone --dev-manual
+
+# Regenerate app icons (assets/icon.png, .ico, .icns)
+icon:
+	uv run python scripts/generate_icon.py
 
 # Remove PyInstaller work/spec caches and built binaries
 clean:

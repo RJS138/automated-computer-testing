@@ -162,8 +162,15 @@ def _get_wifi_macos() -> dict:
                     if rate:
                         info["tx_rate_mbps"] = int(rate)
 
-                # Nearby networks (no signal_noise in their entries on macOS 13+)
-                for net in iface.get("spairport_airport_other_local_wireless_networks", []):
+                # Nearby networks — key varies by macOS version:
+                # macOS 13+: spairport_airport_other_local_wireless_networks
+                # older macOS / not connected: spairport_airport_local_wireless_networks
+                nearby = (
+                    iface.get("spairport_airport_other_local_wireless_networks")
+                    or iface.get("spairport_airport_local_wireless_networks")
+                    or []
+                )
+                for net in nearby:
                     ssid = net.get("_name", "")
                     sig_noise = str(net.get("spairport_signal_noise", ""))
                     m = re.search(r"(-?\d+)\s*dBm", sig_noise)
@@ -178,6 +185,36 @@ def _get_wifi_macos() -> dict:
                 break  # first interface only
     except Exception:
         pass
+
+    # Fallback: use airport -s for available networks if system_profiler returned none.
+    # Works on Intel Macs / older macOS where the JSON key is absent or empty.
+    if not info["available_networks"]:
+        try:
+            r = subprocess.run(
+                [_AIRPORT, "-s"],
+                capture_output=True, text=True, timeout=15,
+            )
+            for line in r.stdout.splitlines()[1:]:  # skip header row
+                # Columns: SSID  BSSID  RSSI  CHANNEL  HT  CC  SECURITY
+                # SSID is right-aligned and may contain spaces; BSSID is a MAC address
+                m = re.search(
+                    r"^(.+?)\s+((?:[0-9a-f]{2}:){5}[0-9a-f]{2})\s+(-\d+)\s+(\S+)",
+                    line.strip(), re.IGNORECASE,
+                )
+                if m:
+                    try:
+                        channel = int(m.group(4).split(",")[0])
+                    except ValueError:
+                        channel = None
+                    info["available_networks"].append({
+                        "ssid":       m.group(1).strip() or "Hidden",
+                        "bssid":      m.group(2),
+                        "signal_dbm": int(m.group(3)),
+                        "channel":    channel,
+                        "security":   None,
+                    })
+        except Exception:
+            pass
 
     # Fallback: try networksetup for SSID (works on older macOS)
     if info.get("connected") and not info.get("ssid"):

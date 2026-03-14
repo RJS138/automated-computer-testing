@@ -19,6 +19,30 @@ import os
 import sys
 
 
+def _try_enable_windows_vt() -> bool:
+    """
+    On Windows, attempt to enable VT/ANSI processing via SetConsoleMode.
+    Returns True if VT is now available (Windows 10+), False if not (Windows 8.1 etc.).
+    No-op and returns False on non-Windows.
+    """
+    if sys.platform != "win32":
+        return False
+    try:
+        import ctypes
+        import ctypes.wintypes
+        kernel32 = ctypes.windll.kernel32
+        ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
+        STD_OUTPUT_HANDLE = -11
+        handle = kernel32.GetStdHandle(STD_OUTPUT_HANDLE)
+        mode = ctypes.wintypes.DWORD()
+        if not kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+            return False
+        new_mode = mode.value | ENABLE_VIRTUAL_TERMINAL_PROCESSING
+        return bool(kernel32.SetConsoleMode(handle, new_mode))
+    except Exception:
+        return False
+
+
 def _positive_truecolor_signals() -> bool:
     """Return True only if the terminal explicitly claims truecolor support."""
     # Explicit COLORTERM advertisement (de-facto standard)
@@ -81,6 +105,16 @@ def configure_for_textual(simple: bool) -> None:
     Adjust environment variables so Textual uses the right colour depth.
     Must be called before PCTesterApp().run().
     """
+    if sys.platform == "win32":
+        # Try to enable VT processing (succeeds on Windows 10+, fails on 8.1 etc.)
+        vt_ok = _try_enable_windows_vt()
+        if not vt_ok:
+            # Old Windows console — let Textual/Rich use Win32 API directly.
+            # Do NOT set TERM here; overriding it would make Rich think ANSI is
+            # available and print raw escape codes the console can't render.
+            os.environ.pop("COLORTERM", None)
+        return
+
     if simple:
         # Remove truecolor hint — Textual will fall back to 256-colour
         os.environ.pop("COLORTERM", None)
