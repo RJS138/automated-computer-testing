@@ -35,19 +35,12 @@ jobs:
           path: dist/linux/touchstone_x86_64
           if-no-files-found: error
 
-  # ── macOS (arm64 + x86_64) ───────────────────────────────────────────────
+  # ── macOS arm64 ──────────────────────────────────────────────────────────
+  # GitHub no longer provides Intel (x86_64) macOS runners.
+  # Intel Mac users can run the arm64 binary transparently via Rosetta 2.
   build-macos:
-    name: Build macOS (${{ matrix.arch }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-14 # Apple Silicon (arm64)
-            arch: arm64
-          - runner: macos-13 # Intel (x86_64)
-            arch: x86_64
-
-    runs-on: ${{ matrix.runner }}
+    name: Build macOS (arm64)
+    runs-on: macos-14
 
     steps:
       - name: Checkout
@@ -69,9 +62,8 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: touchstone-macos-${{ matrix.arch }}
-          # The build script names the binary after uname -m: arm64 or x86_64
-          path: dist/macos/touchstone_${{ matrix.arch }}
+          name: touchstone-macos-arm64
+          path: dist/macos/touchstone_arm64
           if-no-files-found: error
 
   # ── Windows x64 ──────────────────────────────────────────────────────────
@@ -100,6 +92,41 @@ jobs:
           path: dist\windows\touchstone_x64.exe
           if-no-files-found: error
 
+  # ── macOS x86_64 (self-hosted) ───────────────────────────────────────────
+  # Requires a self-hosted runner registered with labels: [self-hosted, macos, x86_64]
+  # To register: Settings → Actions → Runners → New self-hosted runner
+  # This job is NOT in create-release's needs — it uploads to the release
+  # independently once the runner picks it up.
+  build-macos-x86_64:
+    name: Build macOS (x86_64, self-hosted)
+    runs-on: [self-hosted, macos, x86_64]
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install UV
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install Tcl/Tk (for tkinter display/keyboard helpers)
+        run: brew install tcl-tk
+
+      - name: Build
+        run: |
+          chmod +x build/macos/build.sh
+          bash build/macos/build.sh
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: dist/macos/touchstone_x86_64
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   # ── Create GitHub Release ─────────────────────────────────────────────────
   create-release:
     name: Create Release
@@ -123,11 +150,10 @@ jobs:
       - name: Stage release assets
         run: |
           mkdir release
-          cp "artifacts/touchstone-linux-x86_64/touchstone_x86_64"   release/touchstone_linux_x86_64
-          cp "artifacts/touchstone-macos-arm64/touchstone_arm64"      release/touchstone_macos_arm64
-          cp "artifacts/touchstone-macos-x86_64/touchstone_x86_64"   release/touchstone_macos_x86_64
-          cp "artifacts/touchstone-windows-x64/touchstone_x64.exe"   release/touchstone_windows_x64.exe
-          chmod +x release/touchstone_linux_x86_64 release/touchstone_macos_arm64 release/touchstone_macos_x86_64
+          cp "artifacts/touchstone-linux-x86_64/touchstone_x86_64"  release/touchstone_linux_x86_64
+          cp "artifacts/touchstone-macos-arm64/touchstone_arm64"     release/touchstone_macos_arm64
+          cp "artifacts/touchstone-windows-x64/touchstone_x64.exe"  release/touchstone_windows_x64.exe
+          chmod +x release/touchstone_linux_x86_64 release/touchstone_macos_arm64
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -142,7 +168,7 @@ jobs:
             | Platform | File |
             |----------|------|
             | macOS (Apple Silicon / M-series) | `touchstone_macos_arm64` |
-            | macOS (Intel) | `touchstone_macos_x86_64` |
+            | macOS (Intel — run via Rosetta 2) | `touchstone_macos_arm64` |
             | Linux x86_64 | `touchstone_linux_x86_64` |
             | Windows x64 | `touchstone_windows_x64.exe` |
 
@@ -152,6 +178,7 @@ jobs:
             xattr -d com.apple.quarantine touchstone_macos_arm64
             ./touchstone_macos_arm64
             ```
+            > Intel Mac users: the arm64 binary runs transparently via Rosetta 2.
 
             ### Linux — first run
             ```
@@ -164,7 +191,6 @@ jobs:
           files: |
             release/touchstone_linux_x86_64
             release/touchstone_macos_arm64
-            release/touchstone_macos_x86_64
             release/touchstone_windows_x64.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

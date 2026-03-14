@@ -28,6 +28,8 @@ MANIFEST
 # PyInstaller build artifacts
 .pyinstaller/
 *.manifest
+build/_pyinstaller_work/
+build/_pyinstaller_spec/
 *.spec
 
 # Installer logs

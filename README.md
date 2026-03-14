@@ -5,8 +5,8 @@
 **Portable hardware diagnostics for PC repair technicians.**
 Run a full diagnostic suite on any Windows, macOS, or Linux machine — no installation required.
 
-[![Build](https://github.com/OWNER/touchstone/actions/workflows/release.yml/badge.svg)](https://github.com/OWNER/touchstone/actions/workflows/release.yml)
-[![Release](https://img.shields.io/github/v/release/OWNER/touchstone?label=latest)](https://github.com/OWNER/touchstone/releases/latest)
+[![Build](https://github.com/RJS138/automated-computer-testing/actions/workflows/release.yml/badge.svg)](https://github.com/RJS138/automated-computer-testing/actions/workflows/release.yml)
+[![Release](https://img.shields.io/github/v/release/RJS138/automated-computer-testing?label=latest)](https://github.com/RJS138/automated-computer-testing/releases/latest)
 [![License: GPL-2.0](https://img.shields.io/badge/license-GPL--2.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](#download)
 
@@ -25,13 +25,13 @@ Pop in a USB drive and run one line. It installs [Ventoy](https://ventoy.net), d
 **macOS / Linux**
 
 ```bash
-sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/OWNER/touchstone/main/scripts/create_usb.sh)"
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/RJS138/automated-computer-testing/main/scripts/create_usb.sh)"
 ```
 
 **Windows** — open PowerShell as Administrator:
 
 ```powershell
-irm https://raw.githubusercontent.com/OWNER/touchstone/main/scripts/create_usb.ps1 | iex
+irm https://raw.githubusercontent.com/RJS138/automated-computer-testing/main/scripts/create_usb.ps1 | iex
 ```
 
 The USB drive will contain ready-to-run executables for every platform. Plug it into any PC and run the binary for that machine's OS — no Python, no dependencies, no internet required on the target machine.
@@ -68,13 +68,13 @@ A **comparison report** is generated automatically when both a *before* and *aft
 
 ## Download
 
-Pre-built binaries are attached to every [GitHub Release](https://github.com/OWNER/touchstone/releases/latest). No Python or dependencies needed on the target machine.
+Pre-built binaries are attached to every [GitHub Release](https://github.com/RJS138/automated-computer-testing/releases/latest). No Python or dependencies needed on the target machine.
 
 | Platform | File |
 |---|---|
 | Windows x64 | `touchstone_windows_x64.exe` |
 | macOS Apple Silicon | `touchstone_macos_arm64` |
-| macOS Intel | `touchstone_macos_x86_64` |
+| macOS Intel | `touchstone_macos_arm64` (runs via Rosetta 2) |
 | Linux x86_64 | `touchstone_linux_x86_64` |
 
 ### First-run notes
@@ -109,8 +109,8 @@ chmod +x touchstone_linux_x86_64 && sudo ./touchstone_linux_x86_64
 Requires [UV](https://docs.astral.sh/uv/getting-started/installation/).
 
 ```bash
-git clone https://github.com/OWNER/touchstone.git
-cd touchstone
+git clone https://github.com/RJS138/automated-computer-testing.git
+cd automated-computer-testing
 uv sync          # creates .venv, installs all dependencies
 uv run touchstone  # launch the app
 ```

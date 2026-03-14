@@ -9,10 +9,14 @@ uv sync                     # install deps + create .venv
 uv run touchstone           # launch the app normally
 uv run touchstone --dev-manual  # skip to manual tests screen
 
-uv sync --group build       # add PyInstaller
-./build/macos/build.sh      # macOS binary → dist/macos/
-./build/linux/build.sh      # Linux binary → dist/linux/
-build\windows\build.bat     # Windows binary → dist\windows\
+make build                  # build local macOS arm64 binary → dist/macos/touchstone_arm64
+make run                    # same as uv run touchstone
+make dev                    # same as uv run touchstone --dev-manual
+make clean                  # remove PyInstaller caches and dist/
+
+# Other platforms (run on the target machine):
+uv sync --group build && ./build/linux/build.sh   # Linux binary
+uv sync --group build && build\windows\build.bat  # Windows binary
 ```
 
 There are no automated tests. Manual testing is done by running the app.
