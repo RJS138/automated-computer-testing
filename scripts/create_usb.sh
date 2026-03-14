@@ -19,7 +19,7 @@ GITHUB_REPO=$(git -C "$(dirname "${BASH_SOURCE[0]}")/.." \
     remote get-url origin 2>/dev/null \
     | sed 's|.*github\.com[:/]||; s|\.git$||' \
     | tr -d '[:space:]') 2>/dev/null || true
-GITHUB_REPO="${GITHUB_REPO:-OWNER/touchstone}"   # <-- update if auto-detection fails
+GITHUB_REPO="${GITHUB_REPO:-RJS138/automated-computer-testing}"
 
 USB_MARKER="touchstone_usb.marker"
 REPORTS_DIR="reports"
@@ -224,14 +224,12 @@ _dl() {
 
 _dl "touchstone_linux_x86_64"      "$MOUNT_POINT/linux/touchstone_linux_x86_64"
 _dl "touchstone_macos_arm64"       "$MOUNT_POINT/macos/touchstone_macos_arm64"
-_dl "touchstone_macos_x86_64"      "$MOUNT_POINT/macos/touchstone_macos_x86_64"
 _dl "touchstone_windows_x64.exe"   "$MOUNT_POINT/windows/touchstone_windows_x64.exe"
 
 # Make Unix binaries executable
 chmod +x \
     "$MOUNT_POINT/linux/touchstone_linux_x86_64" \
     "$MOUNT_POINT/macos/touchstone_macos_arm64" \
-    "$MOUNT_POINT/macos/touchstone_macos_x86_64" \
     2>/dev/null || true
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -255,9 +253,7 @@ MACOS (Apple Silicon / M-series)
     xattr -d com.apple.quarantine macos/touchstone_macos_arm64
 
 MACOS (Intel)
-  Run: macos/touchstone_macos_x86_64
-  First run only:
-    xattr -d com.apple.quarantine macos/touchstone_macos_x86_64
+  Use macos/touchstone_macos_arm64 — runs via Rosetta 2 automatically.
 
 LINUX
   Run: linux/touchstone_linux_x86_64  (requires sudo)

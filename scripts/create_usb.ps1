@@ -32,7 +32,7 @@ try {
     $raw = git -C "$PSScriptRoot\.." remote get-url origin 2>$null
     $GithubRepo = $raw -replace '.*github\.com[:/]', '' -replace '\.git$', '' -replace '\s', ''
 } catch { $GithubRepo = $null }
-if (-not $GithubRepo) { $GithubRepo = "OWNER/touchstone" }  # <-- update if needed
+if (-not $GithubRepo) { $GithubRepo = "RJS138/automated-computer-testing" }
 
 $UsbMarker  = "touchstone_usb.marker"
 $ReportsDir = "reports"
@@ -76,7 +76,7 @@ try {
 Write-Step "[1/5] Select USB drive"
 Write-Host ""
 
-$usbDisks = Get-Disk | Where-Object { $_.BusType -eq 'USB' -and $_.Size -gt 0 }
+$usbDisks = @(Get-Disk | Where-Object { $_.BusType -eq 'USB' -and $_.Size -gt 0 })
 
 if ($usbDisks.Count -eq 0) {
     Fail "No USB disks detected. Insert the USB drive and try again."
@@ -197,8 +197,7 @@ foreach ($d in $dirs) { New-Item -ItemType Directory -Path $d -Force | Out-Null 
 $assets = @(
     @{ Name = "touchstone_windows_x64.exe"; Dest = "$VentoyDrive\windows\touchstone_windows_x64.exe" },
     @{ Name = "touchstone_linux_x86_64";    Dest = "$VentoyDrive\linux\touchstone_linux_x86_64"      },
-    @{ Name = "touchstone_macos_arm64";     Dest = "$VentoyDrive\macos\touchstone_macos_arm64"       },
-    @{ Name = "touchstone_macos_x86_64";    Dest = "$VentoyDrive\macos\touchstone_macos_x86_64"      }
+    @{ Name = "touchstone_macos_arm64";     Dest = "$VentoyDrive\macos\touchstone_macos_arm64"       }
 )
 
 foreach ($a in $assets) {
@@ -231,7 +230,7 @@ MACOS (Apple Silicon / M-series)
     xattr -d com.apple.quarantine macos/touchstone_macos_arm64
 
 MACOS (Intel)
-  Run: macos/touchstone_macos_x86_64
+  Use macos/touchstone_macos_arm64 - runs via Rosetta 2 automatically.
 
 LINUX
   Run: linux/touchstone_linux_x86_64  (requires sudo)
