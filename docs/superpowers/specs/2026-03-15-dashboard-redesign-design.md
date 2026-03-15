@@ -237,7 +237,7 @@ No changes to the dashboard layout or scheduling logic are required to add new t
 
 ## Navigation & App Window
 
-`TouchstoneWindow` will initialise directly to `MainDashboard` instead of `ReadinessPage`. The `QStackedWidget` approach is retained but only used for the full-screen manual test dialogs (which are `QDialog` subclasses, not stacked pages). Page-to-page navigation is eliminated.
+`TouchstoneWindow` initialises directly to `MainDashboard` set as the central widget. The `QStackedWidget` is removed. Manual test dialogs are `QDialog` subclasses and run their own event loop — they are not part of any widget stack. Page-to-page navigation is eliminated.
 
 ---
 
