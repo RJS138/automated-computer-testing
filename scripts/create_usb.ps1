@@ -32,7 +32,7 @@ try {
     $raw = git -C "$PSScriptRoot\.." remote get-url origin 2>$null
     $GithubRepo = $raw -replace '.*github\.com[:/]', '' -replace '\.git$', '' -replace '\s', ''
 } catch { $GithubRepo = $null }
-if (-not $GithubRepo) { $GithubRepo = "RJS138/automated-computer-testing" }
+if (-not $GithubRepo) { $GithubRepo = "RJS138/touchstone" }
 
 $UsbMarker  = "touchstone_usb.marker"
 $ReportsDir = "reports"

@@ -1,9 +1,9 @@
 @echo off
-REM PC Tester — Windows Build Script
+REM PC Tester — Windows ARM Build Script
 REM
 REM Prerequisites:
 REM   1. Install UV:  winget install --id=astral-sh.uv  (or https://docs.astral.sh/uv/getting-started/installation/)
-REM   2. Run this script — UV handles everything else automatically.
+REM   2. Run this script on a Windows ARM machine — UV handles everything else automatically.
 REM
 REM UV will:
 REM   - Download and pin the correct Python version (.python-version)
@@ -12,11 +12,11 @@ REM   - Build a single self-contained .exe
 
 setlocal
 
-set APP_NAME=Touchstone (Windows x64)
+set APP_NAME=Touchstone (Windows ARM)
 set REPO_ROOT=%~dp0..\..
 set DIST_DIR=%REPO_ROOT%\dist\windows
 
-echo === Touchstone — Windows Build ===
+echo === Touchstone — Windows ARM Build ===
 echo Repo root: %REPO_ROOT%
 
 cd /d "%REPO_ROOT%"
@@ -42,7 +42,7 @@ echo.
 echo [3/4] Running PyInstaller...
 uv run pyinstaller ^
   --onefile ^
-  --name %APP_NAME% ^
+  --name "%APP_NAME%" ^
   --icon "%REPO_ROOT%\assets\icon.ico" ^
   --distpath "%DIST_DIR%" ^
   --workpath "build\_pyinstaller_work" ^

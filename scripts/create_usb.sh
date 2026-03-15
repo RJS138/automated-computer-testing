@@ -19,7 +19,7 @@ GITHUB_REPO=$(git -C "$(dirname "${BASH_SOURCE[0]}")/.." \
     remote get-url origin 2>/dev/null \
     | sed 's|.*github\.com[:/]||; s|\.git$||' \
     | tr -d '[:space:]') 2>/dev/null || true
-GITHUB_REPO="${GITHUB_REPO:-RJS138/automated-computer-testing}"
+GITHUB_REPO="${GITHUB_REPO:-RJS138/touchstone}"
 
 USB_MARKER="touchstone_usb.marker"
 REPORTS_DIR="reports"

@@ -1,7 +1,7 @@
 .PHONY: build run dev clean icon
 
-# Build a local binary for the current machine (macOS arm64 on an M-series Mac).
-# Output: dist/macos/touchstone_arm64
+# Build a local binary for the current machine.
+# Output: dist/macos/Touchstone (Apple Silicon)  or  dist/macos/Touchstone (Intel)
 build:
 	bash build/macos/build.sh
 

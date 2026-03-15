@@ -16,7 +16,11 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 DIST_DIR="$REPO_ROOT/dist/macos"
 ARCH="$(uname -m)"
-APP_NAME="touchstone_${ARCH}"
+if [ "$ARCH" = "arm64" ]; then
+    APP_NAME="Touchstone (Apple Silicon)"
+else
+    APP_NAME="Touchstone (Intel)"
+fi
 
 echo "=== Touchstone — macOS Build ==="
 echo "Repo root : $REPO_ROOT"

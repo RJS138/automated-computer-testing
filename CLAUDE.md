@@ -9,7 +9,7 @@ uv sync                     # install deps + create .venv
 uv run touchstone           # launch the app normally
 uv run touchstone --dev-manual  # skip to manual tests screen
 
-make build                  # build local macOS arm64 binary → dist/macos/touchstone_arm64
+make build                  # build local macOS binary → dist/macos/Touchstone (Apple Silicon) or Touchstone (Intel)
 make run                    # same as uv run touchstone
 make dev                    # same as uv run touchstone --dev-manual
 make clean                  # remove PyInstaller caches and dist/
