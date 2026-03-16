@@ -27,6 +27,7 @@ from src.models.job import TestMode
 from src.models.test_result import TestResult, TestStatus
 from src.ui.widgets.dashboard_card import DashboardCard
 from src.ui.widgets.header_bar import HeaderBar
+from src.ui.widgets.report_options_panel import ReportOptionsPanel
 from src.ui.widgets.system_info_panel import SystemInfoPanel
 from src.ui.workers import TestWorker
 
@@ -117,9 +118,15 @@ class MainDashboard(QWidget):
 
         # Right column
         right_col = QWidget()
-        right_layout = QVBoxLayout(right_col)
-        right_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.setSpacing(8)
+        self._right_layout = QVBoxLayout(right_col)
+        self._right_layout.setContentsMargins(0, 0, 0, 0)
+        self._right_layout.setSpacing(8)
+        right_layout = self._right_layout  # local alias for readability below
+
+        # Report options panel (Advanced mode only — hidden by default)
+        self._report_options = ReportOptionsPanel(self)
+        self._report_options.hide()
+        right_layout.addWidget(self._report_options)
 
         # Automated section title
         auto_title = QLabel("AUTOMATED TESTS")
@@ -213,7 +220,7 @@ class MainDashboard(QWidget):
     # ── Mode switching ────────────────────────────────────────────────────────
 
     def _on_mode_changed(self, mode: str) -> None:
-        """Show/hide advanced-only cards based on selected mode."""
+        """Show/hide advanced-only cards and report options panel based on selected mode."""
         is_advanced = mode == "advanced"
         for entry in self._TEST_REGISTRY:
             if entry["advanced_only"]:
@@ -226,6 +233,7 @@ class MainDashboard(QWidget):
             card = self._cards.get(entry["name"])
             if card is not None:
                 card.set_advanced(is_advanced)
+        self._report_options.setVisible(is_advanced)
 
     # ── System info ───────────────────────────────────────────────────────────
 
