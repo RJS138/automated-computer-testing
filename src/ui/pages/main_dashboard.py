@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.models.job import TestMode
-from src.models.test_result import TestResult
+from src.models.test_result import TestResult, TestStatus
 from src.ui.widgets.dashboard_card import DashboardCard
 from src.ui.widgets.header_bar import HeaderBar
 from src.ui.widgets.system_info_panel import SystemInfoPanel
@@ -89,6 +89,13 @@ class MainDashboard(QWidget):
         self._cards: dict[str, DashboardCard] = {}
         self._results: dict[str, TestResult] = {}
         self._si_result: TestResult | None = None
+
+        # ── Run-all state ─────────────────────────────────────────────────────
+        self._running_all: bool = False
+        self._active_workers: list[TestWorker] = []
+        self._parallel_done_count: int = 0
+        self._parallel_total: int = 0
+        self._sequential_queue: list[dict] = []
 
         # ── Layout ────────────────────────────────────────────────────────────
         main_layout = QVBoxLayout(self)
@@ -241,16 +248,172 @@ class MainDashboard(QWidget):
         self._recalculate_overall()
 
     def _recalculate_overall(self) -> None:
-        """Placeholder — will be properly implemented in Task 7."""
-        self._info_panel.set_overall("waiting")
+        """Calculate overall status from all completed results and update panel + header."""
+        statuses = [r.status.value for r in self._results.values()]
+        if not statuses:
+            self._info_panel.set_overall("waiting")
+            return
 
-    # ── Stubs for later tasks ─────────────────────────────────────────────────
+        # Priority: fail/error > warn > skip > pass > running > waiting
+        priority = ["fail", "error", "warn", "skip", "pass", "running", "waiting"]
+        overall = "waiting"
+        for p in priority:
+            if p in statuses:
+                overall = p
+                break
+
+        self._info_panel.set_overall(overall)
+
+        # Check if all checked tests are done (no WAITING or RUNNING)
+        incomplete = {"waiting", "running"}
+        all_done = all(
+            r.status.value not in incomplete
+            for name, r in self._results.items()
+            if self._cards.get(name) and self._cards[name].is_checked()
+        )
+        if all_done and not self._running_all:
+            self._header.set_action_state("generate_report")
+
+    # ── Run All ───────────────────────────────────────────────────────────────
 
     def _on_run_all(self) -> None:
-        pass
+        """Construct JobInfo, launch all checked automated tests."""
+        from src.models.job import JobInfo, ReportType
+
+        # Build JobInfo from header fields
+        report_type = ReportType.AFTER if self._header.report_type() == "after" else ReportType.BEFORE
+        self._window.job_info = JobInfo(
+            customer_name=self._header.customer(),
+            device_description=self._header.device(),
+            job_number=self._header.job_number(),
+            report_type=report_type,
+        )
+
+        self._running_all = True
+        for card in self._cards.values():
+            card.set_running_all(True)
+
+        # Separate checked automated tests into parallel and sequential groups
+        parallel_entries = []
+        self._sequential_queue = []
+        for entry in self._TEST_REGISTRY:
+            if entry["kind"] != "automated":
+                continue
+            card = self._cards.get(entry["name"])
+            if card is None or not card.is_checked():
+                continue
+            if entry["advanced_only"] and self._header.mode() != "advanced":
+                continue
+            if entry["group"] == "parallel":
+                parallel_entries.append(entry)
+            else:
+                self._sequential_queue.append(entry)
+
+        self._parallel_total = len(parallel_entries)
+        self._parallel_done_count = 0
+
+        if parallel_entries:
+            for entry in parallel_entries:
+                self._launch_test(entry)
+        else:
+            # No parallel tests — go straight to sequential
+            self._next_sequential()
 
     def _on_run_requested(self, name: str) -> None:
-        pass
+        """Individual card Run/Re-run button clicked."""
+        if self._running_all:
+            return  # ignore individual runs during Run All
+        entry = next((e for e in self._TEST_REGISTRY if e["name"] == name), None)
+        if entry is None or entry["kind"] != "automated":
+            return
+        result = self._results.get(name)
+        if result is None:
+            return
+        # Reset result and card to RUNNING
+        result.status = TestStatus.WAITING
+        result.summary = ""
+        result.error_message = ""
+        result.data = {}
+        card = self._cards[name]
+        card.set_status("running")
+        worker = self._make_worker(entry, result, on_done=lambda n: self._on_single_test_done(n))
+        self._active_workers.append(worker)
+        worker.start()
+
+    # ── Worker helpers ────────────────────────────────────────────────────────
+
+    def _launch_test(self, entry: dict) -> None:
+        """Launch a test worker for an automated registry entry."""
+        name = entry["name"]
+        result = self._results[name]
+        result.status = TestStatus.WAITING
+        result.summary = ""
+        result.error_message = ""
+        result.data = {}
+        card = self._cards[name]
+        card.set_status("running")
+        on_done = self._on_parallel_test_done if entry["group"] == "parallel" else self._on_sequential_test_done
+        worker = self._make_worker(entry, result, on_done=on_done)
+        self._active_workers.append(worker)
+        worker.start()
+
+    def _make_worker(self, entry: dict, result: TestResult, on_done) -> TestWorker:
+        """Create and wire a TestWorker for the given registry entry."""
+        cls = entry["cls"]
+        module_name = cls.__module__.split(".")[-1]
+        cls_name = cls.__name__
+        worker = TestWorker(
+            name=entry["name"],
+            module=module_name,
+            cls_name=cls_name,
+            result=result,
+            mode=TestMode.QUICK,
+            parent=self,
+        )
+        worker.finished.connect(on_done)
+        return worker
+
+    # ── Result callbacks ──────────────────────────────────────────────────────
+
+    def _on_parallel_test_done(self, name: str) -> None:
+        self._apply_result(name)
+        self._parallel_done_count += 1
+        if self._parallel_done_count >= self._parallel_total:
+            # All parallel done → start sequential
+            self._next_sequential()
+
+    def _on_sequential_test_done(self, name: str) -> None:
+        self._apply_result(name)
+        self._next_sequential()
+
+    def _on_single_test_done(self, name: str) -> None:
+        self._apply_result(name)
+        self._recalculate_overall()
+
+    def _next_sequential(self) -> None:
+        if self._sequential_queue:
+            entry = self._sequential_queue.pop(0)
+            self._launch_test(entry)
+        else:
+            self._on_automated_done()
+
+    def _on_automated_done(self) -> None:
+        """Called when all automated tests finish during Run All."""
+        # For now: end run-all mode. Manual queue will be added in Task 8.
+        self._running_all = False
+        for card in self._cards.values():
+            card.set_running_all(False)
+        self._recalculate_overall()
+
+    def _apply_result(self, name: str) -> None:
+        """Update the card for a completed test and clean up the worker."""
+        result = self._results.get(name)
+        card = self._cards.get(name)
+        if result and card:
+            card.set_status(result.status.value, result.summary or "", result.error_message or "")
+        # Clean up finished workers
+        self._active_workers = [w for w in self._active_workers if w.isRunning()]
+        self._recalculate_overall()
 
     # ── Dev helper ────────────────────────────────────────────────────────────
 
