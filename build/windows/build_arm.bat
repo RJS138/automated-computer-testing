@@ -23,7 +23,7 @@ cd /d "%REPO_ROOT%"
 
 REM Install Python + all deps + PyInstaller into the project venv
 echo.
-echo [1/4] Syncing dependencies (uv sync --group build)...
+echo [1/3] Syncing dependencies (uv sync --group build)...
 uv sync --group build
 if %ERRORLEVEL% neq 0 (
     echo ERROR: uv sync failed. Is UV installed?
@@ -32,14 +32,7 @@ if %ERRORLEVEL% neq 0 (
 )
 
 echo.
-echo [2/4] Generating icons...
-uv run python scripts/generate_icon.py
-if %ERRORLEVEL% neq 0 (
-    echo WARNING: Icon generation failed, building without icon.
-)
-
-echo.
-echo [3/4] Running PyInstaller...
+echo [2/3] Running PyInstaller...
 uv run pyinstaller ^
   --onefile ^
   --name "%APP_NAME%" ^
@@ -71,7 +64,7 @@ if %ERRORLEVEL% neq 0 (
 )
 
 echo.
-echo [4/4] Done.
+echo [3/3] Done.
 echo Output: "%DIST_DIR%\%APP_NAME%.exe"
 
 endlocal

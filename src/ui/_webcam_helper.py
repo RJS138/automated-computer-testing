@@ -9,31 +9,32 @@ Exit codes:
 
 import sys
 
-
 # ── Visual constants ─────────────────────────────────────────────────────────
 
-_BG      = "#1a1a1a"
-_FG      = "#cccccc"
-_ACCENT  = "#2a5ab8"
-_GREEN   = "#1a6b1a"
+_BG = "#1a1a1a"
+_FG = "#cccccc"
+_ACCENT = "#2a5ab8"
+_GREEN = "#1a6b1a"
 _GREEN_H = "#228822"
-_RED     = "#8b1a1a"
-_RED_H   = "#a02020"
-_GREY    = "#3a3a3a"
-_GREY_H  = "#4a4a4a"
+_RED = "#8b1a1a"
+_RED_H = "#a02020"
+_GREY = "#3a3a3a"
+_GREY_H = "#4a4a4a"
 
-_DD_BG    = "#252525"
+_DD_BG = "#252525"
 _DD_HOVER = "#303030"
 
 
 # ── Main UI ──────────────────────────────────────────────────────────────────
 
+
 def run_webcam_test() -> bool:
     """Show full-screen webcam preview. Returns True if Pass clicked."""
     try:
+        import tkinter as tk
+
         import cv2
         from PIL import Image, ImageTk
-        import tkinter as tk
     except ImportError:
         sys.exit(2)
 
@@ -78,8 +79,9 @@ def run_webcam_test() -> bool:
             result_nc[0] = "skip"
             root.destroy()
 
-        tk.Label(root, text="Webcam Test", bg=_BG, fg="#4a9eff",
-                 font=("Courier", 16, "bold")).pack(pady=(48, 0))
+        tk.Label(root, text="Webcam Test", bg=_BG, fg="#4a9eff", font=("Courier", 16, "bold")).pack(
+            pady=(48, 0)
+        )
 
         if _platform.system() == "Darwin":
             msg = (
@@ -98,14 +100,23 @@ def run_webcam_test() -> bool:
                 "has permission to access it, then re-launch."
             )
 
-        tk.Label(root, text=msg, bg=_BG, fg="#aaaaaa",
-                 font=("Courier", 12), justify="left").pack(pady=24, padx=60)
+        tk.Label(root, text=msg, bg=_BG, fg="#aaaaaa", font=("Courier", 12), justify="left").pack(
+            pady=24, padx=60
+        )
 
         def _make_btn(parent, text, bg, fg, command, hover_bg):
-            lbl = tk.Label(parent, text=text, bg=bg, fg=fg,
-                           font=("Courier", 13, "bold"), padx=28, pady=8, cursor="hand2")
-            lbl.bind("<Enter>",         lambda e, w=lbl, c=hover_bg: w.configure(bg=c))
-            lbl.bind("<Leave>",         lambda e, w=lbl, c=bg:       w.configure(bg=c))
+            lbl = tk.Label(
+                parent,
+                text=text,
+                bg=bg,
+                fg=fg,
+                font=("Courier", 13, "bold"),
+                padx=28,
+                pady=8,
+                cursor="hand2",
+            )
+            lbl.bind("<Enter>", lambda e, w=lbl, c=hover_bg: w.configure(bg=c))
+            lbl.bind("<Leave>", lambda e, w=lbl, c=bg: w.configure(bg=c))
             lbl.bind("<ButtonPress-1>", lambda e: command())
             return lbl
 
@@ -118,18 +129,26 @@ def run_webcam_test() -> bool:
         root.mainloop()
         return result_nc[0] or "fail"
 
-    result   = [None]      # "pass" | "fail" | "skip"
-    cap      = [None]      # current cv2.VideoCapture
-    running  = [False]
-    photo_ref = [None]     # prevent GC of ImageTk.PhotoImage
+    result = [None]  # "pass" | "fail" | "skip"
+    cap = [None]  # current cv2.VideoCapture
+    running = [False]
+    photo_ref = [None]  # prevent GC of ImageTk.PhotoImage
 
     # ── Helper: label-based button ───────────────────────────────────────────
 
     def _make_btn(parent, text, bg, fg, command, hover_bg):
-        lbl = tk.Label(parent, text=text, bg=bg, fg=fg,
-                       font=("Courier", 13, "bold"), padx=28, pady=8, cursor="hand2")
-        lbl.bind("<Enter>",         lambda e, w=lbl, c=hover_bg: w.configure(bg=c))
-        lbl.bind("<Leave>",         lambda e, w=lbl, c=bg:       w.configure(bg=c))
+        lbl = tk.Label(
+            parent,
+            text=text,
+            bg=bg,
+            fg=fg,
+            font=("Courier", 13, "bold"),
+            padx=28,
+            pady=8,
+            cursor="hand2",
+        )
+        lbl.bind("<Enter>", lambda e, w=lbl, c=hover_bg: w.configure(bg=c))
+        lbl.bind("<Leave>", lambda e, w=lbl, c=bg: w.configure(bg=c))
         lbl.bind("<ButtonPress-1>", lambda e: command())
         return lbl
 
@@ -166,36 +185,46 @@ def run_webcam_test() -> bool:
     topbar = tk.Frame(root, bg=_BG)
     topbar.pack(fill="x", padx=16, pady=(12, 0))
 
-    tk.Label(topbar, text="Webcam Test",
-             bg=_BG, fg="#4a9eff",
-             font=("Courier", 16, "bold")).pack(side="left")
+    tk.Label(topbar, text="Webcam Test", bg=_BG, fg="#4a9eff", font=("Courier", 16, "bold")).pack(
+        side="left"
+    )
 
     # Camera dropdown — Label + tk.Menu (NOT tk.OptionMenu)
     cam_names = [f"Camera {i}" for i in available_indices]
     cam_var = tk.StringVar(value=cam_names[0])
 
     cam_menu = tk.Menu(
-        root, tearoff=0,
-        bg=_DD_BG, fg="#cccccc",
-        activebackground=_ACCENT, activeforeground="white",
-        font=("Courier", 11), relief="flat",
+        root,
+        tearoff=0,
+        bg=_DD_BG,
+        fg="#cccccc",
+        activebackground=_ACCENT,
+        activeforeground="white",
+        font=("Courier", 11),
+        relief="flat",
     )
 
     dropdown_frame = tk.Frame(topbar, bg=_BG)
     dropdown_frame.pack(side="right")
 
-    tk.Label(dropdown_frame, text="Camera:", bg=_BG, fg="#888888",
-             font=("Courier", 11)).pack(side="left", padx=(0, 6))
+    tk.Label(dropdown_frame, text="Camera:", bg=_BG, fg="#888888", font=("Courier", 11)).pack(
+        side="left", padx=(0, 6)
+    )
 
     dropdown_lbl = tk.Label(
-        dropdown_frame, textvariable=cam_var,
-        bg=_DD_BG, fg="#cccccc",
+        dropdown_frame,
+        textvariable=cam_var,
+        bg=_DD_BG,
+        fg="#cccccc",
         font=("Courier", 11),
-        padx=14, pady=4, cursor="hand2",
+        padx=14,
+        pady=4,
+        cursor="hand2",
     )
     dropdown_lbl.pack(side="left")
-    tk.Label(dropdown_frame, text=" ▾", bg=_BG, fg="#666666",
-             font=("Courier", 11)).pack(side="left")
+    tk.Label(dropdown_frame, text=" ▾", bg=_BG, fg="#666666", font=("Courier", 11)).pack(
+        side="left"
+    )
 
     def _show_cam_dropdown(event=None):
         x = dropdown_lbl.winfo_rootx()
@@ -209,28 +238,29 @@ def run_webcam_test() -> bool:
     # ── Info bar ─────────────────────────────────────────────────────────────
 
     info_var = tk.StringVar(value="Opening camera…")
-    tk.Label(root, textvariable=info_var,
-             bg=_BG, fg="#888888",
-             font=("Courier", 11)).pack(anchor="w", padx=16, pady=(4, 0))
+    tk.Label(root, textvariable=info_var, bg=_BG, fg="#888888", font=("Courier", 11)).pack(
+        anchor="w", padx=16, pady=(4, 0)
+    )
 
     # ── Bottom bar (packed before canvas so expand=True doesn't push it off) ──
 
     bottom = tk.Frame(root, bg=_BG)
     bottom.pack(fill="x", pady=(0, 18))
 
-    tk.Label(bottom,
-             text="Verify the live preview is clear, then mark Pass or Fail.",
-             bg=_BG, fg="#555555", font=("Courier", 10)).pack()
+    tk.Label(
+        bottom,
+        text="Verify the live preview is clear, then mark Pass or Fail.",
+        bg=_BG,
+        fg="#555555",
+        font=("Courier", 10),
+    ).pack()
 
     btn_row = tk.Frame(bottom, bg=_BG)
     btn_row.pack(pady=(10, 0))
 
-    _make_btn(btn_row, "Fail", _RED, "white", _do_fail, _RED_H).pack(
-        side="left", padx=10)
-    _make_btn(btn_row, "Pass", _GREEN, "white", _do_pass, _GREEN_H).pack(
-        side="left", padx=10)
-    _make_btn(btn_row, "Skip", _GREY, _FG, _do_skip, _GREY_H).pack(
-        side="left", padx=10)
+    _make_btn(btn_row, "Fail", _RED, "white", _do_fail, _RED_H).pack(side="left", padx=10)
+    _make_btn(btn_row, "Pass", _GREEN, "white", _do_pass, _GREEN_H).pack(side="left", padx=10)
+    _make_btn(btn_row, "Skip", _GREY, _FG, _do_skip, _GREY_H).pack(side="left", padx=10)
 
     # ── Preview canvas ───────────────────────────────────────────────────────
 
@@ -260,8 +290,8 @@ def run_webcam_test() -> bool:
             return
 
         # Read resolution and FPS
-        fw  = int(cap[0].get(cv2.CAP_PROP_FRAME_WIDTH))
-        fh  = int(cap[0].get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fw = int(cap[0].get(cv2.CAP_PROP_FRAME_WIDTH))
+        fh = int(cap[0].get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps = cap[0].get(cv2.CAP_PROP_FPS)
         fps_str = f"{fps:.0f}" if fps and fps > 0 else "?"
         info_var.set(f"{fw} × {fh} @ {fps_str} fps")
@@ -274,7 +304,7 @@ def run_webcam_test() -> bool:
         _open_camera(idx)
 
     # Populate the dropdown menu
-    for cam_idx, cam_name in zip(available_indices, cam_names):
+    for cam_idx, cam_name in zip(available_indices, cam_names, strict=False):
         cam_menu.add_command(
             label=cam_name,
             command=lambda i=cam_idx, n=cam_name: _switch_camera(i, n),
@@ -306,10 +336,10 @@ def run_webcam_test() -> bool:
         new_h = max(1, int(fh_px * scale))
 
         frame_resized = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
-        frame_rgb     = cv2.cvtColor(frame_resized, cv2.COLOR_BGR2RGB)
-        img           = Image.fromarray(frame_rgb)
-        photo         = ImageTk.PhotoImage(image=img)
-        photo_ref[0]  = photo   # keep reference — prevents GC
+        frame_rgb = cv2.cvtColor(frame_resized, cv2.COLOR_BGR2RGB)
+        img = Image.fromarray(frame_rgb)
+        photo = ImageTk.PhotoImage(image=img)
+        photo_ref[0] = photo  # keep reference — prevents GC
 
         x0 = (cw - new_w) // 2
         y0 = (ch - new_h) // 2

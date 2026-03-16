@@ -11,14 +11,14 @@ from concurrent.futures import ThreadPoolExecutor
 import psutil
 
 from ..config import CPU_STRESS_FULL, CPU_STRESS_QUICK
-from ..thresholds import get_cpu_thresholds
 from ..models.test_result import TestResult
+from ..thresholds import get_cpu_thresholds
 from .base import BaseTest
-
 
 # ---------------------------------------------------------------------------
 # CPU stress worker
 # ---------------------------------------------------------------------------
+
 
 def _cpu_worker(duration_seconds: float) -> None:
     """
@@ -35,6 +35,7 @@ def _cpu_worker(duration_seconds: float) -> None:
 # ---------------------------------------------------------------------------
 # Temperature helpers
 # ---------------------------------------------------------------------------
+
 
 def _get_cpu_temps() -> list[float]:
     """Return a flat list of CPU core temps in °C (empty if unavailable)."""
@@ -61,10 +62,13 @@ def _read_mactop_sample() -> dict:
     No root required.
     """
     import json
+
     try:
         pm = subprocess.run(
             ["mactop", "--headless", "--count", "1", "--format", "json"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         if pm.returncode == 0 and pm.stdout.strip():
             samples = json.loads(pm.stdout)
@@ -121,7 +125,10 @@ def _get_cpu_temps_macos() -> list[float]:
     # osx-cpu-temp legacy fallback
     try:
         pm = subprocess.run(
-            ["osx-cpu-temp"], capture_output=True, text=True, timeout=5,
+            ["osx-cpu-temp"],
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         if pm.returncode == 0:
             match = re.search(r"([\d.]+)", pm.stdout)
@@ -144,7 +151,7 @@ def _temp_unavailable_note() -> str:
         )
     return (
         "CPU temperature unavailable. Run as root for powermetrics temp access:\n"
-        "  sudo \"./PC Tester (Intel)\""
+        '  sudo "./PC Tester (Intel)"'
     )
 
 
@@ -153,7 +160,9 @@ def _is_mac_fanless() -> bool:
     try:
         r = subprocess.run(
             ["sysctl", "-n", "hw.model"],
-            capture_output=True, text=True, timeout=3,
+            capture_output=True,
+            text=True,
+            timeout=3,
         )
         return "air" in r.stdout.strip().lower()
     except Exception:
@@ -163,6 +172,7 @@ def _is_mac_fanless() -> bool:
 # ---------------------------------------------------------------------------
 # Clock speed helpers
 # ---------------------------------------------------------------------------
+
 
 def _get_clock_speed_macos() -> str | None:
     """
@@ -175,7 +185,9 @@ def _get_clock_speed_macos() -> str | None:
     try:
         result = subprocess.run(
             ["sysctl", "-n", "hw.cpufrequency_max"],
-            capture_output=True, text=True, timeout=3,
+            capture_output=True,
+            text=True,
+            timeout=3,
         )
         freq_hz = int(result.stdout.strip())
         if freq_hz > 0:
@@ -187,7 +199,9 @@ def _get_clock_speed_macos() -> str | None:
     try:
         result = subprocess.run(
             ["system_profiler", "SPHardwareDataType"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         for line in result.stdout.splitlines():
             if "Processor Speed:" in line:
@@ -203,6 +217,7 @@ def _get_clock_speed_macos() -> str | None:
 # Main test class
 # ---------------------------------------------------------------------------
 
+
 class CpuTest(BaseTest):
     async def run(self) -> TestResult:
         self.result.mark_running()
@@ -212,6 +227,7 @@ class CpuTest(BaseTest):
         # --- CPU info ---
         try:
             import cpuinfo  # type: ignore
+
             info = cpuinfo.get_cpu_info()
             data["brand"] = info.get("brand_raw") or "Unknown"
             data["arch"] = info.get("arch") or "Unknown"
@@ -327,7 +343,7 @@ class CpuTest(BaseTest):
             temp_str = f"{peak}°C" if peak is not None else "N/A (see report)"
             self.result.mark_pass(
                 summary=f"{data['brand']} — {data['logical_cores']} threads — "
-                        f"{freq_str} — peak temp {temp_str}",
+                f"{freq_str} — peak temp {temp_str}",
                 data=data,
             )
 

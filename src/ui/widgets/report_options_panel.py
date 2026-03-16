@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 def _default_save_path() -> str:
     try:
         from src.utils.file_manager import find_usb_drive
+
         usb = find_usb_drive()
         return str(usb) if usb else str(Path.home() / "touchstone_reports")
     except Exception:

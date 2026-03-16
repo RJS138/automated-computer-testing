@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFrame,
     QLabel,
     QScrollArea,
-    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -28,7 +29,7 @@ class SystemInfoPanel(QFrame):
     """
 
     # Data keys to display, in order
-    _KEYS = [
+    _KEYS: ClassVar[list[str]] = [
         "model",
         "serial",
         "os",
@@ -42,7 +43,7 @@ class SystemInfoPanel(QFrame):
     ]
 
     # Badge colours by status
-    _BADGE_COLORS = {
+    _BADGE_COLORS: ClassVar[dict[str, dict[str, str]]] = {
         "pass": {"bg": "#22c55e", "text": "#ffffff"},
         "warn": {"bg": "#f59e0b", "text": "#000000"},
         "fail": {"bg": "#ef4444", "text": "#ffffff"},

@@ -1,9 +1,12 @@
 from .job import JobInfo, ReportType, TestMode
-from .test_result import TestResult, TestStatus
 from .report import FullReport
+from .test_result import TestResult, TestStatus
 
 __all__ = [
-    "JobInfo", "ReportType", "TestMode",
-    "TestResult", "TestStatus",
     "FullReport",
+    "JobInfo",
+    "ReportType",
+    "TestMode",
+    "TestResult",
+    "TestStatus",
 ]

@@ -44,6 +44,7 @@ class TouchstoneWindow(QMainWindow):
 
         # ── Central widget: MainDashboard ────────────────────────
         from src.ui.pages.main_dashboard import MainDashboard
+
         self._dashboard = MainDashboard(self)
         self.setCentralWidget(self._dashboard)
 

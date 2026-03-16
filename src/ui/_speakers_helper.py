@@ -12,39 +12,39 @@ Exit codes:
   2  — tkinter not available, no display server, or audio system unavailable
 """
 
-import sys
-import platform
-import math
 import array
-import wave
-import tempfile
+import math
+import os
+import platform
+import random
 import shutil
 import subprocess
+import sys
+import tempfile
 import threading
-import random
-import os
-from pathlib import Path
+import wave
 
 # ── Visual constants ────────────────────────────────────────────────────────
 
-_BG            = "#1a1a1a"
-_FG            = "#cccccc"
-_ACCENT        = "#2a5ab8"
-_GREEN         = "#1a6b1a"
-_GREEN_H       = "#228822"
-_RED           = "#8b1a1a"
-_RED_H         = "#a02020"
-_GREY          = "#3a3a3a"
-_GREY_H        = "#4a4a4a"
+_BG = "#1a1a1a"
+_FG = "#cccccc"
+_ACCENT = "#2a5ab8"
+_GREEN = "#1a6b1a"
+_GREEN_H = "#228822"
+_RED = "#8b1a1a"
+_RED_H = "#a02020"
+_GREY = "#3a3a3a"
+_GREY_H = "#4a4a4a"
 _PASS_DISABLED_BG = "#2a2a2a"
-_PASS_ENABLED_BG  = "#1a6b1a"
-_PASS_HOVER_BG    = "#228822"
+_PASS_ENABLED_BG = "#1a6b1a"
+_PASS_HOVER_BG = "#228822"
 
 _SAMPLE_RATE = 44100
-_AMPLITUDE   = 28000   # 16-bit max ~32767; leave headroom
+_AMPLITUDE = 28000  # 16-bit max ~32767; leave headroom
 
 
 # ── Audio generation ────────────────────────────────────────────────────────
+
 
 def _generate_tone(freq: float, duration: float, channel: str) -> bytes:
     """Return raw 16-bit stereo PCM bytes for a sine tone.
@@ -72,10 +72,10 @@ def _generate_sweep(f_start: float, f_end: float, duration: float) -> bytes:
     n_samples = int(_SAMPLE_RATE * duration)
     buf = array.array("h")
     log_start = math.log(f_start)
-    log_end   = math.log(f_end)
+    log_end = math.log(f_end)
     phase = 0.0
     for i in range(n_samples):
-        t    = i / _SAMPLE_RATE
+        _t = i / _SAMPLE_RATE
         frac = i / n_samples
         freq = math.exp(log_start + frac * (log_end - log_start))
         phase += 2 * math.pi * freq / _SAMPLE_RATE
@@ -95,13 +95,14 @@ def _write_wav(path: str, pcm: bytes) -> None:
 
 # ── Playback ────────────────────────────────────────────────────────────────
 
+
 def _play_wav(path: str):
     """Return a Popen (or thread-like object) for non-blocking WAV playback."""
     system = platform.system()
     if system == "Darwin":
-        return subprocess.Popen(["afplay", path],
-                                stdout=subprocess.DEVNULL,
-                                stderr=subprocess.DEVNULL)
+        return subprocess.Popen(
+            ["afplay", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
     elif system == "Windows":
         # winsound blocks; run in thread and expose .is_alive() / poll()
         class _WinThread:
@@ -109,29 +110,32 @@ def _play_wav(path: str):
                 self._t = threading.Thread(target=self._run, args=(p,), daemon=True)
                 self._done = False
                 self._t.start()
+
             def _run(self, p):
                 try:
                     import winsound
+
                     winsound.PlaySound(p, winsound.SND_FILENAME)
                 except Exception:
                     pass
                 self._done = True
+
             def poll(self):
                 return 0 if self._done else None
+
             def terminate(self):
                 pass  # no clean kill for winsound
+
         return _WinThread(path)
     else:  # Linux
         for cmd in (
-            ["aplay",  path],
+            ["aplay", path],
             ["paplay", path],
             ["ffplay", "-nodisp", "-autoexit", path],
-            ["mpv",    "--no-video", path],
+            ["mpv", "--no-video", path],
         ):
             if shutil.which(cmd[0]):
-                return subprocess.Popen(cmd,
-                                        stdout=subprocess.DEVNULL,
-                                        stderr=subprocess.DEVNULL)
+                return subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return None
 
 
@@ -139,9 +143,7 @@ def _tts_speak(text: str):
     """Speak text via platform TTS. Returns (Popen_or_None, tts_available: bool)."""
     system = platform.system()
     if system == "Darwin":
-        p = subprocess.Popen(["say", text],
-                             stdout=subprocess.DEVNULL,
-                             stderr=subprocess.DEVNULL)
+        p = subprocess.Popen(["say", text], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return p, True
     elif system == "Windows":
         script = (
@@ -150,20 +152,23 @@ def _tts_speak(text: str):
         )
         p = subprocess.Popen(
             ["powershell", "-NoProfile", "-Command", script],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
         return p, True
     else:  # Linux
         if shutil.which("espeak"):
-            p = subprocess.Popen(["espeak", text],
-                                  stdout=subprocess.DEVNULL,
-                                  stderr=subprocess.DEVNULL)
+            p = subprocess.Popen(
+                ["espeak", text], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
             return p, True
         if shutil.which("festival"):
-            p = subprocess.Popen(["festival", "--tts"],
-                                  stdin=subprocess.PIPE,
-                                  stdout=subprocess.DEVNULL,
-                                  stderr=subprocess.DEVNULL)
+            p = subprocess.Popen(
+                ["festival", "--tts"],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
             try:
                 p.stdin.write(text.encode())
                 p.stdin.close()
@@ -177,34 +182,35 @@ def _tts_speak(text: str):
 
 _STEPS = [
     {
-        "title":  "Both Speakers",
-        "desc":   "Plays a 1 kHz tone through both channels for 3 seconds.\nListen for audio from both left and right speakers.",
-        "audio":  ("tone", 1000, 3.0, "both"),
+        "title": "Both Speakers",
+        "desc": "Plays a 1 kHz tone through both channels for 3 seconds.\nListen for audio from both left and right speakers.",
+        "audio": ("tone", 1000, 3.0, "both"),
     },
     {
-        "title":  "Left Speaker",
-        "desc":   "Plays a 1 kHz tone through the LEFT channel only for 3 seconds.\nYou should hear audio from the left speaker only.",
-        "audio":  ("tone", 1000, 3.0, "left"),
+        "title": "Left Speaker",
+        "desc": "Plays a 1 kHz tone through the LEFT channel only for 3 seconds.\nYou should hear audio from the left speaker only.",
+        "audio": ("tone", 1000, 3.0, "left"),
     },
     {
-        "title":  "Right Speaker",
-        "desc":   "Plays a 1 kHz tone through the RIGHT channel only for 3 seconds.\nYou should hear audio from the right speaker only.",
-        "audio":  ("tone", 1000, 3.0, "right"),
+        "title": "Right Speaker",
+        "desc": "Plays a 1 kHz tone through the RIGHT channel only for 3 seconds.\nYou should hear audio from the right speaker only.",
+        "audio": ("tone", 1000, 3.0, "right"),
     },
     {
-        "title":  "Frequency Sweep",
-        "desc":   "Plays a logarithmic sweep from 200 Hz to 8 kHz over 5 seconds\nthrough both channels. Listen for a smooth, rising tone.",
-        "audio":  ("sweep", 200, 8000, 5.0),
+        "title": "Frequency Sweep",
+        "desc": "Plays a logarithmic sweep from 200 Hz to 8 kHz over 5 seconds\nthrough both channels. Listen for a smooth, rising tone.",
+        "audio": ("sweep", 200, 8000, 5.0),
     },
     {
-        "title":  "Spoken Code",
-        "desc":   "A 4-digit code will be spoken aloud.\nType the code you hear to confirm audio is working.",
-        "audio":  None,   # handled specially
+        "title": "Spoken Code",
+        "desc": "A 4-digit code will be spoken aloud.\nType the code you hear to confirm audio is working.",
+        "audio": None,  # handled specially
     },
 ]
 
 
 # ── Main UI ──────────────────────────────────────────────────────────────────
+
 
 def run_speakers_test() -> bool:
     try:
@@ -245,11 +251,11 @@ def run_speakers_test() -> bool:
         sys.exit(2)
 
     # ── Spoken code ──────────────────────────────────────────────────────────
-    code_digits  = [str(random.randint(0, 9)) for _ in range(4)]
-    code_str     = "".join(code_digits)
+    code_digits = [str(random.randint(0, 9)) for _ in range(4)]
+    code_str = "".join(code_digits)
     # Prefixing with "The code is" gives context and prevents digits being
     # run together or misread as a multi-digit number by the TTS engine.
-    spoken_text  = "The code is " + ", ".join(code_digits)   # e.g. "The code is 2, 7, 4, 1"
+    spoken_text = "The code is " + ", ".join(code_digits)  # e.g. "The code is 2, 7, 4, 1"
 
     # Check TTS availability early (Linux only needs a probe)
     _tts_available = [True]
@@ -258,18 +264,23 @@ def run_speakers_test() -> bool:
             _tts_available[0] = False
 
     # ── State ────────────────────────────────────────────────────────────────
-    current_step  = [0]
-    step_played   = [False] * len(_STEPS)
-    code_confirmed  = [False]
-    pass_unlocked   = [False]
-    playback_proc  = [None]   # current Popen / WinThread
-    tts_proc       = [None]
+    current_step = [0]
+    step_played = [False] * len(_STEPS)
+    code_confirmed = [False]
+    pass_unlocked = [False]
+    playback_proc = [None]  # current Popen / WinThread
+    tts_proc = [None]
 
     # ── Layout ───────────────────────────────────────────────────────────────
     topbar = tk.Frame(root, bg=_BG)
     topbar.pack(fill="x", padx=16, pady=(12, 0))
-    tk.Label(topbar, text="Speaker / Audio Test", bg=_BG, fg="#4a9eff",
-             font=("Courier", 16, "bold")).pack(side="left")
+    tk.Label(
+        topbar,
+        text="Speaker / Audio Test",
+        bg=_BG,
+        fg="#4a9eff",
+        font=("Courier", 16, "bold"),
+    ).pack(side="left")
 
     content = tk.Frame(root, bg=_BG)
 
@@ -278,17 +289,24 @@ def run_speakers_test() -> bool:
     left_panel.pack(side="left", fill="y", padx=(0, 10))
     left_panel.pack_propagate(False)
 
-    tk.Label(left_panel, text="Steps", bg="#111111", fg="#666",
-             font=("Courier", 10, "bold"), anchor="w").pack(
-        fill="x", padx=12, pady=(12, 4))
+    tk.Label(
+        left_panel,
+        text="Steps",
+        bg="#111111",
+        fg="#666",
+        font=("Courier", 10, "bold"),
+        anchor="w",
+    ).pack(fill="x", padx=12, pady=(12, 4))
 
     step_labels: list[tk.Label] = []
-    for i, step in enumerate(_STEPS):
+    for _i, step in enumerate(_STEPS):
         lbl = tk.Label(
             left_panel,
             text=f"  ○  {step['title']}",
-            bg="#111111", fg="#555",
-            font=("Courier", 11), anchor="w",
+            bg="#111111",
+            fg="#555",
+            font=("Courier", 11),
+            anchor="w",
             justify="left",
         )
         lbl.pack(fill="x", padx=8, pady=2)
@@ -298,13 +316,27 @@ def run_speakers_test() -> bool:
     right_panel = tk.Frame(content, bg=_BG)
     right_panel.pack(side="left", fill="both", expand=True)
 
-    detail_title = tk.Label(right_panel, text="", bg=_BG, fg="#4a9eff",
-                            font=("Courier", 15, "bold"), anchor="w", justify="left")
+    detail_title = tk.Label(
+        right_panel,
+        text="",
+        bg=_BG,
+        fg="#4a9eff",
+        font=("Courier", 15, "bold"),
+        anchor="w",
+        justify="left",
+    )
     detail_title.pack(fill="x", pady=(8, 4))
 
-    detail_desc = tk.Label(right_panel, text="", bg=_BG, fg=_FG,
-                           font=("Courier", 11), anchor="w", justify="left",
-                           wraplength=600)
+    detail_desc = tk.Label(
+        right_panel,
+        text="",
+        bg=_BG,
+        fg=_FG,
+        font=("Courier", 11),
+        anchor="w",
+        justify="left",
+        wraplength=600,
+    )
     detail_desc.pack(fill="x", pady=(0, 12))
 
     # Play button row
@@ -312,18 +344,25 @@ def run_speakers_test() -> bool:
     play_row.pack(anchor="w", pady=(0, 8))
 
     def _make_btn(parent, text, bg, fg, command, hover_bg):
-        lbl = tk.Label(parent, text=text, bg=bg, fg=fg,
-                       font=("Courier", 13, "bold"), padx=28, pady=8, cursor="hand2")
-        lbl.bind("<Enter>",         lambda e, w=lbl, c=hover_bg: w.configure(bg=c))
-        lbl.bind("<Leave>",         lambda e, w=lbl, c=bg:       w.configure(bg=c))
+        lbl = tk.Label(
+            parent,
+            text=text,
+            bg=bg,
+            fg=fg,
+            font=("Courier", 13, "bold"),
+            padx=28,
+            pady=8,
+            cursor="hand2",
+        )
+        lbl.bind("<Enter>", lambda e, w=lbl, c=hover_bg: w.configure(bg=c))
+        lbl.bind("<Leave>", lambda e, w=lbl, c=bg: w.configure(bg=c))
         lbl.bind("<ButtonPress-1>", lambda e: command())
         return lbl
 
     play_btn = _make_btn(play_row, "▶  Play", _ACCENT, "white", lambda: _play_step(), "#3a6fd8")
     play_btn.pack(side="left", padx=(0, 14))
 
-    play_status = tk.Label(play_row, text="", bg=_BG, fg="#888",
-                            font=("Courier", 11))
+    play_status = tk.Label(play_row, text="", bg=_BG, fg="#888", font=("Courier", 11))
     play_status.pack(side="left")
 
     next_btn_frame = tk.Frame(right_panel, bg=_BG)
@@ -332,8 +371,15 @@ def run_speakers_test() -> bool:
     # Code challenge widgets (step 5) — hidden until step 4
     code_frame = tk.Frame(right_panel, bg=_BG)
 
-    code_hint = tk.Label(code_frame, text="", bg=_BG, fg="#aaa",
-                         font=("Courier", 11), anchor="w", justify="left")
+    code_hint = tk.Label(
+        code_frame,
+        text="",
+        bg=_BG,
+        fg="#aaa",
+        font=("Courier", 11),
+        anchor="w",
+        justify="left",
+    )
     code_hint.pack(anchor="w", pady=(8, 4))
 
     code_entry_row = tk.Frame(code_frame, bg=_BG)
@@ -343,19 +389,21 @@ def run_speakers_test() -> bool:
     code_entry = tk.Entry(
         code_entry_row,
         textvariable=code_var,
-        bg="#252525", fg="white",
+        bg="#252525",
+        fg="white",
         insertbackground="white",
         font=("Courier", 18, "bold"),
-        width=6, relief="flat",
-        highlightthickness=1, highlightbackground="#444",
+        width=6,
+        relief="flat",
+        highlightthickness=1,
+        highlightbackground="#444",
     )
     code_entry.pack(side="left", padx=(0, 10))
 
     confirm_btn = _make_btn(code_entry_row, "Confirm", _GREY, _FG, lambda: _confirm_code(), _GREY_H)
     confirm_btn.pack(side="left")
 
-    code_result = tk.Label(code_frame, text="", bg=_BG, fg="#888",
-                            font=("Courier", 12, "bold"))
+    code_result = tk.Label(code_frame, text="", bg=_BG, fg="#888", font=("Courier", 12, "bold"))
     code_result.pack(anchor="w", pady=(8, 0))
 
     replay_btn_frame = tk.Frame(code_frame, bg=_BG)
@@ -365,9 +413,13 @@ def run_speakers_test() -> bool:
     bottom = tk.Frame(root, bg=_BG)
     bottom.pack(fill="x", pady=(4, 18))
 
-    tk.Label(bottom,
-             text="Play each step, then confirm the spoken code to enable Pass.",
-             bg=_BG, fg="#555", font=("Courier", 10)).pack()
+    tk.Label(
+        bottom,
+        text="Play each step, then confirm the spoken code to enable Pass.",
+        bg=_BG,
+        fg="#555",
+        font=("Courier", 10),
+    ).pack()
 
     btn_row = tk.Frame(bottom, bg=_BG)
     btn_row.pack(pady=(10, 0))
@@ -380,17 +432,21 @@ def run_speakers_test() -> bool:
         result[0] = "skip"
         root.destroy()
 
-    _make_btn(btn_row, "Fail", _RED, "white", _do_fail, _RED_H).pack(
-        side="left", padx=10)
+    _make_btn(btn_row, "Fail", _RED, "white", _do_fail, _RED_H).pack(side="left", padx=10)
 
     pass_lbl = tk.Label(
-        btn_row, text="Pass", bg=_PASS_DISABLED_BG, fg="#555",
-        font=("Courier", 13, "bold"), padx=28, pady=8, cursor="arrow",
+        btn_row,
+        text="Pass",
+        bg=_PASS_DISABLED_BG,
+        fg="#555",
+        font=("Courier", 13, "bold"),
+        padx=28,
+        pady=8,
+        cursor="arrow",
     )
     pass_lbl.pack(side="left", padx=10)
 
-    _make_btn(btn_row, "Skip", _GREY, "#aaa", _do_skip, _GREY_H).pack(
-        side="left", padx=10)
+    _make_btn(btn_row, "Skip", _GREY, "#aaa", _do_skip, _GREY_H).pack(side="left", padx=10)
 
     # Pack content after bottom bar so expand=True doesn't hide the buttons
     content.pack(fill="both", expand=True, padx=16, pady=10)
@@ -418,12 +474,12 @@ def run_speakers_test() -> bool:
         if _tts_available[0]:
             ok = all_played and code_confirmed[0]
         else:
-            ok = all_played   # TTS unavailable: visual code is the fallback
+            ok = all_played  # TTS unavailable: visual code is the fallback
         pass_unlocked[0] = ok
         if ok:
             pass_lbl.configure(bg=_PASS_ENABLED_BG, fg="white", cursor="hand2")
-            pass_lbl.bind("<Enter>",         lambda e: pass_lbl.configure(bg=_PASS_HOVER_BG))
-            pass_lbl.bind("<Leave>",         lambda e: pass_lbl.configure(bg=_PASS_ENABLED_BG))
+            pass_lbl.bind("<Enter>", lambda e: pass_lbl.configure(bg=_PASS_HOVER_BG))
+            pass_lbl.bind("<Leave>", lambda e: pass_lbl.configure(bg=_PASS_ENABLED_BG))
             pass_lbl.bind("<ButtonPress-1>", lambda e: _do_done())
         else:
             pass_lbl.configure(bg=_PASS_DISABLED_BG, fg="#555", cursor="arrow")
@@ -431,7 +487,7 @@ def run_speakers_test() -> bool:
             pass_lbl.unbind("<Leave>")
             pass_lbl.unbind("<ButtonPress-1>")
 
-    result = ["fail"]   # "pass" | "fail" | "skip"
+    result = ["fail"]  # "pass" | "fail" | "skip"
 
     def _do_done():
         result[0] = "pass"
@@ -454,8 +510,7 @@ def run_speakers_test() -> bool:
         detail_desc.configure(text=step["desc"])
 
         play_status.configure(text="")
-        play_btn.configure(state="normal", cursor="hand2",
-                           bg=_ACCENT, fg="white")
+        play_btn.configure(state="normal", cursor="hand2", bg=_ACCENT, fg="white")
 
         # Remove old next button children
         for w in next_btn_frame.winfo_children():
@@ -478,11 +533,12 @@ def run_speakers_test() -> bool:
 
         if _tts_available[0]:
             code_hint.configure(
-                text="Click Play to hear the spoken code,\nthen type the 4 digits you heard and click Confirm.")
+                text="Click Play to hear the spoken code,\nthen type the 4 digits you heard and click Confirm."
+            )
         else:
             code_hint.configure(
                 text="TTS is unavailable on this system.\n"
-                     "Audio cannot be verified automatically — mark Fail or Skip.",
+                "Audio cannot be verified automatically — mark Fail or Skip.",
                 fg="#e0a040",
             )
 
@@ -566,8 +622,9 @@ def run_speakers_test() -> bool:
             # Show replay button
             for w in replay_btn_frame.winfo_children():
                 w.destroy()
-            _make_btn(replay_btn_frame, "▶  Replay Code",
-                      _GREY, _FG, _play_step, _GREY_H).pack(side="left")
+            _make_btn(replay_btn_frame, "▶  Replay Code", _GREY, _FG, _play_step, _GREY_H).pack(
+                side="left"
+            )
 
     def _mark_played(idx: int):
         step_played[idx] = True
@@ -578,11 +635,14 @@ def run_speakers_test() -> bool:
             w.destroy()
 
         if idx < len(_STEPS) - 1:
+
             def _go_next():
                 _stop_playback()
                 _show_step(idx + 1)
-            _make_btn(next_btn_frame, "Next Step →",
-                      _ACCENT, "white", _go_next, "#3a6fd8").pack(side="left")
+
+            _make_btn(next_btn_frame, "Next Step →", _ACCENT, "white", _go_next, "#3a6fd8").pack(
+                side="left"
+            )
 
         _check_pass_unlock()
 

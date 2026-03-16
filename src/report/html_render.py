@@ -1,7 +1,6 @@
 """Render a FullReport to HTML using Jinja2."""
 
 import json
-from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 

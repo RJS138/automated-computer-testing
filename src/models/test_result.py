@@ -2,11 +2,11 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class TestStatus(str, Enum):
+class TestStatus(StrEnum):
     WAITING = "waiting"
     RUNNING = "running"
     PASS = "pass"

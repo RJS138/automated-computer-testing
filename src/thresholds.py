@@ -161,7 +161,9 @@ def detect_cpu_family(brand: str, platform_sys: str, has_battery: bool) -> str:
 
     if "intel" in b and ("core" in b or "i3" in b or "i5" in b or "i7" in b or "i9" in b):
         # Detect mobile suffix (H, HX, HK, P, U at end of model number)
-        is_mobile = has_battery or platform_sys == "Darwin" or bool(re.search(r"\d{4,5}[HhPpUu]", brand))
+        is_mobile = (
+            has_battery or platform_sys == "Darwin" or bool(re.search(r"\d{4,5}[HhPpUu]", brand))
+        )
         if is_mobile:
             # H/HX suffix → high-power mobile; P/U → low-power mobile
             if re.search(r"\d{4,5}[HhXxKk]", brand):
@@ -248,7 +250,7 @@ def get_gpu_thresholds(vendor: str, name: str) -> dict:
     if v == "apple" or "apple" in n:
         return dict(_GPU_DB["apple_silicon"])
     if v == "nvidia" or "nvidia" in n:
-        if "quadro" in n or "rtx" in n and "a" in n[:10]:
+        if "quadro" in n or ("rtx" in n and "a" in n[:10]):
             return dict(_GPU_DB["nvidia_professional"])
         return dict(_GPU_DB["nvidia_geforce"])
     if v in ("amd", "ati") or "radeon" in n or "amd" in n:

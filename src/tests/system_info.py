@@ -3,7 +3,6 @@
 import asyncio
 import platform
 import subprocess
-from datetime import datetime
 
 from ..models.test_result import TestResult
 from .base import BaseTest
@@ -13,6 +12,7 @@ def _get_info_windows() -> dict:
     info: dict = {}
     try:
         import wmi  # type: ignore
+
         c = wmi.WMI()
 
         for bios in c.Win32_BIOS():
@@ -44,6 +44,7 @@ def _get_info_windows() -> dict:
 def _get_info_darwin() -> dict:
     """Query system info on macOS using system_profiler, sw_vers, and sysctl."""
     import re
+
     info: dict = {}
 
     # OS version
@@ -63,7 +64,9 @@ def _get_info_darwin() -> dict:
     try:
         result = subprocess.run(
             ["system_profiler", "SPHardwareDataType"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         for line in result.stdout.splitlines():
             line = line.strip()
@@ -89,7 +92,9 @@ def _get_info_darwin() -> dict:
     try:
         result = subprocess.run(
             ["sysctl", "-n", "kern.version"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         kern = result.stdout.strip()
         # Format: "... Wed Jan 28 20:56:35 PST 2026; ..."
@@ -105,7 +110,8 @@ def _get_info_darwin() -> dict:
     try:
         result = subprocess.run(
             ["ioreg", "-c", "IOPlatformExpertDevice", "-r", "-d", "2"],
-            capture_output=True, timeout=8,
+            capture_output=True,
+            timeout=8,
         )
         stdout = result.stdout.decode("utf-8", errors="ignore")
 
@@ -116,8 +122,11 @@ def _get_info_darwin() -> dict:
         else:
             # Hex-encoded format (Apple Silicon)
             m = re.search(r'"regulatory-model-number"\s*=\s*<([0-9a-fA-F]+)>', stdout)
-            raw = (bytes.fromhex(m.group(1)).rstrip(b"\x00").decode("ascii", errors="ignore")
-                   if m else "")
+            raw = (
+                bytes.fromhex(m.group(1)).rstrip(b"\x00").decode("ascii", errors="ignore")
+                if m
+                else ""
+            )
 
         if re.match(r"^A\d{4}$", raw):
             info["apple_model_number"] = raw
@@ -133,6 +142,7 @@ def _get_info_darwin() -> dict:
 def _get_info_linux() -> dict:
     """Read DMI info from /sys/class/dmi/id/ and dmidecode."""
     from pathlib import Path
+
     info: dict = {}
     dmi_base = Path("/sys/class/dmi/id")
 
@@ -155,8 +165,7 @@ def _get_info_linux() -> dict:
     # OS info
     try:
         result = subprocess.run(
-            ["cat", "/etc/os-release"],
-            capture_output=True, text=True, timeout=3
+            ["cat", "/etc/os-release"], capture_output=True, text=True, timeout=3
         )
         for line in result.stdout.splitlines():
             if line.startswith("PRETTY_NAME="):

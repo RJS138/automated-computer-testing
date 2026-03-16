@@ -7,26 +7,27 @@ Exit codes:
   2  — tkinter not available or no display server
 """
 
-import sys
 import json
 import platform
 import subprocess
+import sys
 
 # ── Visual constants ─────────────────────────────────────────────────────────
 
-_BG      = "#1a1a1a"
-_FG      = "#cccccc"
-_ACCENT  = "#2a5ab8"
-_GREEN   = "#1a6b1a"
+_BG = "#1a1a1a"
+_FG = "#cccccc"
+_ACCENT = "#2a5ab8"
+_GREEN = "#1a6b1a"
 _GREEN_H = "#228822"
-_RED     = "#8b1a1a"
-_RED_H   = "#a02020"
-_GREY    = "#3a3a3a"
-_GREY_H  = "#4a4a4a"
-_NEW_BG  = "#0d1f0d"
+_RED = "#8b1a1a"
+_RED_H = "#a02020"
+_GREY = "#3a3a3a"
+_GREY_H = "#4a4a4a"
+_NEW_BG = "#0d1f0d"
 
 
 # ── USB enumeration ──────────────────────────────────────────────────────────
+
 
 def _enumerate_usb() -> list[dict]:
     """Return list of dicts with keys: name, speed, key."""
@@ -37,7 +38,8 @@ def _enumerate_usb() -> list[dict]:
         try:
             out = subprocess.check_output(
                 ["system_profiler", "SPUSBDataType", "-json"],
-                timeout=10, stderr=subprocess.DEVNULL
+                timeout=10,
+                stderr=subprocess.DEVNULL,
             )
             data = json.loads(out)
 
@@ -64,8 +66,14 @@ def _enumerate_usb() -> list[dict]:
                     name = controller.get("_name", "").strip()
                     manufacturer = controller.get("manufacturer", "").strip()
                     speed = controller.get("device_speed", "").strip()
-                    if name and name not in ("USB 3.0 Bus", "USB 2.0 Bus", "USB31Bus",
-                                             "USB30Bus", "USB Bus", "AppleUSBHub"):
+                    if name and name not in (
+                        "USB 3.0 Bus",
+                        "USB 2.0 Bus",
+                        "USB31Bus",
+                        "USB30Bus",
+                        "USB Bus",
+                        "AppleUSBHub",
+                    ):
                         key = f"{name}|{manufacturer}"
                         devices.append({"name": name, "speed": speed, "key": key})
 
@@ -74,9 +82,7 @@ def _enumerate_usb() -> list[dict]:
 
     elif os_name == "Linux":
         try:
-            out = subprocess.check_output(
-                ["lsusb"], timeout=10, stderr=subprocess.DEVNULL
-            )
+            out = subprocess.check_output(["lsusb"], timeout=10, stderr=subprocess.DEVNULL)
             for line in out.decode("utf-8", errors="replace").splitlines():
                 line = line.strip()
                 if not line:
@@ -93,14 +99,11 @@ def _enumerate_usb() -> list[dict]:
 
     elif os_name == "Windows":
         try:
-            ps_cmd = (
-                "Get-PnpDevice -Class USB | "
-                "Select-Object FriendlyName,Status | "
-                "ConvertTo-Json"
-            )
+            ps_cmd = "Get-PnpDevice -Class USB | Select-Object FriendlyName,Status | ConvertTo-Json"
             out = subprocess.check_output(
                 ["powershell", "-NoProfile", "-Command", ps_cmd],
-                timeout=15, stderr=subprocess.DEVNULL
+                timeout=15,
+                stderr=subprocess.DEVNULL,
             )
             raw = json.loads(out.decode("utf-8", errors="replace"))
             if isinstance(raw, dict):
@@ -119,6 +122,7 @@ def _enumerate_usb() -> list[dict]:
 
 # ── Main UI ──────────────────────────────────────────────────────────────────
 
+
 def run_usb_test(port_type: str = "USB-A") -> bool:
     """Show full-screen USB port test. Returns True if Pass clicked, False otherwise."""
     try:
@@ -135,7 +139,7 @@ def run_usb_test(port_type: str = "USB-A") -> bool:
     root.attributes("-fullscreen", True)
     root.configure(bg=_BG)
 
-    result = [None]   # "pass" | "fail" | "skip"
+    result = [None]  # "pass" | "fail" | "skip"
 
     # State
     baseline_keys: set[str] = set()
@@ -144,10 +148,18 @@ def run_usb_test(port_type: str = "USB-A") -> bool:
     # ── Helper: label-based button ───────────────────────────────────────────
 
     def _make_btn(parent, text, bg, fg, command, hover_bg):
-        lbl = tk.Label(parent, text=text, bg=bg, fg=fg,
-                       font=("Courier", 13, "bold"), padx=28, pady=8, cursor="hand2")
-        lbl.bind("<Enter>",         lambda e, w=lbl, c=hover_bg: w.configure(bg=c))
-        lbl.bind("<Leave>",         lambda e, w=lbl, c=bg:       w.configure(bg=c))
+        lbl = tk.Label(
+            parent,
+            text=text,
+            bg=bg,
+            fg=fg,
+            font=("Courier", 13, "bold"),
+            padx=28,
+            pady=8,
+            cursor="hand2",
+        )
+        lbl.bind("<Enter>", lambda e, w=lbl, c=hover_bg: w.configure(bg=c))
+        lbl.bind("<Leave>", lambda e, w=lbl, c=bg: w.configure(bg=c))
         lbl.bind("<ButtonPress-1>", lambda e: command())
         return lbl
 
@@ -170,14 +182,18 @@ def run_usb_test(port_type: str = "USB-A") -> bool:
     topbar = tk.Frame(root, bg=_BG)
     topbar.pack(fill="x", padx=16, pady=(12, 0))
 
-    tk.Label(topbar, text=f"{port_type} Port Test",
-             bg=_BG, fg="#4a9eff",
-             font=("Courier", 16, "bold")).pack(side="left")
+    tk.Label(
+        topbar,
+        text=f"{port_type} Port Test",
+        bg=_BG,
+        fg="#4a9eff",
+        font=("Courier", 16, "bold"),
+    ).pack(side="left")
 
     count_var = tk.StringVar(value="")
-    tk.Label(topbar, textvariable=count_var,
-             bg=_BG, fg=_FG,
-             font=("Courier", 11)).pack(side="right", padx=(0, 4))
+    tk.Label(topbar, textvariable=count_var, bg=_BG, fg=_FG, font=("Courier", 11)).pack(
+        side="right", padx=(0, 4)
+    )
 
     # ── Instruction text ─────────────────────────────────────────────────────
 
@@ -185,12 +201,15 @@ def run_usb_test(port_type: str = "USB-A") -> bool:
         f"Plug a known-good device into each {port_type} port, click Scan, "
         f"verify it appears highlighted below. Test each port individually."
     )
-    tk.Label(root, text=instr_text,
-             bg=_BG, fg="#888888",
-             font=("Courier", 11),
-             wraplength=900, justify="left").pack(
-        anchor="w", padx=16, pady=(8, 0)
-    )
+    tk.Label(
+        root,
+        text=instr_text,
+        bg=_BG,
+        fg="#888888",
+        font=("Courier", 11),
+        wraplength=900,
+        justify="left",
+    ).pack(anchor="w", padx=16, pady=(8, 0))
 
     # ── Device list area ─────────────────────────────────────────────────────
 
@@ -200,29 +219,41 @@ def run_usb_test(port_type: str = "USB-A") -> bool:
     header = tk.Frame(list_outer, bg=_BG)
     header.pack(fill="x", padx=0, pady=(0, 2))
 
-    tk.Label(header, text="Device", bg=_BG, fg="#666666",
-             font=("Courier", 10, "bold"),
-             width=50, anchor="w").pack(side="left", padx=(8, 0))
-    tk.Label(header, text="Speed / Status", bg=_BG, fg="#666666",
-             font=("Courier", 10, "bold"),
-             width=30, anchor="w").pack(side="left")
+    tk.Label(
+        header,
+        text="Device",
+        bg=_BG,
+        fg="#666666",
+        font=("Courier", 10, "bold"),
+        width=50,
+        anchor="w",
+    ).pack(side="left", padx=(8, 0))
+    tk.Label(
+        header,
+        text="Speed / Status",
+        bg=_BG,
+        fg="#666666",
+        font=("Courier", 10, "bold"),
+        width=30,
+        anchor="w",
+    ).pack(side="left")
 
     # Scrollable rows area
     rows_frame = tk.Frame(list_outer, bg="#111111")
     rows_frame.pack(fill="both", expand=True, padx=4, pady=4)
-
-    no_dev_lbl = tk.Label(rows_frame, text="No USB devices detected.",
-                          bg="#111111", fg="#555555",
-                          font=("Courier", 11))
 
     def _rebuild_rows():
         for w in rows_frame.winfo_children():
             w.destroy()
 
         if not current_devices:
-            no_dev_lbl = tk.Label(rows_frame, text="No USB devices detected.",
-                                  bg="#111111", fg="#555555",
-                                  font=("Courier", 11))
+            no_dev_lbl = tk.Label(
+                rows_frame,
+                text="No USB devices detected.",
+                bg="#111111",
+                fg="#555555",
+                font=("Courier", 11),
+            )
             no_dev_lbl.pack(anchor="w", padx=8, pady=8)
             return
 
@@ -235,12 +266,24 @@ def run_usb_test(port_type: str = "USB-A") -> bool:
             row = tk.Frame(rows_frame, bg=row_bg)
             row.pack(fill="x", padx=0, pady=1)
 
-            tk.Label(row, text=name_text, bg=row_bg, fg=name_fg,
-                     font=("Courier", 11),
-                     width=50, anchor="w").pack(side="left", padx=(8, 0), pady=3)
-            tk.Label(row, text=dev["speed"] or "—", bg=row_bg, fg="#888888",
-                     font=("Courier", 11),
-                     width=30, anchor="w").pack(side="left", pady=3)
+            tk.Label(
+                row,
+                text=name_text,
+                bg=row_bg,
+                fg=name_fg,
+                font=("Courier", 11),
+                width=50,
+                anchor="w",
+            ).pack(side="left", padx=(8, 0), pady=3)
+            tk.Label(
+                row,
+                text=dev["speed"] or "—",
+                bg=row_bg,
+                fg="#888888",
+                font=("Courier", 11),
+                width=30,
+                anchor="w",
+            ).pack(side="left", pady=3)
 
     def _update_count():
         total = len(current_devices)
@@ -269,21 +312,21 @@ def run_usb_test(port_type: str = "USB-A") -> bool:
     bottom = tk.Frame(root, bg=_BG)
     bottom.pack(fill="x", pady=(0, 18))
 
-    tk.Label(bottom,
-             text="Plug in a device to each port one at a time, scan after each.",
-             bg=_BG, fg="#555555", font=("Courier", 10)).pack()
+    tk.Label(
+        bottom,
+        text="Plug in a device to each port one at a time, scan after each.",
+        bg=_BG,
+        fg="#555555",
+        font=("Courier", 10),
+    ).pack()
 
     btn_row = tk.Frame(bottom, bg=_BG)
     btn_row.pack(pady=(10, 0))
 
-    _make_btn(btn_row, "Scan Again", _ACCENT, "white", _scan, "#3a6acc").pack(
-        side="left", padx=10)
-    _make_btn(btn_row, "Fail", _RED, "white", _do_fail, _RED_H).pack(
-        side="left", padx=10)
-    _make_btn(btn_row, "Pass", _GREEN, "white", _do_pass, _GREEN_H).pack(
-        side="left", padx=10)
-    _make_btn(btn_row, "Skip", _GREY, _FG, _do_skip, _GREY_H).pack(
-        side="left", padx=10)
+    _make_btn(btn_row, "Scan Again", _ACCENT, "white", _scan, "#3a6acc").pack(side="left", padx=10)
+    _make_btn(btn_row, "Fail", _RED, "white", _do_fail, _RED_H).pack(side="left", padx=10)
+    _make_btn(btn_row, "Pass", _GREEN, "white", _do_pass, _GREEN_H).pack(side="left", padx=10)
+    _make_btn(btn_row, "Skip", _GREY, _FG, _do_skip, _GREY_H).pack(side="left", padx=10)
 
     # Pack list_outer after bottom bar so expand=True doesn't hide the buttons
     list_outer.pack(fill="both", expand=True, padx=16, pady=10)

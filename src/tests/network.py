@@ -17,15 +17,19 @@ from .base import BaseTest
 
 # macOS airport binary path
 _AIRPORT = (
-    "/System/Library/PrivateFrameworks/Apple80211.framework/"
-    "Versions/Current/Resources/airport"
+    "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport"
 )
 
 # BT HCI version → human version string (per Bluetooth Core Spec)
 _BT_HCI_VERSION = {
-    "0x06": "4.0", "0x07": "4.1", "0x08": "4.2",
-    "0x09": "5.0", "0x0a": "5.1", "0x0b": "5.2",
-    "0x0c": "5.3", "0x0d": "5.4",
+    "0x06": "4.0",
+    "0x07": "4.1",
+    "0x08": "4.2",
+    "0x09": "5.0",
+    "0x0a": "5.1",
+    "0x0b": "5.2",
+    "0x0c": "5.3",
+    "0x0d": "5.4",
 }
 
 
@@ -33,11 +37,14 @@ _BT_HCI_VERSION = {
 # Ping
 # ---------------------------------------------------------------------------
 
+
 async def _ping(host: str, timeout: int) -> tuple[bool, float | None]:
     sys = platform.system()
-    cmd = (["ping", "-n", "1", "-w", str(timeout * 1000), host]
-           if sys == "Windows"
-           else ["ping", "-c", "1", "-W", str(timeout), host])
+    cmd = (
+        ["ping", "-n", "1", "-w", str(timeout * 1000), host]
+        if sys == "Windows"
+        else ["ping", "-c", "1", "-W", str(timeout), host]
+    )
     try:
         loop = asyncio.get_event_loop()
         start = time.monotonic()
@@ -65,6 +72,7 @@ async def _ping(host: str, timeout: int) -> tuple[bool, float | None]:
 # Network adapters
 # ---------------------------------------------------------------------------
 
+
 def _get_adapters() -> list[dict]:
     adapters = []
     stats = psutil.net_if_stats()
@@ -81,16 +89,23 @@ def _get_adapters() -> list[dict]:
                 ipv4 = addr.address
             elif addr.family == socket.AF_INET6:
                 ipv6 = addr.address
-        adapters.append({
-            "name": name, "is_up": is_up, "speed_mbps": speed,
-            "mac": mac, "ipv4": ipv4, "ipv6": ipv6,
-        })
+        adapters.append(
+            {
+                "name": name,
+                "is_up": is_up,
+                "speed_mbps": speed,
+                "mac": mac,
+                "ipv4": ipv4,
+                "ipv6": ipv6,
+            }
+        )
     return adapters
 
 
 # ---------------------------------------------------------------------------
 # Speed test (download via Cloudflare)
 # ---------------------------------------------------------------------------
+
 
 def _speed_test_download(test_mb: int = 5) -> dict:
     """Download test_mb MB and return download_mbps."""
@@ -111,14 +126,14 @@ def _speed_test_download(test_mb: int = 5) -> dict:
 # Wi-Fi — macOS
 # ---------------------------------------------------------------------------
 
+
 def _clean_security(raw: str) -> str:
     """'spairport_security_mode_wpa2_personal_mixed' → 'WPA2 Personal Mixed'"""
     s = raw.replace("spairport_security_mode_", "").replace("_", " ").strip()
     if not s:
         return "Open"
     _CAPS = {"wpa", "wpa2", "wpa3", "wep", "wps", "pmf", "sae", "owe"}
-    return " ".join(w.upper() if w.lower() in _CAPS else w.capitalize()
-                    for w in s.split())
+    return " ".join(w.upper() if w.lower() in _CAPS else w.capitalize() for w in s.split())
 
 
 def _get_wifi_macos() -> dict:
@@ -132,7 +147,9 @@ def _get_wifi_macos() -> dict:
     try:
         r = subprocess.run(
             ["system_profiler", "SPAirPortDataType", "-json"],
-            capture_output=True, text=True, timeout=15,
+            capture_output=True,
+            text=True,
+            timeout=15,
         )
         data = _json.loads(r.stdout).get("SPAirPortDataType", [])
         for entry in data:
@@ -152,10 +169,9 @@ def _get_wifi_macos() -> dict:
                     if m:
                         info["signal_dbm"] = int(m.group(1))
 
-                    info["channel"]  = current.get("spairport_network_channel")
+                    info["channel"] = current.get("spairport_network_channel")
                     info["standard"] = current.get("spairport_network_phymode")
-                    info["security"] = _clean_security(
-                        current.get("spairport_security_mode", ""))
+                    info["security"] = _clean_security(current.get("spairport_security_mode", ""))
 
                     # Link rate (integer Mbps)
                     rate = current.get("spairport_network_rate")
@@ -174,14 +190,15 @@ def _get_wifi_macos() -> dict:
                     ssid = net.get("_name", "")
                     sig_noise = str(net.get("spairport_signal_noise", ""))
                     m = re.search(r"(-?\d+)\s*dBm", sig_noise)
-                    info["available_networks"].append({
-                        "ssid":       None if ssid == "<redacted>" else (ssid or "Hidden"),
-                        "bssid":      None,
-                        "signal_dbm": int(m.group(1)) if m else None,
-                        "channel":    net.get("spairport_network_channel"),
-                        "security":   _clean_security(
-                            net.get("spairport_security_mode", "")),
-                    })
+                    info["available_networks"].append(
+                        {
+                            "ssid": None if ssid == "<redacted>" else (ssid or "Hidden"),
+                            "bssid": None,
+                            "signal_dbm": int(m.group(1)) if m else None,
+                            "channel": net.get("spairport_network_channel"),
+                            "security": _clean_security(net.get("spairport_security_mode", "")),
+                        }
+                    )
                 break  # first interface only
     except Exception:
         pass
@@ -192,27 +209,32 @@ def _get_wifi_macos() -> dict:
         try:
             r = subprocess.run(
                 [_AIRPORT, "-s"],
-                capture_output=True, text=True, timeout=15,
+                capture_output=True,
+                text=True,
+                timeout=15,
             )
             for line in r.stdout.splitlines()[1:]:  # skip header row
                 # Columns: SSID  BSSID  RSSI  CHANNEL  HT  CC  SECURITY
                 # SSID is right-aligned and may contain spaces; BSSID is a MAC address
                 m = re.search(
                     r"^(.+?)\s+((?:[0-9a-f]{2}:){5}[0-9a-f]{2})\s+(-\d+)\s+(\S+)",
-                    line.strip(), re.IGNORECASE,
+                    line.strip(),
+                    re.IGNORECASE,
                 )
                 if m:
                     try:
                         channel = int(m.group(4).split(",")[0])
                     except ValueError:
                         channel = None
-                    info["available_networks"].append({
-                        "ssid":       m.group(1).strip() or "Hidden",
-                        "bssid":      m.group(2),
-                        "signal_dbm": int(m.group(3)),
-                        "channel":    channel,
-                        "security":   None,
-                    })
+                    info["available_networks"].append(
+                        {
+                            "ssid": m.group(1).strip() or "Hidden",
+                            "bssid": m.group(2),
+                            "signal_dbm": int(m.group(3)),
+                            "channel": channel,
+                            "security": None,
+                        }
+                    )
         except Exception:
             pass
 
@@ -222,7 +244,9 @@ def _get_wifi_macos() -> dict:
             iface = info.get("interface", "en0")
             r = subprocess.run(
                 ["networksetup", "-getairportnetwork", iface],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             if "Current Wi-Fi Network:" in r.stdout:
                 info["ssid"] = r.stdout.split("Current Wi-Fi Network:", 1)[1].strip()
@@ -236,12 +260,15 @@ def _get_wifi_macos() -> dict:
 # Wi-Fi — Windows
 # ---------------------------------------------------------------------------
 
+
 def _get_wifi_windows() -> dict:
     info: dict = {"connected": False, "available_networks": []}
     try:
         r = subprocess.run(
             ["netsh", "wlan", "show", "interfaces"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         for line in r.stdout.splitlines():
             line = line.strip()
@@ -285,7 +312,9 @@ def _get_wifi_windows() -> dict:
     try:
         r = subprocess.run(
             ["netsh", "wlan", "show", "networks", "mode=bssid"],
-            capture_output=True, text=True, timeout=15,
+            capture_output=True,
+            text=True,
+            timeout=15,
         )
         current: dict = {}
         for line in r.stdout.splitlines():
@@ -317,6 +346,7 @@ def _get_wifi_windows() -> dict:
 # Wi-Fi — Linux
 # ---------------------------------------------------------------------------
 
+
 def _get_wifi_linux() -> dict:
     info: dict = {"connected": False, "available_networks": []}
     wifi_iface = None
@@ -324,7 +354,9 @@ def _get_wifi_linux() -> dict:
     try:
         r = subprocess.run(
             ["nmcli", "-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "dev"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         for line in r.stdout.splitlines():
             parts = line.split(":")
@@ -341,7 +373,9 @@ def _get_wifi_linux() -> dict:
         try:
             r = subprocess.run(
                 ["iw", "dev", wifi_iface, "link"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             for line in r.stdout.splitlines():
                 line = line.strip()
@@ -365,9 +399,19 @@ def _get_wifi_linux() -> dict:
     # Available networks via nmcli (multiline mode avoids BSSID colon conflict)
     try:
         r = subprocess.run(
-            ["nmcli", "-m", "multiline", "-f", "SSID,BSSID,SIGNAL,CHAN,SECURITY",
-             "dev", "wifi", "list"],
-            capture_output=True, text=True, timeout=15,
+            [
+                "nmcli",
+                "-m",
+                "multiline",
+                "-f",
+                "SSID,BSSID,SIGNAL,CHAN,SECURITY",
+                "dev",
+                "wifi",
+                "list",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
         )
         nets: list[dict] = []
         cur: dict = {}
@@ -403,6 +447,7 @@ def _get_wifi_linux() -> dict:
 # Bluetooth — macOS
 # ---------------------------------------------------------------------------
 
+
 def _get_bluetooth_macos() -> dict:
     """
     Parse SPBluetoothDataType JSON.
@@ -413,7 +458,9 @@ def _get_bluetooth_macos() -> dict:
     try:
         r = subprocess.run(
             ["system_profiler", "SPBluetoothDataType", "-json"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         data = _json.loads(r.stdout).get("SPBluetoothDataType", [])
         for entry in data:
@@ -434,9 +481,8 @@ def _get_bluetooth_macos() -> dict:
                 connected = entry.get("device_connected", [])
                 not_connected = entry.get("device_not_connected", [])
                 bt["devices_connected"] = len(connected) if isinstance(connected, list) else 0
-                bt["devices_paired"]    = (
-                    (len(connected) if isinstance(connected, list) else 0) +
-                    (len(not_connected) if isinstance(not_connected, list) else 0)
+                bt["devices_paired"] = (len(connected) if isinstance(connected, list) else 0) + (
+                    len(not_connected) if isinstance(not_connected, list) else 0
                 )
                 break
 
@@ -445,12 +491,16 @@ def _get_bluetooth_macos() -> dict:
             if local:
                 bt["available"] = True
                 state = str(local.get("spbluetooth_state", "")).lower()
-                bt["enabled"]  = state not in ("off", "disabled", "spbluetooth_state_off")
-                bt["address"]  = local.get("spbluetooth_local_address")
-                bt["name"]     = local.get("spbluetooth_local_name")
-                bt["chipset"]  = local.get("spbluetooth_chipset")
+                bt["enabled"] = state not in (
+                    "off",
+                    "disabled",
+                    "spbluetooth_state_off",
+                )
+                bt["address"] = local.get("spbluetooth_local_address")
+                bt["name"] = local.get("spbluetooth_local_name")
+                bt["chipset"] = local.get("spbluetooth_chipset")
                 hci = local.get("spbluetooth_hci_version", "")
-                bt["version"]  = _BT_HCI_VERSION.get(hci, hci) if hci else None
+                bt["version"] = _BT_HCI_VERSION.get(hci, hci) if hci else None
                 break
     except Exception:
         pass
@@ -461,16 +511,18 @@ def _get_bluetooth_macos() -> dict:
 # Bluetooth — Windows
 # ---------------------------------------------------------------------------
 
+
 def _get_bluetooth_windows() -> dict:
     bt: dict = {"available": False}
     try:
         import wmi  # type: ignore
+
         c = wmi.WMI()
         bt_guid = "{e0cbf06c-cd8b-4647-bb8a-263b43f0f974}"
         for dev in c.Win32_PnPEntity():
             if getattr(dev, "ClassGuid", "") == bt_guid:
                 bt["available"] = True
-                bt["name"]    = dev.Name
+                bt["name"] = dev.Name
                 bt["enabled"] = getattr(dev, "Status", "") == "OK"
                 break
     except Exception:
@@ -482,18 +534,21 @@ def _get_bluetooth_windows() -> dict:
 # Bluetooth — Linux
 # ---------------------------------------------------------------------------
 
+
 def _get_bluetooth_linux() -> dict:
     bt: dict = {"available": False}
     try:
         r = subprocess.run(
             ["rfkill", "list", "bluetooth"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         if r.stdout.strip():
-            bt["available"]    = True
+            bt["available"] = True
             bt["soft_blocked"] = "Soft blocked: yes" in r.stdout
             bt["hard_blocked"] = "Hard blocked: yes" in r.stdout
-            bt["enabled"]      = not bt["soft_blocked"] and not bt["hard_blocked"]
+            bt["enabled"] = not bt["soft_blocked"] and not bt["hard_blocked"]
     except Exception:
         pass
 
@@ -501,7 +556,9 @@ def _get_bluetooth_linux() -> dict:
         try:
             r = subprocess.run(
                 ["bluetoothctl", "show"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             for line in r.stdout.splitlines():
                 line = line.strip()
@@ -520,6 +577,7 @@ def _get_bluetooth_linux() -> dict:
 # ---------------------------------------------------------------------------
 # Main test class
 # ---------------------------------------------------------------------------
+
 
 class NetworkTest(BaseTest):
     async def run(self) -> TestResult:
@@ -548,7 +606,7 @@ class NetworkTest(BaseTest):
 
         # Ping (Tx/Rx check)
         reachable, rtt_ms = await _ping(PING_TARGET, PING_TIMEOUT)
-        wifi["ping_ok"]     = reachable
+        wifi["ping_ok"] = reachable
         wifi["ping_rtt_ms"] = rtt_ms
 
         # Download speed test (only if internet reachable)
@@ -557,12 +615,12 @@ class NetworkTest(BaseTest):
             wifi.update(speed)
 
         data: dict = {
-            "adapters":       adapters,
-            "wifi":           wifi,
-            "bluetooth":      bluetooth,
-            "ping_target":    PING_TARGET,
+            "adapters": adapters,
+            "wifi": wifi,
+            "bluetooth": bluetooth,
+            "ping_target": PING_TARGET,
             "ping_reachable": reachable,
-            "ping_rtt_ms":    rtt_ms,
+            "ping_rtt_ms": rtt_ms,
         }
 
         # Overall status
@@ -575,26 +633,29 @@ class NetworkTest(BaseTest):
         elif not wifi.get("connected"):
             nets = wifi.get("available_networks", [])
             ssids = ", ".join(n.get("ssid", "?") for n in nets[:4] if n.get("ssid"))
-            note  = f"Available: {ssids}" if ssids else "No networks in range"
+            note = f"Available: {ssids}" if ssids else "No networks in range"
             self.result.mark_warn(
                 summary=f"Wi-Fi not connected — {len(nets)} network(s) visible. {note}",
                 data=data,
             )
         elif not reachable:
             self.result.mark_warn(
-                summary=(f"Connected to '{wifi.get('ssid')}' but no internet "
-                         f"(ping {PING_TARGET} failed)"),
+                summary=(
+                    f"Connected to '{wifi.get('ssid')}' but no internet (ping {PING_TARGET} failed)"
+                ),
                 data=data,
             )
         else:
-            dl     = wifi.get("download_mbps")
+            dl = wifi.get("download_mbps")
             dl_str = f" — {dl} Mbps ↓" if dl else ""
-            bt_str = (" — BT " + ("OK" if bluetooth.get("enabled") else "off")
-                      if bluetooth.get("available") else "")
-            ssid   = wifi.get("ssid") or "Connected"
+            bt_str = (
+                " — BT " + ("OK" if bluetooth.get("enabled") else "off")
+                if bluetooth.get("available")
+                else ""
+            )
+            ssid = wifi.get("ssid") or "Connected"
             self.result.mark_pass(
-                summary=(f"Wi-Fi '{ssid}' — Ping {rtt_ms} ms"
-                         f"{dl_str}{bt_str}"),
+                summary=(f"Wi-Fi '{ssid}' — Ping {rtt_ms} ms{dl_str}{bt_str}"),
                 data=data,
             )
 

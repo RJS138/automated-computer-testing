@@ -13,7 +13,8 @@ def _query_nvidia() -> list[dict]:
     """Query NVIDIA GPUs via pynvml."""
     gpus = []
     try:
-        import pynvml  # type: ignore
+        import pynvml  # type: ignore  # nvidia-ml-py
+
         pynvml.nvmlInit()
         count = pynvml.nvmlDeviceGetCount()
         for i in range(count):
@@ -30,14 +31,16 @@ def _query_nvidia() -> list[dict]:
                 fan = pynvml.nvmlDeviceGetFanSpeed(handle)
             except Exception:
                 fan = None
-            gpus.append({
-                "vendor": "NVIDIA",
-                "name": name,
-                "vram_total_mb": round(mem_info.total / (1024**2)),
-                "vram_used_mb": round(mem_info.used / (1024**2)),
-                "temp_c": temp,
-                "fan_pct": fan,
-            })
+            gpus.append(
+                {
+                    "vendor": "NVIDIA",
+                    "name": name,
+                    "vram_total_mb": round(mem_info.total / (1024**2)),
+                    "vram_used_mb": round(mem_info.used / (1024**2)),
+                    "temp_c": temp,
+                    "fan_pct": fan,
+                }
+            )
         pynvml.nvmlShutdown()
     except Exception:
         pass
@@ -49,15 +52,18 @@ def _query_gputil() -> list[dict]:
     gpus = []
     try:
         import GPUtil  # type: ignore
+
         for g in GPUtil.getGPUs():
-            gpus.append({
-                "vendor": "NVIDIA",
-                "name": g.name,
-                "vram_total_mb": round(g.memoryTotal),
-                "vram_used_mb": round(g.memoryUsed),
-                "temp_c": g.temperature,
-                "fan_pct": None,
-            })
+            gpus.append(
+                {
+                    "vendor": "NVIDIA",
+                    "name": g.name,
+                    "vram_total_mb": round(g.memoryTotal),
+                    "vram_used_mb": round(g.memoryUsed),
+                    "temp_c": g.temperature,
+                    "fan_pct": None,
+                }
+            )
     except Exception:
         pass
     return gpus
@@ -68,17 +74,22 @@ def _query_windows_wmi() -> list[dict]:
     gpus = []
     try:
         import wmi  # type: ignore
+
         c = wmi.WMI()
         for v in c.Win32_VideoController():
-            gpus.append({
-                "vendor": v.AdapterCompatibility or "Unknown",
-                "name": v.Name or "Unknown",
-                "vram_total_mb": round(int(v.AdapterRAM or 0) / (1024**2)) if v.AdapterRAM else None,
-                "vram_used_mb": None,
-                "temp_c": None,
-                "fan_pct": None,
-                "driver_version": v.DriverVersion,
-            })
+            gpus.append(
+                {
+                    "vendor": v.AdapterCompatibility or "Unknown",
+                    "name": v.Name or "Unknown",
+                    "vram_total_mb": round(int(v.AdapterRAM or 0) / (1024**2))
+                    if v.AdapterRAM
+                    else None,
+                    "vram_used_mb": None,
+                    "temp_c": None,
+                    "fan_pct": None,
+                    "driver_version": v.DriverVersion,
+                }
+            )
     except Exception:
         pass
     return gpus
@@ -91,15 +102,17 @@ def _query_linux_lspci() -> list[dict]:
     /proc/driver/nvidia/gpuinfo                     — NVIDIA (fallback)
     """
     from pathlib import Path
+
     gpus = []
     try:
-        result = subprocess.run(
-            ["lspci", "-v", "-k"],
-            capture_output=True, text=True, timeout=5
-        )
+        result = subprocess.run(["lspci", "-v", "-k"], capture_output=True, text=True, timeout=5)
         current: dict | None = None
         for line in result.stdout.splitlines():
-            if "VGA compatible controller" in line or "3D controller" in line or "Display controller" in line:
+            if (
+                "VGA compatible controller" in line
+                or "3D controller" in line
+                or "Display controller" in line
+            ):
                 if current:
                     gpus.append(current)
                 current = {
@@ -126,11 +139,20 @@ def _query_linux_lspci() -> list[dict]:
             vram_file = card / "device" / "mem_info_vram_total"
             used_file = card / "device" / "mem_info_vram_used"
             if vram_file.exists():
-                vram_mb = round(int(vram_file.read_text().strip()) / (1024 ** 2))
-                used_mb = round(int(used_file.read_text().strip()) / (1024 ** 2)) if used_file.exists() else None
+                vram_mb = round(int(vram_file.read_text().strip()) / (1024**2))
+                used_mb = (
+                    round(int(used_file.read_text().strip()) / (1024**2))
+                    if used_file.exists()
+                    else None
+                )
                 # Match to a GPU that doesn't have VRAM yet
                 for g in gpus:
-                    if g["vram_total_mb"] is None and g["vendor"] in ("AMD", "ATI", "Intel", "Unknown"):
+                    if g["vram_total_mb"] is None and g["vendor"] in (
+                        "AMD",
+                        "ATI",
+                        "Intel",
+                        "Unknown",
+                    ):
                         g["vram_total_mb"] = vram_mb
                         if used_mb is not None:
                             g["vram_used_mb"] = used_mb
@@ -155,9 +177,10 @@ def _parse_vram_to_mb(vram_str: str) -> int | None:
 def _get_macos_total_ram_mb() -> int | None:
     """Return total physical RAM in MB via sysctl hw.memsize."""
     try:
-        r = subprocess.run(["sysctl", "-n", "hw.memsize"],
-                           capture_output=True, text=True, timeout=3)
-        return round(int(r.stdout.strip()) / (1024 ** 2))
+        r = subprocess.run(
+            ["sysctl", "-n", "hw.memsize"], capture_output=True, text=True, timeout=3
+        )
+        return round(int(r.stdout.strip()) / (1024**2))
     except Exception:
         return None
 
@@ -172,11 +195,14 @@ def _query_macos_system_profiler() -> list[dict]:
     Intel Macs:    VRAM reported in 'spdisplays_vram' JSON field.
     """
     import json as _json
+
     gpus = []
     try:
         result = subprocess.run(
             ["system_profiler", "SPDisplaysDataType", "-json"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         data = _json.loads(result.stdout)
         entries = data.get("SPDisplaysDataType", [])
@@ -235,9 +261,13 @@ def _query_macos_system_profiler() -> list[dict]:
                 total_ram_mb = _get_macos_total_ram_mb()
                 gpu["unified_memory_mb"] = total_ram_mb
                 gpu["vram_note"] = (
-                    f"Unified Memory: {round(total_ram_mb / 1024)} GB "
-                    f"(shared between CPU and GPU)"
-                ) if total_ram_mb else "Unified Memory (shared)"
+                    (
+                        f"Unified Memory: {round(total_ram_mb / 1024)} GB "
+                        f"(shared between CPU and GPU)"
+                    )
+                    if total_ram_mb
+                    else "Unified Memory (shared)"
+                )
 
             gpus.append(gpu)
     except Exception:

@@ -18,7 +18,6 @@ import asyncio
 import math
 import platform
 import subprocess
-import sys
 from typing import Any
 
 from ..models.test_result import TestResult
@@ -260,9 +259,7 @@ def _cg_display_info() -> list[dict]:
             if sz.width > 0 and sz.height > 0:
                 d["physical_width_mm"] = round(sz.width)
                 d["physical_height_mm"] = round(sz.height)
-                d["inches"] = round(
-                    math.sqrt(sz.width ** 2 + sz.height ** 2) / 25.4, 1
-                )
+                d["inches"] = round(math.sqrt(sz.width**2 + sz.height**2) / 25.4, 1)
         except Exception:
             pass
 
@@ -291,7 +288,9 @@ def _get_displays_macos() -> list[dict]:
         for j, sp in enumerate(sp_list):
             if j in used_sp:
                 continue
-            if cg.get("is_primary") == sp.get("is_primary") and cg.get("is_internal") == sp.get("is_internal"):
+            if cg.get("is_primary") == sp.get("is_primary") and cg.get("is_internal") == sp.get(
+                "is_internal"
+            ):
                 _overlay(cg, sp)
                 used_sp.add(j)
                 break
@@ -324,8 +323,14 @@ def _get_displays_macos() -> list[dict]:
                     txt = v
                     break
         if txt:
-            for key in ("panel_technology", "panel_serial", "native_resolution",
-                        "ui_resolution", "ui_refresh_hz", "display_type"):
+            for key in (
+                "panel_technology",
+                "panel_serial",
+                "native_resolution",
+                "ui_resolution",
+                "ui_refresh_hz",
+                "display_type",
+            ):
                 if txt.get(key) and not cg.get(key):
                     cg[key] = txt[key]
             # Fill in refresh rate from UI Looks like if CG didn't have it
@@ -396,7 +401,6 @@ def _get_displays_linux() -> list[dict]:
         return []
 
     import re
-    from pathlib import Path
 
     displays: list[dict] = []
     current: dict | None = None
@@ -504,8 +508,6 @@ def _linux_conn_type(name: str) -> str:
 
 def _get_displays_windows() -> list[dict]:
     """Collect display info via WMI and ctypes EnumDisplaySettings."""
-    import ctypes
-    import ctypes.wintypes
 
     displays: list[dict] = []
 
@@ -528,7 +530,9 @@ def _get_displays_windows() -> list[dict]:
                 "is_primary": True,  # assume first is primary
             }
             try:
-                d["current_resolution"] = f"{vc.CurrentHorizontalResolution}x{vc.CurrentVerticalResolution}"
+                d["current_resolution"] = (
+                    f"{vc.CurrentHorizontalResolution}x{vc.CurrentVerticalResolution}"
+                )
             except Exception:
                 pass
             try:
@@ -539,7 +543,7 @@ def _get_displays_windows() -> list[dict]:
             displays.append(d)
 
         # Add physical monitor details
-        for pnp, mon in monitors.items():
+        for _pnp, mon in monitors.items():
             d = {
                 "name": mon.Caption or mon.Name or "Monitor",
                 "manufacturer": mon.MonitorManufacturer or None,

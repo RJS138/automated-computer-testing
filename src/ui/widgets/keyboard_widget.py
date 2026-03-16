@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 from rich.text import Text
@@ -22,27 +22,27 @@ _LAYOUT_ORDER = ["macbook_us", "tkl_us", "full_us"]
 
 # Maps shifted Textual key names → their unshifted equivalents
 _SHIFTED_SYMBOLS: dict[str, str] = {
-    "exclamation_mark":   "1",
-    "at":                 "2",
-    "hash":               "3",
-    "dollar_sign":        "4",
-    "percent_sign":       "5",
-    "caret":              "6",
-    "ampersand":          "7",
-    "asterisk":           "8",
-    "left_parenthesis":   "9",
-    "right_parenthesis":  "0",
-    "underscore":         "minus",
-    "plus":               "equal",
-    "left_brace":         "left_bracket",
-    "right_brace":        "right_bracket",
-    "pipe":               "backslash",
-    "colon":              "semicolon",
-    "double_quote":       "apostrophe",
-    "less_than_sign":     "comma",
-    "greater_than_sign":  "period",
-    "question_mark":      "slash",
-    "tilde":              "grave_accent",
+    "exclamation_mark": "1",
+    "at": "2",
+    "hash": "3",
+    "dollar_sign": "4",
+    "percent_sign": "5",
+    "caret": "6",
+    "ampersand": "7",
+    "asterisk": "8",
+    "left_parenthesis": "9",
+    "right_parenthesis": "0",
+    "underscore": "minus",
+    "plus": "equal",
+    "left_brace": "left_bracket",
+    "right_brace": "right_bracket",
+    "pipe": "backslash",
+    "colon": "semicolon",
+    "double_quote": "apostrophe",
+    "less_than_sign": "comma",
+    "greater_than_sign": "period",
+    "question_mark": "slash",
+    "tilde": "grave_accent",
 }
 
 
@@ -58,12 +58,13 @@ def normalize_key(key: str) -> str:
 # Data model
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class Key:
     id: str
     label: str
     width: float
-    all_keys: set[str]   # primary + also names (already normalised)
+    all_keys: set[str]  # primary + also names (already normalised)
     capturable: bool = True
 
 
@@ -82,24 +83,25 @@ class KeyboardLayout:
     id: str
     name: str
     rows: list[Row]
-    key_map: dict[str, Key]            # key_id → Key
-    name_map: dict[str, set[str]]      # normalised_key_name → set[key_id]
+    key_map: dict[str, Key]  # key_id → Key
+    name_map: dict[str, set[str]]  # normalised_key_name → set[key_id]
 
 
 # ---------------------------------------------------------------------------
 # Layout loading helpers
 # ---------------------------------------------------------------------------
 
+
 def load_layout(path: Path) -> KeyboardLayout:
     tree = ET.parse(path)
     root = tree.getroot()
 
-    kb_id   = root.get("id",   path.stem)
+    kb_id = root.get("id", path.stem)
     kb_name = root.get("name", kb_id)
 
     rows: list[Row] = []
-    key_map:  dict[str, Key]       = {}
-    name_map: dict[str, set[str]]  = {}
+    key_map: dict[str, Key] = {}
+    name_map: dict[str, set[str]] = {}
 
     for row_el in root.findall("row"):
         items: list[Key | Gap] = []
@@ -108,12 +110,12 @@ def load_layout(path: Path) -> KeyboardLayout:
                 items.append(Gap(width=float(child.get("width", "1.0"))))
 
             elif child.tag == "key":
-                key_id     = child.get("id",    "")
-                label      = child.get("label", "")
-                primary    = child.get("key",   "")
-                width      = float(child.get("width", "1.0"))
+                key_id = child.get("id", "")
+                label = child.get("label", "")
+                primary = child.get("key", "")
+                width = float(child.get("width", "1.0"))
                 capturable = child.get("capturable", "true").lower() != "false"
-                also_raw   = child.get("also", "")
+                also_raw = child.get("also", "")
 
                 all_keys: set[str] = set()
                 if primary:
@@ -121,8 +123,13 @@ def load_layout(path: Path) -> KeyboardLayout:
                 for k in (x.strip() for x in also_raw.split(",") if x.strip()):
                     all_keys.add(normalize_key(k))
 
-                key = Key(id=key_id, label=label, width=width,
-                          all_keys=all_keys, capturable=capturable)
+                key = Key(
+                    id=key_id,
+                    label=label,
+                    width=width,
+                    all_keys=all_keys,
+                    capturable=capturable,
+                )
                 items.append(key)
                 key_map[key_id] = key
 
@@ -132,8 +139,7 @@ def load_layout(path: Path) -> KeyboardLayout:
 
         rows.append(Row(items=items))
 
-    return KeyboardLayout(id=kb_id, name=kb_name, rows=rows,
-                          key_map=key_map, name_map=name_map)
+    return KeyboardLayout(id=kb_id, name=kb_name, rows=rows, key_map=key_map, name_map=name_map)
 
 
 def list_layouts() -> list[tuple[str, str]]:
@@ -159,6 +165,7 @@ def get_layout_path(layout_id: str) -> Path:
 # Widget
 # ---------------------------------------------------------------------------
 
+
 class KeyboardWidget(Widget):
     """Renders a keyboard diagram; keys disappear as they are pressed."""
 
@@ -175,8 +182,8 @@ class KeyboardWidget(Widget):
 
     def __init__(self, layout: KeyboardLayout, **kwargs) -> None:
         super().__init__(**kwargs)
-        self._layout:  KeyboardLayout = layout
-        self._pressed: set[str]       = set()   # key_ids that have been pressed
+        self._layout: KeyboardLayout = layout
+        self._pressed: set[str] = set()  # key_ids that have been pressed
 
     # ------------------------------------------------------------------
     # Public API
@@ -184,7 +191,7 @@ class KeyboardWidget(Widget):
 
     def load_layout(self, layout: KeyboardLayout) -> None:
         """Hot-swap to a different layout and reset pressed keys."""
-        self._layout  = layout
+        self._layout = layout
         self._pressed = set()
         self.refresh()
 
@@ -194,8 +201,8 @@ class KeyboardWidget(Widget):
 
         Returns True if at least one new key_id was marked.
         """
-        norm     = normalize_key(key)
-        key_ids  = self._layout.name_map.get(norm, set())
+        norm = normalize_key(key)
+        key_ids = self._layout.name_map.get(norm, set())
         new_hits = key_ids - self._pressed
         if new_hits:
             self._pressed.update(new_hits)
@@ -235,8 +242,8 @@ class KeyboardWidget(Widget):
                     text.append(" " * (inner_w + 3))
 
                 elif isinstance(item, Key):
-                    raw     = item.label
-                    label   = raw[:inner_w].center(inner_w) if len(raw) <= inner_w else raw[:inner_w]
+                    raw = item.label
+                    label = raw[:inner_w].center(inner_w) if len(raw) <= inner_w else raw[:inner_w]
 
                     if not item.capturable:
                         # Shown dimmed; not counted
@@ -246,8 +253,7 @@ class KeyboardWidget(Widget):
                         text.append(" " * (inner_w + 2))
                     else:
                         # Waiting to be pressed — bright
-                        text.append(f"[{label}]",
-                                    style="bold bright_white on rgb(50,80,155)")
+                        text.append(f"[{label}]", style="bold bright_white on rgb(50,80,155)")
 
                     text.append(" ")  # one-char gap between keys
 

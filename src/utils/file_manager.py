@@ -31,6 +31,7 @@ def find_usb_drive() -> Path | None:
 def _find_usb_windows() -> Path | None:
     try:
         import ctypes
+
         drives = []
         bitmask = ctypes.windll.kernel32.GetLogicalDrives()
         for letter in string.ascii_uppercase:

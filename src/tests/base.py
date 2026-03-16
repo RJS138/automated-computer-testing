@@ -1,11 +1,10 @@
 """Abstract base class for all hardware tests."""
 
 import abc
-import asyncio
 from typing import TYPE_CHECKING
 
-from ..models.test_result import TestResult
 from ..models.job import TestMode
+from ..models.test_result import TestResult
 
 if TYPE_CHECKING:
     pass

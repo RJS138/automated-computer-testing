@@ -14,30 +14,31 @@ Exit codes:
   2  — tkinter not available or no display server
 """
 
-import sys
 import platform
+import sys
 
 # ── Visual constants ────────────────────────────────────────────────────────
 
-_BG            = "#1a1a1a"
-_FG            = "#cccccc"
-_ACCENT        = "#2a5ab8"
-_GREEN         = "#1a6b1a"
-_GREEN_H       = "#228822"
-_RED           = "#8b1a1a"
-_RED_H         = "#a02020"
-_GREY          = "#3a3a3a"
-_GREY_H        = "#4a4a4a"
+_BG = "#1a1a1a"
+_FG = "#cccccc"
+_ACCENT = "#2a5ab8"
+_GREEN = "#1a6b1a"
+_GREEN_H = "#228822"
+_RED = "#8b1a1a"
+_RED_H = "#a02020"
+_GREY = "#3a3a3a"
+_GREY_H = "#4a4a4a"
 _PASS_DISABLED_BG = "#2a2a2a"
-_PASS_ENABLED_BG  = "#1a6b1a"
-_PASS_HOVER_BG    = "#228822"
+_PASS_ENABLED_BG = "#1a6b1a"
+_PASS_HOVER_BG = "#228822"
 
 _GRID_COLS = 20
 _GRID_ROWS = 12
-_COVERAGE_THRESHOLD = 25   # percent
+_COVERAGE_THRESHOLD = 25  # percent
 
 
 # ── Main UI ──────────────────────────────────────────────────────────────────
+
 
 def run_touchpad_test() -> bool:
     try:
@@ -59,20 +60,28 @@ def run_touchpad_test() -> bool:
         root.attributes("-fullscreen", True)
 
     # ── State ────────────────────────────────────────────────────────────────
-    left_clicks   = [0]
-    right_clicks  = [0]
-    scroll_total  = [0]
-    coverage_pct  = [0]
+    left_clicks = [0]
+    right_clicks = [0]
+    scroll_total = [0]
+    coverage_pct = [0]
 
     visited_cells: set[tuple[int, int]] = set()
     last_draw_pos: list[tuple[int, int] | None] = [None]
 
     # ── Helper: Label-based button ────────────────────────────────────────────
     def _make_btn(parent, text, bg, fg, command, hover_bg):
-        lbl = tk.Label(parent, text=text, bg=bg, fg=fg,
-                       font=("Courier", 13, "bold"), padx=28, pady=8, cursor="hand2")
-        lbl.bind("<Enter>",         lambda e, w=lbl, c=hover_bg: w.configure(bg=c))
-        lbl.bind("<Leave>",         lambda e, w=lbl, c=bg:       w.configure(bg=c))
+        lbl = tk.Label(
+            parent,
+            text=text,
+            bg=bg,
+            fg=fg,
+            font=("Courier", 13, "bold"),
+            padx=28,
+            pady=8,
+            cursor="hand2",
+        )
+        lbl.bind("<Enter>", lambda e, w=lbl, c=hover_bg: w.configure(bg=c))
+        lbl.bind("<Leave>", lambda e, w=lbl, c=bg: w.configure(bg=c))
         lbl.bind("<ButtonPress-1>", lambda e: command())
         return lbl
 
@@ -80,17 +89,27 @@ def run_touchpad_test() -> bool:
     topbar = tk.Frame(root, bg=_BG)
     topbar.pack(fill="x", padx=16, pady=(12, 0))
 
-    tk.Label(topbar, text="Touchpad / Trackpad Test", bg=_BG, fg="#4a9eff",
-             font=("Courier", 16, "bold")).pack(side="left")
+    tk.Label(
+        topbar,
+        text="Touchpad / Trackpad Test",
+        bg=_BG,
+        fg="#4a9eff",
+        font=("Courier", 16, "bold"),
+    ).pack(side="left")
 
-    coverage_lbl = tk.Label(topbar, text="Coverage: 0%", bg=_BG, fg="#555",
-                            font=("Courier", 13, "bold"))
+    coverage_lbl = tk.Label(
+        topbar, text="Coverage: 0%", bg=_BG, fg="#555", font=("Courier", 13, "bold")
+    )
     coverage_lbl.pack(side="right")
 
     # Instruction line
-    tk.Label(root,
-             text="Draw across the pad surface. Left-click, right-click, and scroll in the zones.",
-             bg=_BG, fg="#888", font=("Courier", 11)).pack(fill="x", padx=16, pady=(4, 0))
+    tk.Label(
+        root,
+        text="Draw across the pad surface. Left-click, right-click, and scroll in the zones.",
+        bg=_BG,
+        fg="#888",
+        font=("Courier", 11),
+    ).pack(fill="x", padx=16, pady=(4, 0))
 
     # ── Content area (packed after bottom bar so expand=True doesn't hide it) ─
     content = tk.Frame(root, bg=_BG)
@@ -113,19 +132,24 @@ def run_touchpad_test() -> bool:
     # ── Zone panel factory ────────────────────────────────────────────────────
     def _make_zone(parent, title_text):
         """Return (frame, count_label, status_label)."""
-        frame = tk.Frame(parent, bg="#111111",
-                         highlightthickness=1, highlightbackground="#2a2a2a")
+        frame = tk.Frame(parent, bg="#111111", highlightthickness=1, highlightbackground="#2a2a2a")
         frame.pack(fill="x", pady=(0, 8))
 
-        tk.Label(frame, text=title_text, bg="#111111", fg="#888",
-                 font=("Courier", 10, "bold"), justify="center").pack(pady=(10, 0))
+        tk.Label(
+            frame,
+            text=title_text,
+            bg="#111111",
+            fg="#888",
+            font=("Courier", 10, "bold"),
+            justify="center",
+        ).pack(pady=(10, 0))
 
-        count_lbl = tk.Label(frame, text="0", bg="#111111", fg="#555",
-                             font=("Courier", 28, "bold"))
+        count_lbl = tk.Label(frame, text="0", bg="#111111", fg="#555", font=("Courier", 28, "bold"))
         count_lbl.pack()
 
-        status_lbl = tk.Label(frame, text="waiting...", bg="#111111", fg="#555",
-                              font=("Courier", 10))
+        status_lbl = tk.Label(
+            frame, text="waiting...", bg="#111111", fg="#555", font=("Courier", 10)
+        )
         status_lbl.pack(pady=(0, 10))
 
         return frame, count_lbl, status_lbl
@@ -135,7 +159,7 @@ def run_touchpad_test() -> bool:
     sc_frame, sc_count, sc_status = _make_zone(right_col, "SCROLL\nscroll here")
 
     # ── Pass / completion logic ───────────────────────────────────────────────
-    result = ["fail"]   # "pass" | "fail" | "skip"
+    result = ["fail"]  # "pass" | "fail" | "skip"
 
     def _do_done():
         result[0] = "pass"
@@ -153,7 +177,7 @@ def run_touchpad_test() -> bool:
 
     def _check_pass_unlock():
         ok = (
-            left_clicks[0]  >= 1
+            left_clicks[0] >= 1
             and right_clicks[0] >= 1
             and scroll_total[0] >= 1
             and coverage_pct[0] >= _COVERAGE_THRESHOLD
@@ -161,8 +185,8 @@ def run_touchpad_test() -> bool:
         pass_unlocked[0] = ok
         if ok:
             pass_lbl.configure(bg=_PASS_ENABLED_BG, fg="white", cursor="hand2")
-            pass_lbl.bind("<Enter>",         lambda e: pass_lbl.configure(bg=_PASS_HOVER_BG))
-            pass_lbl.bind("<Leave>",         lambda e: pass_lbl.configure(bg=_PASS_ENABLED_BG))
+            pass_lbl.bind("<Enter>", lambda e: pass_lbl.configure(bg=_PASS_HOVER_BG))
+            pass_lbl.bind("<Leave>", lambda e: pass_lbl.configure(bg=_PASS_ENABLED_BG))
             pass_lbl.bind("<ButtonPress-1>", lambda e: _do_done())
         else:
             pass_lbl.configure(bg=_PASS_DISABLED_BG, fg="#555", cursor="arrow")
@@ -213,8 +237,12 @@ def run_touchpad_test() -> bool:
         prev = last_draw_pos[0]
         if prev is not None:
             canvas.create_line(
-                prev[0], prev[1], x, y,
-                fill="#2a5ab8", width=2,
+                prev[0],
+                prev[1],
+                x,
+                y,
+                fill="#2a5ab8",
+                width=2,
                 capstyle="round",
             )
         last_draw_pos[0] = (x, y)
@@ -224,7 +252,7 @@ def run_touchpad_test() -> bool:
         last_draw_pos[0] = None
 
     canvas.bind("<B1-Motion>", _on_motion)
-    canvas.bind("<Leave>",     _on_leave)
+    canvas.bind("<Leave>", _on_leave)
 
     # ── Zone click / scroll handlers ──────────────────────────────────────────
     def _on_left_click(event):
@@ -245,7 +273,7 @@ def run_touchpad_test() -> bool:
     # Bind left-click zone (left click on canvas counts too, but zone panels
     # are the labelled areas).  We bind on all zone frame children for reliability.
     def _bind_zone_clicks(frame, left_handler=None, right_handler=None, scroll_handler=None):
-        targets = [frame] + list(frame.winfo_children())
+        targets = [frame, *list(frame.winfo_children())]
         for w in targets:
             if left_handler:
                 w.bind("<Button-1>", left_handler)
@@ -254,8 +282,8 @@ def run_touchpad_test() -> bool:
                 w.bind("<Button-3>", right_handler)
             if scroll_handler:
                 w.bind("<MouseWheel>", scroll_handler)
-                w.bind("<Button-4>",   scroll_handler)
-                w.bind("<Button-5>",   scroll_handler)
+                w.bind("<Button-4>", scroll_handler)
+                w.bind("<Button-5>", scroll_handler)
 
     _bind_zone_clicks(lc_frame, left_handler=_on_left_click)
     _bind_zone_clicks(rc_frame, right_handler=_on_right_click)
@@ -284,9 +312,13 @@ def run_touchpad_test() -> bool:
     bottom = tk.Frame(root, bg=_BG)
     bottom.pack(fill="x", pady=(4, 18))
 
-    tk.Label(bottom,
-             text="Complete all zones and reach 25% coverage to enable Pass.",
-             bg=_BG, fg="#555", font=("Courier", 10)).pack()
+    tk.Label(
+        bottom,
+        text="Complete all zones and reach 25% coverage to enable Pass.",
+        bg=_BG,
+        fg="#555",
+        font=("Courier", 10),
+    ).pack()
 
     btn_row = tk.Frame(bottom, bg=_BG)
     btn_row.pack(pady=(10, 0))
@@ -299,20 +331,23 @@ def run_touchpad_test() -> bool:
         coverage_lbl.configure(text="Coverage: 0%", fg="#555")
         _check_pass_unlock()
 
-    _make_btn(btn_row, "Clear", "#2a2a2a", "#888", _do_clear, "#3a3a3a").pack(
-        side="left", padx=10)
+    _make_btn(btn_row, "Clear", "#2a2a2a", "#888", _do_clear, "#3a3a3a").pack(side="left", padx=10)
 
-    _make_btn(btn_row, "Fail", _RED, "white", _do_fail_btn, _RED_H).pack(
-        side="left", padx=10)
+    _make_btn(btn_row, "Fail", _RED, "white", _do_fail_btn, _RED_H).pack(side="left", padx=10)
 
     pass_lbl = tk.Label(
-        btn_row, text="Pass", bg=_PASS_DISABLED_BG, fg="#555",
-        font=("Courier", 13, "bold"), padx=28, pady=8, cursor="arrow",
+        btn_row,
+        text="Pass",
+        bg=_PASS_DISABLED_BG,
+        fg="#555",
+        font=("Courier", 13, "bold"),
+        padx=28,
+        pady=8,
+        cursor="arrow",
     )
     pass_lbl.pack(side="left", padx=10)
 
-    _make_btn(btn_row, "Skip", _GREY, "#aaa", _do_skip_btn, _GREY_H).pack(
-        side="left", padx=10)
+    _make_btn(btn_row, "Skip", _GREY, "#aaa", _do_skip_btn, _GREY_H).pack(side="left", padx=10)
 
     # Pack content after bottom so the expanding canvas doesn't hide the buttons
     content.pack(fill="both", expand=True, padx=16, pady=8)

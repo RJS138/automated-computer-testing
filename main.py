@@ -23,6 +23,7 @@ def main() -> None:
         return
 
     from src.cli import main as _main
+
     _main()
 
 
@@ -31,10 +32,12 @@ def _run_helper(name: str) -> None:
     try:
         if name == "display":
             from src.ui._display_helper import run_display_test
+
             result = run_display_test()
             sys.exit(0 if result else 1)
         elif name == "keyboard":
             from src.ui._keyboard_helper import run_keyboard_test
+
             result = run_keyboard_test()
             sys.exit(0 if result else 1)
         else:

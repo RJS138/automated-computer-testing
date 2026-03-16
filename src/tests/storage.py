@@ -9,7 +9,6 @@ import subprocess
 import sys as _sys
 import tempfile
 import time
-from pathlib import Path
 
 import psutil
 
@@ -18,10 +17,10 @@ from ..models.test_result import TestResult
 from ..thresholds import get_storage_thresholds
 from .base import BaseTest
 
-
 # ---------------------------------------------------------------------------
 # smartctl JSON helper
 # ---------------------------------------------------------------------------
+
 
 def _get_smartctl_bin() -> str:
     """Return path to smartctl: bundled copy inside PyInstaller _MEIPASS, or system PATH."""
@@ -37,7 +36,9 @@ def _smartctl_json(device: str) -> dict:
     try:
         r = subprocess.run(
             [_get_smartctl_bin(), "-a", "--json", device],
-            capture_output=True, text=True, timeout=15,
+            capture_output=True,
+            text=True,
+            timeout=15,
         )
         return _json.loads(r.stdout)
     except Exception:
@@ -93,6 +94,7 @@ def _enrich_with_smartctl(drive: dict) -> None:
 # Physical drive enumeration — per platform
 # ---------------------------------------------------------------------------
 
+
 def _drives_macos() -> list[dict]:
     """
     Enumerate physical drives on macOS.
@@ -108,7 +110,9 @@ def _drives_macos() -> list[dict]:
         try:
             r = subprocess.run(
                 ["system_profiler", sp_type, "-json"],
-                capture_output=True, text=True, timeout=15,
+                capture_output=True,
+                text=True,
+                timeout=15,
             )
             data = _json.loads(r.stdout).get(sp_type, [])
             for ctrl in data:
@@ -119,23 +123,25 @@ def _drives_macos() -> list[dict]:
                         continue
                     seen.add(bsd)
                     cap = item.get("size_in_bytes")
-                    drives.append({
-                        "device": f"/dev/{bsd}",
-                        "model": item.get("device_model") or item.get("_name", "Unknown"),
-                        "serial": item.get("device_serial") or "Unknown",
-                        "firmware": item.get("device_revision") or "Unknown",
-                        "capacity_bytes": cap,
-                        "total_gb": round(cap / 1e9, 1) if cap else None,
-                        "used_gb": None,
-                        "free_gb": None,
-                        "interface": iface,
-                        "medium_type": "SSD",
-                        "smart_status": item.get("smart_status", "Unknown"),
-                        "power_on_hours": None,
-                        "temp_c": None,
-                        "reallocated_sectors": None,
-                        "percentage_used": None,
-                    })
+                    drives.append(
+                        {
+                            "device": f"/dev/{bsd}",
+                            "model": item.get("device_model") or item.get("_name", "Unknown"),
+                            "serial": item.get("device_serial") or "Unknown",
+                            "firmware": item.get("device_revision") or "Unknown",
+                            "capacity_bytes": cap,
+                            "total_gb": round(cap / 1e9, 1) if cap else None,
+                            "used_gb": None,
+                            "free_gb": None,
+                            "interface": iface,
+                            "medium_type": "SSD",
+                            "smart_status": item.get("smart_status", "Unknown"),
+                            "power_on_hours": None,
+                            "temp_c": None,
+                            "reallocated_sectors": None,
+                            "percentage_used": None,
+                        }
+                    )
         except Exception:
             pass
 
@@ -146,12 +152,14 @@ def _drives_macos() -> list[dict]:
     try:
         r = subprocess.run(
             ["system_profiler", "SPStorageDataType", "-json"],
-            capture_output=True, text=True, timeout=15,
+            capture_output=True,
+            text=True,
+            timeout=15,
         )
         storage = _json.loads(r.stdout).get("SPStorageDataType", [])
         matched_devices: set[str] = set()
         for vol in storage:
-            phys = vol.get("physical_drive", {})
+            _phys = vol.get("physical_drive", {})
             # Match the volume back to a physical drive bsd_name
             # The bsd_name in SPStorageDataType is the APFS volume (disk3s1),
             # so map it by looking for our physical drives (disk0, disk1, ...)
@@ -182,26 +190,29 @@ def _drives_windows() -> list[dict]:
     drives: list[dict] = []
     try:
         import wmi  # type: ignore
+
         c = wmi.WMI()
         for disk in c.Win32_DiskDrive():
             cap = int(disk.Size) if disk.Size else None
-            drives.append({
-                "device": disk.DeviceID,
-                "model": disk.Model or "Unknown",
-                "serial": (disk.SerialNumber or "").strip() or "Unknown",
-                "firmware": disk.FirmwareRevision or "Unknown",
-                "capacity_bytes": cap,
-                "total_gb": round(cap / 1e9, 1) if cap else None,
-                "used_gb": None,
-                "free_gb": None,
-                "interface": disk.InterfaceType or "Unknown",
-                "medium_type": "Unknown",
-                "smart_status": "Unknown",
-                "power_on_hours": None,
-                "temp_c": None,
-                "reallocated_sectors": None,
-                "percentage_used": None,
-            })
+            drives.append(
+                {
+                    "device": disk.DeviceID,
+                    "model": disk.Model or "Unknown",
+                    "serial": (disk.SerialNumber or "").strip() or "Unknown",
+                    "firmware": disk.FirmwareRevision or "Unknown",
+                    "capacity_bytes": cap,
+                    "total_gb": round(cap / 1e9, 1) if cap else None,
+                    "used_gb": None,
+                    "free_gb": None,
+                    "interface": disk.InterfaceType or "Unknown",
+                    "medium_type": "Unknown",
+                    "smart_status": "Unknown",
+                    "power_on_hours": None,
+                    "temp_c": None,
+                    "reallocated_sectors": None,
+                    "percentage_used": None,
+                }
+            )
     except Exception:
         pass
 
@@ -216,7 +227,9 @@ def _drives_linux() -> list[dict]:
     try:
         r = subprocess.run(
             ["lsblk", "-d", "-o", "NAME,MODEL,SERIAL,SIZE,ROTA,TRAN", "--json"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         data = _json.loads(r.stdout)
         for dev in data.get("blockdevices", []):
@@ -225,24 +238,26 @@ def _drives_linux() -> list[dict]:
                 continue
             rota = dev.get("rota", "1")
             tran = dev.get("tran") or "Unknown"
-            size_str = dev.get("size", "")
-            drives.append({
-                "device": f"/dev/{name}",
-                "model": dev.get("model") or "Unknown",
-                "serial": dev.get("serial") or "Unknown",
-                "firmware": "Unknown",
-                "capacity_bytes": None,
-                "total_gb": None,
-                "used_gb": None,
-                "free_gb": None,
-                "interface": tran.upper(),
-                "medium_type": "HDD" if rota == "1" else "SSD",
-                "smart_status": "Unknown",
-                "power_on_hours": None,
-                "temp_c": None,
-                "reallocated_sectors": None,
-                "percentage_used": None,
-            })
+            _size_str = dev.get("size", "")
+            drives.append(
+                {
+                    "device": f"/dev/{name}",
+                    "model": dev.get("model") or "Unknown",
+                    "serial": dev.get("serial") or "Unknown",
+                    "firmware": "Unknown",
+                    "capacity_bytes": None,
+                    "total_gb": None,
+                    "used_gb": None,
+                    "free_gb": None,
+                    "interface": tran.upper(),
+                    "medium_type": "HDD" if rota == "1" else "SSD",
+                    "smart_status": "Unknown",
+                    "power_on_hours": None,
+                    "temp_c": None,
+                    "reallocated_sectors": None,
+                    "percentage_used": None,
+                }
+            )
     except Exception:
         pass
 
@@ -277,11 +292,13 @@ def _fill_usage_from_psutil(drives: list[dict]) -> None:
 # Speed test
 # ---------------------------------------------------------------------------
 
+
 def _nocache_fd(fd: int, plat: str) -> None:
     """Best-effort: disable OS read cache for file descriptor fd."""
     if plat == "Darwin":
         try:
             import fcntl as _fcntl
+
             _fcntl.fcntl(fd, 48, 1)  # F_NOCACHE = 48
         except Exception:
             pass
@@ -296,9 +313,9 @@ def _disk_speed_test(size_mb: int, full: bool = False) -> dict:
 
     macOS: F_NOCACHE (fcntl 48) bypasses page cache on reads — no alignment needed.
     """
-    block_size = 1024 * 1024          # 1 MiB sequential blocks
-    rand_block = 4096                  # 4 KiB random reads
-    rand_duration = 5.0                # seconds to run random IO phase
+    block_size = 1024 * 1024  # 1 MiB sequential blocks
+    rand_block = 4096  # 4 KiB random reads
+    rand_duration = 5.0  # seconds to run random IO phase
     total_bytes = size_mb * 1024 * 1024
     results: dict = {}
     tmp_path: str | None = None
@@ -309,7 +326,7 @@ def _disk_speed_test(size_mb: int, full: bool = False) -> dict:
             tmp_path = f.name
 
         # --- Sequential write (fsync to flush write cache) ---
-        buf = b"\xFF" * block_size
+        buf = b"\xff" * block_size
         start = time.monotonic()
         with open(tmp_path, "wb", buffering=0) as f:
             written = 0
@@ -344,9 +361,7 @@ def _disk_speed_test(size_mb: int, full: bool = False) -> dict:
             elapsed = time.monotonic() - rand_start
             if elapsed > 0 and ops > 0:
                 results["rand_read_iops"] = round(ops / elapsed)
-                results["rand_read_mb_s"] = round(
-                    (ops * rand_block / (1024 ** 2)) / elapsed, 1
-                )
+                results["rand_read_mb_s"] = round((ops * rand_block / (1024**2)) / elapsed, 1)
                 results["rand_read_ops"] = ops
                 results["rand_read_duration_s"] = round(elapsed, 1)
 
@@ -364,6 +379,7 @@ def _disk_speed_test(size_mb: int, full: bool = False) -> dict:
 # ---------------------------------------------------------------------------
 # Main test class
 # ---------------------------------------------------------------------------
+
 
 class StorageTest(BaseTest):
     async def run(self) -> TestResult:
@@ -386,6 +402,7 @@ class StorageTest(BaseTest):
         # 3. Speed test
         size_mb = STORAGE_TEST_SIZE_QUICK if self.is_quick() else STORAGE_TEST_SIZE_FULL
         import functools as _functools
+
         speed_fn = _functools.partial(_disk_speed_test, full=not self.is_quick())
         speed = await loop.run_in_executor(None, speed_fn, size_mb)
 
@@ -428,16 +445,24 @@ class StorageTest(BaseTest):
             speed["speed_expected_write"] = speed_thresh["expected_write"]
             if read_mb_s and read_mb_s < speed_thresh["fail_read"]:
                 speed_status = "fail"
-                speed_note = f"Read {read_mb_s} MB/s — expected ≥{speed_thresh['expected_read']} MB/s"
+                speed_note = (
+                    f"Read {read_mb_s} MB/s — expected ≥{speed_thresh['expected_read']} MB/s"
+                )
             elif write_mb_s and write_mb_s < speed_thresh["fail_write"]:
                 speed_status = "fail"
-                speed_note = f"Write {write_mb_s} MB/s — expected ≥{speed_thresh['expected_write']} MB/s"
+                speed_note = (
+                    f"Write {write_mb_s} MB/s — expected ≥{speed_thresh['expected_write']} MB/s"
+                )
             elif read_mb_s and read_mb_s < speed_thresh["warn_read"]:
                 speed_status = "warn"
-                speed_note = f"Read {read_mb_s} MB/s below expected {speed_thresh['expected_read']} MB/s"
+                speed_note = (
+                    f"Read {read_mb_s} MB/s below expected {speed_thresh['expected_read']} MB/s"
+                )
             elif write_mb_s and write_mb_s < speed_thresh["warn_write"]:
                 speed_status = "warn"
-                speed_note = f"Write {write_mb_s} MB/s below expected {speed_thresh['expected_write']} MB/s"
+                speed_note = (
+                    f"Write {write_mb_s} MB/s below expected {speed_thresh['expected_write']} MB/s"
+                )
 
         data: dict = {
             "drives": drives,
@@ -448,10 +473,7 @@ class StorageTest(BaseTest):
         # 6. Determine overall status — priority: SMART fail > temp fail > speed fail >
         #    reallocated > temp warn > speed warn > no SMART > PASS
         failed = any(d.get("smart_status") == "FAILED" for d in drives)
-        reallocated = any(
-            d.get("reallocated_sectors") not in (None, 0, "0")
-            for d in drives
-        )
+        reallocated = any(d.get("reallocated_sectors") not in (None, 0, "0") for d in drives)
         no_smart = not drives or all(d.get("smart_status") in (None, "Unknown") for d in drives)
 
         if failed:

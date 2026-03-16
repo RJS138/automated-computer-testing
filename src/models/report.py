@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
 
 from .job import JobInfo
 from .test_result import TestResult, TestStatus
@@ -24,7 +23,7 @@ class FullReport:
             return TestStatus.WARN
         return TestStatus.PASS
 
-    def result_by_name(self, name: str) -> Optional[TestResult]:
+    def result_by_name(self, name: str) -> TestResult | None:
         return next((r for r in self.results if r.name == name), None)
 
     def pass_count(self) -> int:

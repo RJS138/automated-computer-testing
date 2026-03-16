@@ -35,7 +35,7 @@ _INSTRUCTIONS = (
 )
 
 
-_BG_DARK  = "#0d0d0d"
+_BG_DARK = "#0d0d0d"
 _BG_BTN_F = "#8b1a1a"
 _BG_BTN_P = "#1a6b1a"
 _BG_BTN_S = "#3a3a3a"
@@ -49,7 +49,7 @@ def run_display_test() -> str:
         sys.exit(2)
 
     result = ["skip"]
-    phase  = [-1]
+    phase = [-1]
 
     try:
         root = tk.Tk()
@@ -61,9 +61,12 @@ def run_display_test() -> str:
     root.configure(bg=_BG_DARK, cursor="none")
 
     instr = tk.Label(
-        root, text=_INSTRUCTIONS,
-        bg=_BG_DARK, fg="#e0e0e0",
-        font=("Courier", 14), justify="left",
+        root,
+        text=_INSTRUCTIONS,
+        bg=_BG_DARK,
+        fg="#e0e0e0",
+        font=("Courier", 14),
+        justify="left",
     )
     instr.place(relx=0.5, rely=0.45, anchor="center")
 
@@ -72,10 +75,18 @@ def run_display_test() -> str:
     hint.place(relx=0.0, rely=1.0, anchor="sw", relwidth=1.0)
 
     def _make_btn(parent, text, bg, command, hover_bg):
-        lbl = tk.Label(parent, text=text, bg=bg, fg="white",
-                       font=("Courier", 13, "bold"), padx=28, pady=10, cursor="hand2")
-        lbl.bind("<Enter>",         lambda e, w=lbl, c=hover_bg: w.configure(bg=c))
-        lbl.bind("<Leave>",         lambda e, w=lbl, c=bg:       w.configure(bg=c))
+        lbl = tk.Label(
+            parent,
+            text=text,
+            bg=bg,
+            fg="white",
+            font=("Courier", 13, "bold"),
+            padx=28,
+            pady=10,
+            cursor="hand2",
+        )
+        lbl.bind("<Enter>", lambda e, w=lbl, c=hover_bg: w.configure(bg=c))
+        lbl.bind("<Leave>", lambda e, w=lbl, c=bg: w.configure(bg=c))
         lbl.bind("<ButtonPress-1>", lambda e: command())
         return lbl
 
@@ -101,11 +112,17 @@ def run_display_test() -> str:
 
         msg = (
             "Colour cycle complete.\nDid the display pass all checks?"
-            if cycle_complete else
-            "Cycle ended early.\nReview what you observed and mark below."
+            if cycle_complete
+            else "Cycle ended early.\nReview what you observed and mark below."
         )
-        tk.Label(root, text=msg, bg=_BG_DARK, fg="#cccccc",
-                 font=("Courier", 14), justify="center").place(relx=0.5, rely=0.4, anchor="center")
+        tk.Label(
+            root,
+            text=msg,
+            bg=_BG_DARK,
+            fg="#cccccc",
+            font=("Courier", 14),
+            justify="center",
+        ).place(relx=0.5, rely=0.4, anchor="center")
 
         btn_frame = tk.Frame(root, bg=_BG_DARK)
         btn_frame.place(relx=0.5, rely=0.6, anchor="center")
@@ -114,9 +131,15 @@ def run_display_test() -> str:
             result[0] = r
             root.destroy()
 
-        _make_btn(btn_frame, "Fail", _BG_BTN_F, lambda: _do("fail"), "#a02020").pack(side="left", padx=14)
-        _make_btn(btn_frame, "Pass", _BG_BTN_P, lambda: _do("pass"), "#228822").pack(side="left", padx=14)
-        _make_btn(btn_frame, "Skip", _BG_BTN_S, lambda: _do("skip"), "#4a4a4a").pack(side="left", padx=14)
+        _make_btn(btn_frame, "Fail", _BG_BTN_F, lambda: _do("fail"), "#a02020").pack(
+            side="left", padx=14
+        )
+        _make_btn(btn_frame, "Pass", _BG_BTN_P, lambda: _do("pass"), "#228822").pack(
+            side="left", padx=14
+        )
+        _make_btn(btn_frame, "Skip", _BG_BTN_S, lambda: _do("skip"), "#4a4a4a").pack(
+            side="left", padx=14
+        )
 
         hint_var.set("  Mark the result above  ")
         hint.configure(bg="#1a1a1a")
@@ -131,7 +154,9 @@ def run_display_test() -> str:
         if instr.winfo_ismapped():
             instr.place_forget()
         hint.configure(bg="#1a1a1a")
-        hint_var.set(f"  {name}   {phase[0] + 1} / {_N}   |   any key / click to advance   |   ESC to end  ")
+        hint_var.set(
+            f"  {name}   {phase[0] + 1} / {_N}   |   any key / click to advance   |   ESC to end  "
+        )
 
     def on_key(event):
         if event.keysym == "Escape":

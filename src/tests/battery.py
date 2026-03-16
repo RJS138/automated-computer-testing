@@ -7,7 +7,11 @@ import subprocess
 import psutil
 
 from ..models.test_result import TestResult
-from ..thresholds import BATTERY_HEALTH_GOOD, BATTERY_HEALTH_WARN, get_battery_cycle_thresholds
+from ..thresholds import (
+    BATTERY_HEALTH_GOOD,
+    BATTERY_HEALTH_WARN,
+    get_battery_cycle_thresholds,
+)
 from .base import BaseTest
 
 
@@ -16,6 +20,7 @@ def _get_battery_details_windows() -> dict:
     details: dict = {}
     try:
         import wmi  # type: ignore
+
         c = wmi.WMI()
 
         # Design capacity
@@ -47,6 +52,7 @@ def _get_battery_details_windows() -> dict:
 def _get_battery_details_linux() -> dict:
     """Read battery details from /sys/class/power_supply/ on Linux."""
     from pathlib import Path
+
     details: dict = {}
 
     power_supply_dir = Path("/sys/class/power_supply")
@@ -63,8 +69,8 @@ def _get_battery_details_linux() -> dict:
         except Exception:
             continue
 
-        def read_val(name: str) -> str | None:
-            p = bat_dir / name
+        def read_val(name: str, _d: Path = bat_dir) -> str | None:
+            p = _d / name
             return p.read_text().strip() if p.exists() else None
 
         design = read_val("energy_full_design") or read_val("charge_full_design")
@@ -95,19 +101,22 @@ def _get_battery_details_darwin() -> dict:
               amperage — fills in capacity values)
     """
     import json as _json
+
     details: dict = {}
 
     # --- system_profiler (clean JSON, most reliable) ---
     try:
         r = subprocess.run(
             ["system_profiler", "SPPowerDataType", "-json"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         data = _json.loads(r.stdout).get("SPPowerDataType", [])
         for entry in data:
             health = entry.get("sppower_battery_health_info", {})
             charge = entry.get("sppower_battery_charge_info", {})
-            model  = entry.get("sppower_battery_model_info", {})
+            model = entry.get("sppower_battery_model_info", {})
 
             if health:
                 # "97%" → 97.0
@@ -131,7 +140,7 @@ def _get_battery_details_darwin() -> dict:
 
             if model:
                 details["battery_serial"] = model.get("sppower_battery_serial_number")
-                details["device_name"]    = model.get("sppower_battery_device_name")
+                details["device_name"] = model.get("sppower_battery_device_name")
 
             # Charger info
             charger = entry.get("sppower_ac_charger_watts") or entry.get("_name")
@@ -156,12 +165,15 @@ def _get_battery_details_darwin() -> dict:
     try:
         r = subprocess.run(
             ["ioreg", "-r", "-n", "AppleSmartBattery"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         for line in r.stdout.splitlines():
             line = line.strip()
-            def _int(l: str) -> int:
-                return int(l.split("=")[-1].strip())
+
+            def _int(line_str: str) -> int:
+                return int(line_str.split("=")[-1].strip())
 
             if '"DesignCapacity"' in line and "=" in line and "{" not in line:
                 details["design_capacity_mah"] = _int(line)
@@ -189,15 +201,23 @@ def _get_battery_details_darwin() -> dict:
     # Compute health from raw mAh if system_profiler didn't give it
     if "health_pct" not in details:
         design = details.get("design_capacity_mah")
-        full   = details.get("full_charge_capacity_mah")
+        full = details.get("full_charge_capacity_mah")
         if design and full and design > 0:
             details["health_pct"] = round((full / design) * 100, 1)
 
     return details
 
 
-_CHEM_MAP = {1: "Other", 2: "Unknown", 3: "Lead Acid", 4: "NiCd",
-             5: "NiMH", 6: "Li-ion", 7: "NiZn", 8: "AlZn"}
+_CHEM_MAP = {
+    1: "Other",
+    2: "Unknown",
+    3: "Lead Acid",
+    4: "NiCd",
+    5: "NiMH",
+    6: "Li-ion",
+    7: "NiZn",
+    8: "AlZn",
+}
 
 
 class BatteryTest(BaseTest):

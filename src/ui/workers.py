@@ -13,7 +13,6 @@ from PySide6.QtCore import QThread, Signal
 from src.models.job import TestMode
 from src.models.test_result import TestResult
 
-
 # ── Test Worker ───────────────────────────────────────────────────────────────
 
 

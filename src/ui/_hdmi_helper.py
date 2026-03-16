@@ -7,40 +7,41 @@ Exit codes:
   2  — tkinter not available or no display server
 """
 
-import sys
 import json
 import platform
 import subprocess
+import sys
 
 # ── Visual constants ─────────────────────────────────────────────────────────
 
-_BG      = "#1a1a1a"
-_FG      = "#cccccc"
-_ACCENT  = "#2a5ab8"
-_GREEN   = "#1a6b1a"
+_BG = "#1a1a1a"
+_FG = "#cccccc"
+_ACCENT = "#2a5ab8"
+_GREEN = "#1a6b1a"
 _GREEN_H = "#228822"
-_RED     = "#8b1a1a"
-_RED_H   = "#a02020"
-_GREY    = "#3a3a3a"
-_GREY_H  = "#4a4a4a"
-_NEW_BG  = "#0d1f0d"
+_RED = "#8b1a1a"
+_RED_H = "#a02020"
+_GREY = "#3a3a3a"
+_GREY_H = "#4a4a4a"
+_NEW_BG = "#0d1f0d"
 
-_COLOUR_TEST_BG   = "#444466"
+_COLOUR_TEST_BG = "#444466"
 _COLOUR_TEST_BG_H = "#555577"
 
 _CYCLE_COLOURS = [
-    ("Black",   "#000000"),
-    ("White",   "#ffffff"),
-    ("Red",     "#ff0000"),
-    ("Green",   "#00ff00"),
-    ("Blue",    "#0000ff"),
-    ("Cyan",    "#00ffff"),
+    ("Black", "#000000"),
+    ("White", "#ffffff"),
+    ("Red", "#ff0000"),
+    ("Green", "#00ff00"),
+    ("Blue", "#0000ff"),
+    ("Cyan", "#00ffff"),
     ("Magenta", "#ff00ff"),
-    ("Grey",    "#7f7f7f"),
+    ("Grey", "#7f7f7f"),
 ]
 
 
 # ── Display enumeration ──────────────────────────────────────────────────────
+
 
 def _enumerate_displays() -> list[dict]:
     """Return list of dicts with keys: name, resolution, connection, status, key."""
@@ -51,32 +52,36 @@ def _enumerate_displays() -> list[dict]:
         try:
             out = subprocess.check_output(
                 ["system_profiler", "SPDisplaysDataType", "-json"],
-                timeout=10, stderr=subprocess.DEVNULL
+                timeout=10,
+                stderr=subprocess.DEVNULL,
             )
             data = json.loads(out)
             for gpu in data.get("SPDisplaysDataType", []):
                 for ndrvs in gpu.get("spdisplays_ndrvs", []):
-                    name       = ndrvs.get("_name", "Unknown Display").strip()
+                    name = ndrvs.get("_name", "Unknown Display").strip()
                     resolution = ndrvs.get("spdisplays_resolution", "").strip()
                     connection = ndrvs.get("spdisplays_connection_type", "").strip()
                     online_raw = ndrvs.get("spdisplays_online", "").strip().lower()
-                    status     = "connected" if online_raw in ("yes", "spdisplays_yes") else "disconnected"
-                    key        = f"{name}|{resolution}"
-                    displays.append({
-                        "name": name,
-                        "resolution": resolution,
-                        "connection": connection,
-                        "status": status,
-                        "key": key,
-                    })
+                    status = (
+                        "connected" if online_raw in ("yes", "spdisplays_yes") else "disconnected"
+                    )
+                    key = f"{name}|{resolution}"
+                    displays.append(
+                        {
+                            "name": name,
+                            "resolution": resolution,
+                            "connection": connection,
+                            "status": status,
+                            "key": key,
+                        }
+                    )
         except Exception:
             pass
 
     elif os_name == "Linux":
         try:
             out = subprocess.check_output(
-                ["xrandr", "--query"],
-                timeout=10, stderr=subprocess.DEVNULL
+                ["xrandr", "--query"], timeout=10, stderr=subprocess.DEVNULL
             )
             for line in out.decode("utf-8", errors="replace").splitlines():
                 if " connected" in line or " disconnected" in line:
@@ -90,13 +95,15 @@ def _enumerate_displays() -> list[dict]:
                         if "x" in part and "+" in part:
                             resolution = part.split("+")[0]
                             break
-                    displays.append({
-                        "name": display_name,
-                        "resolution": resolution,
-                        "connection": "",
-                        "status": status,
-                        "key": display_name,
-                    })
+                    displays.append(
+                        {
+                            "name": display_name,
+                            "resolution": resolution,
+                            "connection": "",
+                            "status": status,
+                            "key": display_name,
+                        }
+                    )
         except Exception:
             pass
 
@@ -109,7 +116,8 @@ def _enumerate_displays() -> list[dict]:
             )
             out = subprocess.check_output(
                 ["powershell", "-NoProfile", "-Command", ps_cmd],
-                timeout=15, stderr=subprocess.DEVNULL
+                timeout=15,
+                stderr=subprocess.DEVNULL,
             )
             raw = json.loads(out.decode("utf-8", errors="replace"))
             if isinstance(raw, dict):
@@ -119,13 +127,15 @@ def _enumerate_displays() -> list[dict]:
                 w = entry.get("ScreenWidth")
                 h = entry.get("ScreenHeight")
                 resolution = f"{w}×{h}" if w and h else ""
-                displays.append({
-                    "name": name,
-                    "resolution": resolution,
-                    "connection": "",
-                    "status": "connected",
-                    "key": name,
-                })
+                displays.append(
+                    {
+                        "name": name,
+                        "resolution": resolution,
+                        "connection": "",
+                        "status": "connected",
+                        "key": name,
+                    }
+                )
         except Exception:
             pass
 
@@ -133,6 +143,7 @@ def _enumerate_displays() -> list[dict]:
 
 
 # ── Main UI ──────────────────────────────────────────────────────────────────
+
 
 def run_hdmi_test() -> bool:
     """Show full-screen HDMI/video-out test. Returns True if Pass clicked."""
@@ -150,7 +161,7 @@ def run_hdmi_test() -> bool:
     root.attributes("-fullscreen", True)
     root.configure(bg=_BG)
 
-    result = [None]   # "pass" | "fail" | "skip"
+    result = [None]  # "pass" | "fail" | "skip"
 
     # State
     baseline_keys: set[str] = set()
@@ -159,10 +170,18 @@ def run_hdmi_test() -> bool:
     # ── Helper: label-based button ───────────────────────────────────────────
 
     def _make_btn(parent, text, bg, fg, command, hover_bg):
-        lbl = tk.Label(parent, text=text, bg=bg, fg=fg,
-                       font=("Courier", 13, "bold"), padx=28, pady=8, cursor="hand2")
-        lbl.bind("<Enter>",         lambda e, w=lbl, c=hover_bg: w.configure(bg=c))
-        lbl.bind("<Leave>",         lambda e, w=lbl, c=bg:       w.configure(bg=c))
+        lbl = tk.Label(
+            parent,
+            text=text,
+            bg=bg,
+            fg=fg,
+            font=("Courier", 13, "bold"),
+            padx=28,
+            pady=8,
+            cursor="hand2",
+        )
+        lbl.bind("<Enter>", lambda e, w=lbl, c=hover_bg: w.configure(bg=c))
+        lbl.bind("<Leave>", lambda e, w=lbl, c=bg: w.configure(bg=c))
         lbl.bind("<ButtonPress-1>", lambda e: command())
         return lbl
 
@@ -185,25 +204,33 @@ def run_hdmi_test() -> bool:
     topbar = tk.Frame(root, bg=_BG)
     topbar.pack(fill="x", padx=16, pady=(12, 0))
 
-    tk.Label(topbar, text="HDMI / Video Out Test",
-             bg=_BG, fg="#4a9eff",
-             font=("Courier", 16, "bold")).pack(side="left")
+    tk.Label(
+        topbar,
+        text="HDMI / Video Out Test",
+        bg=_BG,
+        fg="#4a9eff",
+        font=("Courier", 16, "bold"),
+    ).pack(side="left")
 
     count_var = tk.StringVar(value="")
-    tk.Label(topbar, textvariable=count_var,
-             bg=_BG, fg=_FG,
-             font=("Courier", 11)).pack(side="right", padx=(0, 4))
+    tk.Label(topbar, textvariable=count_var, bg=_BG, fg=_FG, font=("Courier", 11)).pack(
+        side="right", padx=(0, 4)
+    )
 
     # ── Instruction text ─────────────────────────────────────────────────────
 
-    tk.Label(root,
-             text=("Connect an external monitor via HDMI / DisplayPort / USB-C, "
-                   "then click Refresh. Newly detected displays are highlighted in green."),
-             bg=_BG, fg="#888888",
-             font=("Courier", 11),
-             wraplength=900, justify="left").pack(
-        anchor="w", padx=16, pady=(8, 0)
-    )
+    tk.Label(
+        root,
+        text=(
+            "Connect an external monitor via HDMI / DisplayPort / USB-C, "
+            "then click Refresh. Newly detected displays are highlighted in green."
+        ),
+        bg=_BG,
+        fg="#888888",
+        font=("Courier", 11),
+        wraplength=900,
+        justify="left",
+    ).pack(anchor="w", padx=16, pady=(8, 0))
 
     # ── Display list area ────────────────────────────────────────────────────
 
@@ -213,18 +240,42 @@ def run_hdmi_test() -> bool:
     header = tk.Frame(list_outer, bg=_BG)
     header.pack(fill="x", padx=0, pady=(0, 2))
 
-    tk.Label(header, text="Display", bg=_BG, fg="#666666",
-             font=("Courier", 10, "bold"),
-             width=28, anchor="w").pack(side="left", padx=(8, 0))
-    tk.Label(header, text="Resolution", bg=_BG, fg="#666666",
-             font=("Courier", 10, "bold"),
-             width=18, anchor="w").pack(side="left")
-    tk.Label(header, text="Connection", bg=_BG, fg="#666666",
-             font=("Courier", 10, "bold"),
-             width=20, anchor="w").pack(side="left")
-    tk.Label(header, text="Status", bg=_BG, fg="#666666",
-             font=("Courier", 10, "bold"),
-             width=14, anchor="w").pack(side="left")
+    tk.Label(
+        header,
+        text="Display",
+        bg=_BG,
+        fg="#666666",
+        font=("Courier", 10, "bold"),
+        width=28,
+        anchor="w",
+    ).pack(side="left", padx=(8, 0))
+    tk.Label(
+        header,
+        text="Resolution",
+        bg=_BG,
+        fg="#666666",
+        font=("Courier", 10, "bold"),
+        width=18,
+        anchor="w",
+    ).pack(side="left")
+    tk.Label(
+        header,
+        text="Connection",
+        bg=_BG,
+        fg="#666666",
+        font=("Courier", 10, "bold"),
+        width=20,
+        anchor="w",
+    ).pack(side="left")
+    tk.Label(
+        header,
+        text="Status",
+        bg=_BG,
+        fg="#666666",
+        font=("Courier", 10, "bold"),
+        width=14,
+        anchor="w",
+    ).pack(side="left")
 
     rows_frame = tk.Frame(list_outer, bg="#111111")
     rows_frame.pack(fill="both", expand=True, padx=4, pady=4)
@@ -234,9 +285,13 @@ def run_hdmi_test() -> bool:
             w.destroy()
 
         if not current_displays:
-            tk.Label(rows_frame, text="No displays detected.",
-                     bg="#111111", fg="#555555",
-                     font=("Courier", 11)).pack(anchor="w", padx=8, pady=8)
+            tk.Label(
+                rows_frame,
+                text="No displays detected.",
+                bg="#111111",
+                fg="#555555",
+                font=("Courier", 11),
+            ).pack(anchor="w", padx=8, pady=8)
             return
 
         for disp in current_displays:
@@ -249,18 +304,42 @@ def run_hdmi_test() -> bool:
             row = tk.Frame(rows_frame, bg=row_bg)
             row.pack(fill="x", padx=0, pady=1)
 
-            tk.Label(row, text=name_text, bg=row_bg, fg=name_fg,
-                     font=("Courier", 11),
-                     width=28, anchor="w").pack(side="left", padx=(8, 0), pady=3)
-            tk.Label(row, text=disp["resolution"] or "—", bg=row_bg, fg="#888888",
-                     font=("Courier", 11),
-                     width=18, anchor="w").pack(side="left", pady=3)
-            tk.Label(row, text=disp["connection"] or "—", bg=row_bg, fg="#888888",
-                     font=("Courier", 11),
-                     width=20, anchor="w").pack(side="left", pady=3)
-            tk.Label(row, text=disp["status"], bg=row_bg, fg=status_fg,
-                     font=("Courier", 11),
-                     width=14, anchor="w").pack(side="left", pady=3)
+            tk.Label(
+                row,
+                text=name_text,
+                bg=row_bg,
+                fg=name_fg,
+                font=("Courier", 11),
+                width=28,
+                anchor="w",
+            ).pack(side="left", padx=(8, 0), pady=3)
+            tk.Label(
+                row,
+                text=disp["resolution"] or "—",
+                bg=row_bg,
+                fg="#888888",
+                font=("Courier", 11),
+                width=18,
+                anchor="w",
+            ).pack(side="left", pady=3)
+            tk.Label(
+                row,
+                text=disp["connection"] or "—",
+                bg=row_bg,
+                fg="#888888",
+                font=("Courier", 11),
+                width=20,
+                anchor="w",
+            ).pack(side="left", pady=3)
+            tk.Label(
+                row,
+                text=disp["status"],
+                bg=row_bg,
+                fg=status_fg,
+                font=("Courier", 11),
+                width=14,
+                anchor="w",
+            ).pack(side="left", pady=3)
 
     def _update_count():
         total = len(current_displays)
@@ -295,19 +374,25 @@ def run_hdmi_test() -> bool:
         instr_lbl = tk.Label(
             win,
             text="Drag this window to the external monitor, then click to cycle colours.",
-            bg="#000000", fg="#cccccc",
+            bg="#000000",
+            fg="#cccccc",
             font=("Courier", 12),
             wraplength=700,
         )
         instr_lbl.place(relx=0.5, rely=0.5, anchor="center")
 
-        colour_lbl = tk.Label(win, text="", bg="#000000", fg="#cccccc",
-                              font=("Courier", 14, "bold"))
+        colour_lbl = tk.Label(
+            win, text="", bg="#000000", fg="#cccccc", font=("Courier", 14, "bold")
+        )
         colour_lbl.place(relx=0.5, rely=0.08, anchor="center")
 
-        hint_lbl = tk.Label(win, text="Click or press any key to advance",
-                            bg="#1a1a1a", fg="#888888",
-                            font=("Courier", 10))
+        hint_lbl = tk.Label(
+            win,
+            text="Click or press any key to advance",
+            bg="#1a1a1a",
+            fg="#888888",
+            font=("Courier", 10),
+        )
         hint_lbl.place(relx=0.0, rely=1.0, anchor="sw", relwidth=1.0)
 
         def _advance(_event=None):
@@ -320,13 +405,13 @@ def run_hdmi_test() -> bool:
             colour_lbl.configure(
                 bg=bg,
                 fg="#000000" if bg in ("#ffffff", "#00ff00", "#00ffff") else "#ffffff",
-                text=f"{name}  ({phase[0] + 1}/{_N})"
+                text=f"{name}  ({phase[0] + 1}/{_N})",
             )
             hint_lbl.configure(bg=bg)
             colour_lbl.place(relx=0.5, rely=0.08, anchor="center")
 
         win.bind("<ButtonPress-1>", _advance)
-        win.bind("<Key>",           _advance)
+        win.bind("<Key>", _advance)
         win.focus_force()
 
         def _on_close():
@@ -350,9 +435,14 @@ def run_hdmi_test() -> bool:
         # Show colour test button only when more than one display is detected
         if len(current_displays) > 1:
             if colour_btn_holder[0] is None:
-                btn = _make_btn(btn_row, "Colour Test →",
-                                _COLOUR_TEST_BG, "white",
-                                _open_colour_test, _COLOUR_TEST_BG_H)
+                btn = _make_btn(
+                    btn_row,
+                    "Colour Test →",
+                    _COLOUR_TEST_BG,
+                    "white",
+                    _open_colour_test,
+                    _COLOUR_TEST_BG_H,
+                )
                 btn.pack(side="left", padx=10, before=fail_btn)
                 colour_btn_holder[0] = btn
         else:
@@ -371,24 +461,25 @@ def run_hdmi_test() -> bool:
     bottom = tk.Frame(root, bg=_BG)
     bottom.pack(fill="x", pady=(0, 18))
 
-    tk.Label(bottom,
-             text="Connect each output one at a time and click Refresh to detect new displays.",
-             bg=_BG, fg="#555555", font=("Courier", 10)).pack()
+    tk.Label(
+        bottom,
+        text="Connect each output one at a time and click Refresh to detect new displays.",
+        bg=_BG,
+        fg="#555555",
+        font=("Courier", 10),
+    ).pack()
 
     btn_row = tk.Frame(bottom, bg=_BG)
     btn_row.pack(pady=(10, 0))
 
-    _make_btn(btn_row, "Refresh", _ACCENT, "white", _scan, "#3a6acc").pack(
-        side="left", padx=10)
+    _make_btn(btn_row, "Refresh", _ACCENT, "white", _scan, "#3a6acc").pack(side="left", padx=10)
 
     # Colour Test button inserted dynamically (before Fail)
     fail_btn = _make_btn(btn_row, "Fail", _RED, "white", _do_fail, _RED_H)
     fail_btn.pack(side="left", padx=10)
 
-    _make_btn(btn_row, "Pass", _GREEN, "white", _do_pass, _GREEN_H).pack(
-        side="left", padx=10)
-    _make_btn(btn_row, "Skip", _GREY, _FG, _do_skip, _GREY_H).pack(
-        side="left", padx=10)
+    _make_btn(btn_row, "Pass", _GREEN, "white", _do_pass, _GREEN_H).pack(side="left", padx=10)
+    _make_btn(btn_row, "Skip", _GREY, _FG, _do_skip, _GREY_H).pack(side="left", padx=10)
 
     # Pack list_outer after bottom bar so expand=True doesn't hide the buttons
     list_outer.pack(fill="both", expand=True, padx=16, pady=10)

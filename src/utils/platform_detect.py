@@ -48,6 +48,7 @@ def is_frozen() -> bool:
 def get_exe_dir():
     """Return the directory containing the running executable (or script)."""
     from pathlib import Path
+
     if is_frozen():
         return Path(sys.executable).parent
     return Path(__file__).parent.parent.parent  # pc-tester/ root

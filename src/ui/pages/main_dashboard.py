@@ -12,44 +12,45 @@ Layout:
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
     QScrollArea,
-    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 
 from src.models.job import TestMode
 from src.models.test_result import TestResult, TestStatus
+from src.tests.battery import BatteryTest
+
+# ── Test imports ──────────────────────────────────────────────────────────────
+from src.tests.cpu import CpuTest
+from src.tests.fan import FanTest
+from src.tests.gpu import GpuTest
+from src.tests.network import NetworkTest
+from src.tests.ram import RamTest
+from src.tests.ram_extended import RamExtendedTest
+from src.tests.smart_deep import SmartDeepTest
+from src.tests.storage import StorageTest
+
+# ── Dialog imports ────────────────────────────────────────────────────────────
+from src.ui.helpers.display_dialog import DisplayDialog
+from src.ui.helpers.hdmi_dialog import HdmiDialog
+from src.ui.helpers.keyboard_dialog import KeyboardDialog
+from src.ui.helpers.speakers_dialog import SpeakersDialog
+from src.ui.helpers.touchpad_dialog import TouchpadDialog
+from src.ui.helpers.usb_dialog import UsbDialog
+from src.ui.helpers.webcam_dialog import WebcamDialog
 from src.ui.widgets.dashboard_card import DashboardCard
 from src.ui.widgets.header_bar import HeaderBar
 from src.ui.widgets.report_options_panel import ReportOptionsPanel
 from src.ui.widgets.system_info_panel import SystemInfoPanel
 from src.ui.workers import TestWorker
-
-# ── Test imports ──────────────────────────────────────────────────────────────
-from src.tests.cpu import CpuTest
-from src.tests.ram import RamTest
-from src.tests.storage import StorageTest
-from src.tests.battery import BatteryTest
-from src.tests.gpu import GpuTest
-from src.tests.network import NetworkTest
-from src.tests.smart_deep import SmartDeepTest
-from src.tests.ram_extended import RamExtendedTest
-from src.tests.fan import FanTest
-
-# ── Dialog imports ────────────────────────────────────────────────────────────
-from src.ui.helpers.display_dialog import DisplayDialog
-from src.ui.helpers.keyboard_dialog import KeyboardDialog
-from src.ui.helpers.touchpad_dialog import TouchpadDialog
-from src.ui.helpers.speakers_dialog import SpeakersDialog
-from src.ui.helpers.usb_dialog import UsbDialog
-from src.ui.helpers.hdmi_dialog import HdmiDialog
-from src.ui.helpers.webcam_dialog import WebcamDialog
 
 
 class MainDashboard(QWidget):
@@ -57,27 +58,180 @@ class MainDashboard(QWidget):
 
     # ── Registry ──────────────────────────────────────────────────────────────
 
-    _TEST_REGISTRY: list[dict] = [
+    _TEST_REGISTRY: ClassVar[list[dict]] = [
         # ── Automated — parallel group ───────────────────────────────────────
-        {"name": "cpu",     "display_name": "CPU Stress",  "cls": CpuTest,     "group": "parallel",   "kind": "automated", "advanced_only": False, "dialog_cls": None, "dialog_kwargs": {}},
-        {"name": "ram",     "display_name": "RAM Scan",    "cls": RamTest,     "group": "sequential", "kind": "automated", "advanced_only": False, "dialog_cls": None, "dialog_kwargs": {}},
-        {"name": "storage", "display_name": "Storage",     "cls": StorageTest, "group": "sequential", "kind": "automated", "advanced_only": False, "dialog_cls": None, "dialog_kwargs": {}},
-        {"name": "battery", "display_name": "Battery",     "cls": BatteryTest, "group": "parallel",   "kind": "automated", "advanced_only": False, "dialog_cls": None, "dialog_kwargs": {}},
-        {"name": "gpu",     "display_name": "GPU",         "cls": GpuTest,     "group": "parallel",   "kind": "automated", "advanced_only": False, "dialog_cls": None, "dialog_kwargs": {}},
-        {"name": "network", "display_name": "Network",     "cls": NetworkTest, "group": "parallel",   "kind": "automated", "advanced_only": False, "dialog_cls": None, "dialog_kwargs": {}},
+        {
+            "name": "cpu",
+            "display_name": "CPU Stress",
+            "cls": CpuTest,
+            "group": "parallel",
+            "kind": "automated",
+            "advanced_only": False,
+            "dialog_cls": None,
+            "dialog_kwargs": {},
+        },
+        {
+            "name": "ram",
+            "display_name": "RAM Scan",
+            "cls": RamTest,
+            "group": "sequential",
+            "kind": "automated",
+            "advanced_only": False,
+            "dialog_cls": None,
+            "dialog_kwargs": {},
+        },
+        {
+            "name": "storage",
+            "display_name": "Storage",
+            "cls": StorageTest,
+            "group": "sequential",
+            "kind": "automated",
+            "advanced_only": False,
+            "dialog_cls": None,
+            "dialog_kwargs": {},
+        },
+        {
+            "name": "battery",
+            "display_name": "Battery",
+            "cls": BatteryTest,
+            "group": "parallel",
+            "kind": "automated",
+            "advanced_only": False,
+            "dialog_cls": None,
+            "dialog_kwargs": {},
+        },
+        {
+            "name": "gpu",
+            "display_name": "GPU",
+            "cls": GpuTest,
+            "group": "parallel",
+            "kind": "automated",
+            "advanced_only": False,
+            "dialog_cls": None,
+            "dialog_kwargs": {},
+        },
+        {
+            "name": "network",
+            "display_name": "Network",
+            "cls": NetworkTest,
+            "group": "parallel",
+            "kind": "automated",
+            "advanced_only": False,
+            "dialog_cls": None,
+            "dialog_kwargs": {},
+        },
         # ── Automated — advanced only ────────────────────────────────────────
-        {"name": "smart_deep",   "display_name": "SMART Deep",   "cls": SmartDeepTest,   "group": "sequential", "kind": "automated", "advanced_only": True, "dialog_cls": None, "dialog_kwargs": {}},
-        {"name": "ram_extended", "display_name": "RAM Extended",  "cls": RamExtendedTest, "group": "sequential", "kind": "automated", "advanced_only": True, "dialog_cls": None, "dialog_kwargs": {}},
-        {"name": "fan",          "display_name": "Fan Test",      "cls": FanTest,         "group": "parallel",   "kind": "automated", "advanced_only": True, "dialog_cls": None, "dialog_kwargs": {}},
+        {
+            "name": "smart_deep",
+            "display_name": "SMART Deep",
+            "cls": SmartDeepTest,
+            "group": "sequential",
+            "kind": "automated",
+            "advanced_only": True,
+            "dialog_cls": None,
+            "dialog_kwargs": {},
+        },
+        {
+            "name": "ram_extended",
+            "display_name": "RAM Extended",
+            "cls": RamExtendedTest,
+            "group": "sequential",
+            "kind": "automated",
+            "advanced_only": True,
+            "dialog_cls": None,
+            "dialog_kwargs": {},
+        },
+        {
+            "name": "fan",
+            "display_name": "Fan Test",
+            "cls": FanTest,
+            "group": "parallel",
+            "kind": "automated",
+            "advanced_only": True,
+            "dialog_cls": None,
+            "dialog_kwargs": {},
+        },
         # ── Manual tests ─────────────────────────────────────────────────────
-        {"name": "display",  "display_name": "Display",  "cls": None, "group": None, "kind": "manual", "advanced_only": False, "dialog_cls": DisplayDialog,  "dialog_kwargs": {}},
-        {"name": "keyboard", "display_name": "Keyboard", "cls": None, "group": None, "kind": "manual", "advanced_only": False, "dialog_cls": KeyboardDialog, "dialog_kwargs": {}},
-        {"name": "touchpad", "display_name": "Touchpad", "cls": None, "group": None, "kind": "manual", "advanced_only": False, "dialog_cls": TouchpadDialog, "dialog_kwargs": {}},
-        {"name": "speakers", "display_name": "Speakers", "cls": None, "group": None, "kind": "manual", "advanced_only": False, "dialog_cls": SpeakersDialog, "dialog_kwargs": {}},
-        {"name": "usb_a",   "display_name": "USB-A",    "cls": None, "group": None, "kind": "manual", "advanced_only": False, "dialog_cls": UsbDialog,     "dialog_kwargs": {"port_type": "USB-A"}},
-        {"name": "usb_c",   "display_name": "USB-C",    "cls": None, "group": None, "kind": "manual", "advanced_only": False, "dialog_cls": UsbDialog,     "dialog_kwargs": {"port_type": "USB-C"}},
-        {"name": "hdmi",    "display_name": "HDMI",     "cls": None, "group": None, "kind": "manual", "advanced_only": False, "dialog_cls": HdmiDialog,    "dialog_kwargs": {}},
-        {"name": "webcam",  "display_name": "Webcam",   "cls": None, "group": None, "kind": "manual", "advanced_only": False, "dialog_cls": WebcamDialog,  "dialog_kwargs": {}},
+        {
+            "name": "display",
+            "display_name": "Display",
+            "cls": None,
+            "group": None,
+            "kind": "manual",
+            "advanced_only": False,
+            "dialog_cls": DisplayDialog,
+            "dialog_kwargs": {},
+        },
+        {
+            "name": "keyboard",
+            "display_name": "Keyboard",
+            "cls": None,
+            "group": None,
+            "kind": "manual",
+            "advanced_only": False,
+            "dialog_cls": KeyboardDialog,
+            "dialog_kwargs": {},
+        },
+        {
+            "name": "touchpad",
+            "display_name": "Touchpad",
+            "cls": None,
+            "group": None,
+            "kind": "manual",
+            "advanced_only": False,
+            "dialog_cls": TouchpadDialog,
+            "dialog_kwargs": {},
+        },
+        {
+            "name": "speakers",
+            "display_name": "Speakers",
+            "cls": None,
+            "group": None,
+            "kind": "manual",
+            "advanced_only": False,
+            "dialog_cls": SpeakersDialog,
+            "dialog_kwargs": {},
+        },
+        {
+            "name": "usb_a",
+            "display_name": "USB-A",
+            "cls": None,
+            "group": None,
+            "kind": "manual",
+            "advanced_only": False,
+            "dialog_cls": UsbDialog,
+            "dialog_kwargs": {"port_type": "USB-A"},
+        },
+        {
+            "name": "usb_c",
+            "display_name": "USB-C",
+            "cls": None,
+            "group": None,
+            "kind": "manual",
+            "advanced_only": False,
+            "dialog_cls": UsbDialog,
+            "dialog_kwargs": {"port_type": "USB-C"},
+        },
+        {
+            "name": "hdmi",
+            "display_name": "HDMI",
+            "cls": None,
+            "group": None,
+            "kind": "manual",
+            "advanced_only": False,
+            "dialog_cls": HdmiDialog,
+            "dialog_kwargs": {},
+        },
+        {
+            "name": "webcam",
+            "display_name": "Webcam",
+            "cls": None,
+            "group": None,
+            "kind": "manual",
+            "advanced_only": False,
+            "dialog_cls": WebcamDialog,
+            "dialog_kwargs": {},
+        },
     ]
 
     # ── Constructor ───────────────────────────────────────────────────────────
@@ -181,7 +335,11 @@ class MainDashboard(QWidget):
             kind = entry["kind"]
             advanced_only = entry["advanced_only"]
 
-            card = DashboardCard(name, display_name, parent=auto_container if kind == "automated" else manual_container)
+            card = DashboardCard(
+                name,
+                display_name,
+                parent=auto_container if kind == "automated" else manual_container,
+            )
             card.run_requested.connect(self._on_run_requested)
             self._cards[name] = card
 
@@ -254,7 +412,7 @@ class MainDashboard(QWidget):
         worker.finished.connect(self._on_system_info_done)
         worker.start()
 
-    def _on_system_info_done(self, name: str) -> None:  # noqa: ARG002
+    def _on_system_info_done(self, name: str) -> None:
         """Populate the info panel once system_info completes."""
         if self._si_result is not None:
             self._info_panel.populate(self._si_result.data)
@@ -294,7 +452,9 @@ class MainDashboard(QWidget):
         from src.models.job import JobInfo, ReportType
 
         # Build JobInfo from header fields
-        report_type = ReportType.AFTER if self._header.report_type() == "after" else ReportType.BEFORE
+        report_type = (
+            ReportType.AFTER if self._header.report_type() == "after" else ReportType.BEFORE
+        )
         self._window.job_info = JobInfo(
             customer_name=self._header.customer(),
             device_description=self._header.device(),
@@ -368,7 +528,11 @@ class MainDashboard(QWidget):
         result.data = {}
         card = self._cards[name]
         card.set_status("running")
-        on_done = self._on_parallel_test_done if entry["group"] == "parallel" else self._on_sequential_test_done
+        on_done = (
+            self._on_parallel_test_done
+            if entry["group"] == "parallel"
+            else self._on_sequential_test_done
+        )
         worker = self._make_worker(entry, result, on_done=on_done)
         self._active_workers.append(worker)
         worker.start()
@@ -420,7 +584,8 @@ class MainDashboard(QWidget):
     def _run_manual_queue(self) -> None:
         """Build and execute the ordered queue of checked manual tests."""
         self._manual_queue: list[dict] = [
-            entry for entry in self._TEST_REGISTRY
+            entry
+            for entry in self._TEST_REGISTRY
             if entry["kind"] == "manual"
             and self._cards.get(entry["name"]) is not None
             and self._cards[entry["name"]].is_checked()
@@ -521,6 +686,7 @@ class MainDashboard(QWidget):
         self._header.set_action_state("new_job")
 
         from src.ui.workers import ReportWorker
+
         job = self._window.job_info
         results = self._window.test_results
 
@@ -533,8 +699,9 @@ class MainDashboard(QWidget):
     def _on_report_status(self, msg: str) -> None:
         self._header.show_status_message(msg)
 
-    def _on_report_done(self, html_path: str, pdf_path: str) -> None:  # noqa: ARG002
+    def _on_report_done(self, html_path: str, pdf_path: str) -> None:
         import webbrowser
+
         webbrowser.open(html_path)
         self._header.show_status_message(f"Saved: {html_path}")
 
@@ -551,6 +718,7 @@ class MainDashboard(QWidget):
 
         # Reset results
         from src.models.test_result import TestStatus
+
         for result in self._results.values():
             result.status = TestStatus.WAITING
             result.summary = ""

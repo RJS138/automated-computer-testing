@@ -2,15 +2,15 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 
-class ReportType(str, Enum):
+class ReportType(StrEnum):
     BEFORE = "before"
     AFTER = "after"
 
 
-class TestMode(str, Enum):
+class TestMode(StrEnum):
     QUICK = "quick"
     FULL = "full"
 
@@ -28,13 +28,9 @@ class JobInfo:
     def folder_name(self) -> str:
         """Stable folder name for this job: CustomerName_WO#."""
         safe_customer = "".join(
-            c if c.isalnum() or c in ("-", "_") else "_"
-            for c in self.customer_name
+            c if c.isalnum() or c in ("-", "_") else "_" for c in self.customer_name
         )
-        safe_job = "".join(
-            c if c.isalnum() or c in ("-", "_") else "_"
-            for c in self.job_number
-        )
+        safe_job = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in self.job_number)
         return f"{safe_customer}_{safe_job}"
 
     def display_name(self) -> str:

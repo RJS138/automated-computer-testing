@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QFrame,
@@ -19,11 +19,11 @@ from ..stylesheet import refresh_style
 _STATUS_COLORS: dict[str, str] = {
     "waiting": "#7d8590",
     "running": "#f59e0b",
-    "pass":    "#22c55e",
-    "warn":    "#f59e0b",
-    "fail":    "#ef4444",
-    "error":   "#ef4444",
-    "skip":    "#7d8590",
+    "pass": "#22c55e",
+    "warn": "#f59e0b",
+    "fail": "#ef4444",
+    "error": "#ef4444",
+    "skip": "#7d8590",
 }
 
 

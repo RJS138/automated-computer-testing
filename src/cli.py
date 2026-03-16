@@ -35,7 +35,7 @@ def _ensure_elevated() -> None:
         if os.geteuid() != 0:
             os.environ["TOUCHSTONE_ELEVATED"] = "1"
             # execvp replaces the current process — no return
-            os.execvpe("sudo", ["sudo", "-E"] + sys.argv, os.environ)
+            os.execvpe("sudo", ["sudo", "-E", *sys.argv], os.environ)
 
     elif sys_name == "Windows":
         import ctypes

@@ -30,6 +30,7 @@ def _try_enable_windows_vt() -> bool:
     try:
         import ctypes
         import ctypes.wintypes
+
         kernel32 = ctypes.windll.kernel32
         ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
         STD_OUTPUT_HANDLE = -11
@@ -98,6 +99,44 @@ def should_use_simple_ui() -> bool:
     # Everything else (Terminal.app, PuTTY, older xterm, SSH sessions without
     # COLORTERM propagation, etc.) gets simple mode to avoid colour bleeding.
     return not _positive_truecolor_signals()
+
+
+def resize_terminal(cols: int = 100, rows: int = 40) -> None:
+    """
+    Attempt to resize the terminal window to at least *cols* × *rows*.
+
+    Only expands — never shrinks a terminal that's already larger than the target.
+    Silent no-op when the terminal doesn't support resize (SSH, tmux, piped output, etc.).
+    """
+    if not sys.stdout.isatty():
+        return
+
+    try:
+        import shutil
+
+        size = shutil.get_terminal_size(fallback=(0, 0))
+        if size.columns >= cols and size.lines >= rows:
+            return
+        target_cols = max(cols, size.columns)
+        target_rows = max(rows, size.lines)
+    except Exception:
+        return
+
+    try:
+        if sys.platform == "win32":
+            import subprocess
+
+            subprocess.run(
+                f"mode con: cols={target_cols} lines={target_rows}",
+                shell=True,
+                capture_output=True,
+            )
+        else:
+            # ANSI resize: CSI 8 ; rows ; cols t
+            sys.stdout.write(f"\033[8;{target_rows};{target_cols}t")
+            sys.stdout.flush()
+    except Exception:
+        pass
 
 
 def configure_for_textual(simple: bool) -> None:

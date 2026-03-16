@@ -16,6 +16,7 @@ def _parse_html_report(html_path: Path) -> dict:
     The template embeds <script id="report-data" type="application/json">...</script>.
     """
     import re
+
     content = html_path.read_text(encoding="utf-8")
     match = re.search(
         r'<script[^>]+id="report-data"[^>]*>(.*?)</script>',
@@ -35,10 +36,12 @@ def _diff_results(before: dict, after: dict) -> list[dict]:
     Compare per-test result data between before and after reports.
     Returns a list of comparison rows.
     """
-    all_test_names = list({
-        *before.get("results", {}).keys(),
-        *after.get("results", {}).keys(),
-    })
+    all_test_names = list(
+        {
+            *before.get("results", {}).keys(),
+            *after.get("results", {}).keys(),
+        }
+    )
 
     rows = []
     for name in all_test_names:
@@ -63,15 +66,17 @@ def _diff_results(before: dict, after: dict) -> list[dict]:
         else:
             change = "changed"
 
-        rows.append({
-            "name": name,
-            "display_name": b.get("display_name") or a.get("display_name") or name,
-            "before_status": b_status,
-            "after_status": a_status,
-            "before_summary": b_summary,
-            "after_summary": a_summary,
-            "change": change,
-        })
+        rows.append(
+            {
+                "name": name,
+                "display_name": b.get("display_name") or a.get("display_name") or name,
+                "before_status": b_status,
+                "after_status": a_status,
+                "before_summary": b_summary,
+                "after_summary": a_summary,
+                "change": change,
+            }
+        )
 
     return rows
 
@@ -96,18 +101,22 @@ def generate_comparison(job_dir: Path, job: JobInfo) -> str | None:
     worsened = sum(1 for r in diff_rows if r["change"] == "worsened")
     unchanged = sum(1 for r in diff_rows if r["change"] == "unchanged")
 
-    comparison_json = json.dumps({
-        "type": "comparison",
-        "job": {
-            "customer_name": job.customer_name,
-            "device_description": job.device_description,
-            "job_number": job.job_number,
+    comparison_json = json.dumps(
+        {
+            "type": "comparison",
+            "job": {
+                "customer_name": job.customer_name,
+                "device_description": job.device_description,
+                "job_number": job.job_number,
+            },
+            "rows": diff_rows,
+            "improved": improved,
+            "worsened": worsened,
+            "unchanged": unchanged,
         },
-        "rows": diff_rows,
-        "improved": improved,
-        "worsened": worsened,
-        "unchanged": unchanged,
-    }, indent=2, default=str)
+        indent=2,
+        default=str,
+    )
 
     env = Environment(
         loader=FileSystemLoader(str(TEMPLATES_DIR)),

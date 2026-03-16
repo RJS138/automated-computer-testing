@@ -56,14 +56,14 @@ def _restart_as_admin() -> None:
     os_name = get_os()
     try:
         if os_name == "windows":
-            import ctypes as _ctypes  # noqa: PLC0415
+            import ctypes as _ctypes
 
             params = " ".join(sys.argv)
             _ctypes.windll.shell32.ShellExecuteW(  # type: ignore[attr-defined]
                 None, "runas", sys.executable, params, None, 1
             )
         else:
-            subprocess.run(["sudo", sys.executable] + sys.argv)  # noqa: S603, S607
+            subprocess.run(["sudo", sys.executable, *sys.argv])
     finally:
         app = QApplication.instance()
         if app is not None:

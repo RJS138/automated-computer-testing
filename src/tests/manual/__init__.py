@@ -1,5 +1,5 @@
 """Manual test package — per-item definitions + runner."""
 
-from .runner import ManualTestRunner, MANUAL_TEST_ITEMS
+from .runner import MANUAL_TEST_ITEMS, ManualTestRunner
 
-__all__ = ["ManualTestRunner", "MANUAL_TEST_ITEMS"]
+__all__ = ["MANUAL_TEST_ITEMS", "ManualTestRunner"]

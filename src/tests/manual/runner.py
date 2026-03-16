@@ -1,14 +1,13 @@
 """Manual test runner — stores guided checklist results."""
 
 from ...models.test_result import TestResult, TestStatus
-
+from .hdmi import ITEM as _HDMI
+from .keyboard import ITEM as _KEYBOARD
 from .lcd import ITEM as _LCD
 from .speakers import ITEM as _SPEAKERS
-from .keyboard import ITEM as _KEYBOARD
 from .touchpad import ITEM as _TOUCHPAD
 from .usb_a import ITEM as _USB_A
 from .usb_c import ITEM as _USB_C
-from .hdmi import ITEM as _HDMI
 from .webcam import ITEM as _WEBCAM
 
 MANUAL_TEST_ITEMS: list[dict] = [

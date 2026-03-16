@@ -11,7 +11,6 @@ from ..config import RAM_SCAN_MB_FULL, RAM_SCAN_MB_QUICK
 from ..models.test_result import TestResult
 from .base import BaseTest
 
-
 # ---------------------------------------------------------------------------
 # Pattern constants
 # ---------------------------------------------------------------------------
@@ -32,6 +31,7 @@ _PATTERNS: list[tuple[int, str]] = [
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _fill(buf: bytearray, pattern_byte: int) -> None:
     """Fill *buf* in-place with pattern_byte using C memset — near-RAM-bandwidth speed."""
@@ -61,6 +61,7 @@ def _first_bad(buf: bytearray, pattern_byte: int) -> int | None:
 # ---------------------------------------------------------------------------
 # Quick scan: single pattern, full write+verify, with bandwidth measurement
 # ---------------------------------------------------------------------------
+
 
 def _quick_scan(size_mb: int) -> tuple[bool, str, dict]:
     """
@@ -92,7 +93,11 @@ def _quick_scan(size_mb: int) -> tuple[bool, str, dict]:
         gc.collect()
 
         if bad is not None:
-            return False, f"Memory error: pattern 0x{pattern_byte:02X} mismatch at byte {bad}", metrics
+            return (
+                False,
+                f"Memory error: pattern 0x{pattern_byte:02X} mismatch at byte {bad}",
+                metrics,
+            )
         return True, "Pattern scan passed (0xA5 — quick)", metrics
 
     except MemoryError:
@@ -104,6 +109,7 @@ def _quick_scan(size_mb: int) -> tuple[bool, str, dict]:
 # ---------------------------------------------------------------------------
 # Full scan: 6 patterns, every byte, bandwidth measurement
 # ---------------------------------------------------------------------------
+
 
 def _full_scan(size_mb: int) -> tuple[bool, str, dict]:
     """
@@ -164,6 +170,7 @@ def _full_scan(size_mb: int) -> tuple[bool, str, dict]:
 # Main test class
 # ---------------------------------------------------------------------------
 
+
 class RamTest(BaseTest):
     async def run(self) -> TestResult:
         self.result.mark_running()
@@ -190,22 +197,15 @@ class RamTest(BaseTest):
 
         loop = asyncio.get_event_loop()
         if self.is_quick():
-            scan_ok, scan_msg, scan_metrics = await loop.run_in_executor(
-                None, _quick_scan, scan_mb
-            )
+            scan_ok, scan_msg, scan_metrics = await loop.run_in_executor(None, _quick_scan, scan_mb)
         else:
-            scan_ok, scan_msg, scan_metrics = await loop.run_in_executor(
-                None, _full_scan, scan_mb
-            )
+            scan_ok, scan_msg, scan_metrics = await loop.run_in_executor(None, _full_scan, scan_mb)
 
         data["scan_passed"] = scan_ok
         data["scan_message"] = scan_msg
         data.update(scan_metrics)
 
-        summary = (
-            f"{data['total_gb']} GB total, "
-            f"{data['used_percent']}% used — {scan_msg}"
-        )
+        summary = f"{data['total_gb']} GB total, {data['used_percent']}% used — {scan_msg}"
 
         if not scan_ok:
             self.result.mark_fail(summary=summary, data=data)
@@ -219,9 +219,11 @@ class RamTest(BaseTest):
 # RAM speed helpers
 # ---------------------------------------------------------------------------
 
+
 async def _get_ram_speed() -> str | None:
     """Try to get RAM speed from platform-specific sources."""
     import platform
+
     loop = asyncio.get_event_loop()
 
     if platform.system() == "Windows":
@@ -236,6 +238,7 @@ async def _get_ram_speed() -> str | None:
 def _ram_speed_windows() -> str | None:
     try:
         import wmi  # type: ignore
+
         c = wmi.WMI()
         speeds = [str(m.Speed) for m in c.Win32_PhysicalMemory() if m.Speed]
         return ", ".join(set(speeds)) + " MHz" if speeds else None
@@ -245,10 +248,13 @@ def _ram_speed_windows() -> str | None:
 
 def _ram_speed_darwin() -> str | None:
     import subprocess
+
     try:
         result = subprocess.run(
             ["system_profiler", "SPMemoryDataType"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         speeds = []
         mem_type = None
@@ -274,10 +280,10 @@ def _ram_speed_darwin() -> str | None:
 
 def _ram_speed_linux() -> str | None:
     import subprocess
+
     try:
         result = subprocess.run(
-            ["dmidecode", "-t", "17"],
-            capture_output=True, text=True, timeout=5
+            ["dmidecode", "-t", "17"], capture_output=True, text=True, timeout=5
         )
         speeds = []
         for line in result.stdout.splitlines():
