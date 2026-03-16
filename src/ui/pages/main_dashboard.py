@@ -324,7 +324,10 @@ class MainDashboard(QWidget):
         if self._running_all:
             return  # ignore individual runs during Run All
         entry = next((e for e in self._TEST_REGISTRY if e["name"] == name), None)
-        if entry is None or entry["kind"] != "automated":
+        if entry is None:
+            return
+        if entry["kind"] == "manual":
+            self._run_single_manual(entry)
             return
         result = self._results.get(name)
         if result is None:
@@ -398,11 +401,94 @@ class MainDashboard(QWidget):
             self._on_automated_done()
 
     def _on_automated_done(self) -> None:
-        """Called when all automated tests finish during Run All."""
-        # For now: end run-all mode. Manual queue will be added in Task 8.
+        """Called when all automated tests finish during Run All. Starts manual queue."""
+        self._run_manual_queue()
+
+    def _run_manual_queue(self) -> None:
+        """Build and execute the ordered queue of checked manual tests."""
+        self._manual_queue: list[dict] = [
+            entry for entry in self._TEST_REGISTRY
+            if entry["kind"] == "manual"
+            and self._cards.get(entry["name"]) is not None
+            and self._cards[entry["name"]].is_checked()
+        ]
+        self._run_next_manual()
+
+    def _run_next_manual(self) -> None:
+        """Pop next manual test from queue and run its dialog."""
+        if not self._manual_queue:
+            self._on_all_tests_done()
+            return
+
+        entry = self._manual_queue.pop(0)
+        name = entry["name"]
+        dialog_cls = entry["dialog_cls"]
+        dialog_kwargs = entry["dialog_kwargs"]
+
+        card = self._cards.get(name)
+        if card:
+            card.set_status("running")
+
+        dialog = dialog_cls(parent=self, **dialog_kwargs)
+        dialog.run()
+        result_str = dialog.result_str  # "pass" / "fail" / "skip"
+
+        result = self._results.get(name)
+        if result:
+            if result_str == "pass":
+                result.mark_pass(f"{entry['display_name']} passed")
+            elif result_str == "fail":
+                result.mark_fail(f"{entry['display_name']} failed")
+            else:
+                result.mark_skip(f"{entry['display_name']} skipped")
+
+        if card:
+            card.set_status(result.status.value if result else result_str, "")
+
+        if result and result not in self._window.test_results:
+            self._window.test_results.append(result)
+            self._window.manual_items.append(result)
+
+        self._recalculate_overall()
+        self._run_next_manual()
+
+    def _on_all_tests_done(self) -> None:
+        """Called when all tests (automated + manual) complete during Run All."""
         self._running_all = False
         for card in self._cards.values():
             card.set_running_all(False)
+        self._recalculate_overall()
+
+    def _run_single_manual(self, entry: dict) -> None:
+        """Run a single manual test outside of Run All queue."""
+        name = entry["name"]
+        dialog_cls = entry["dialog_cls"]
+        dialog_kwargs = entry["dialog_kwargs"]
+
+        card = self._cards.get(name)
+        if card:
+            card.set_status("running")
+
+        dialog = dialog_cls(parent=self, **dialog_kwargs)
+        dialog.run()
+        result_str = dialog.result_str
+
+        result = self._results.get(name)
+        if result:
+            if result_str == "pass":
+                result.mark_pass(f"{entry['display_name']} passed")
+            elif result_str == "fail":
+                result.mark_fail(f"{entry['display_name']} failed")
+            else:
+                result.mark_skip(f"{entry['display_name']} skipped")
+
+        if card and result:
+            card.set_status(result.status.value, "")
+
+        if result and result not in self._window.test_results:
+            self._window.test_results.append(result)
+            self._window.manual_items.append(result)
+
         self._recalculate_overall()
 
     def _apply_result(self, name: str) -> None:
