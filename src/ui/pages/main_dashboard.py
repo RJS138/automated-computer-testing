@@ -201,6 +201,11 @@ class MainDashboard(QWidget):
         # ── Signal connections ────────────────────────────────────────────────
         self._header.mode_changed.connect(self._on_mode_changed)
         self._header.run_all_clicked.connect(self._on_run_all)
+        self._header.generate_report_clicked.connect(self._on_generate_report)
+        self._header.new_job_clicked.connect(self._on_new_job)
+
+        # Keep report worker alive while it runs
+        self._report_worker: object | None = None
 
         # ── Start system info ─────────────────────────────────────────────────
         self._start_system_info()
@@ -500,6 +505,60 @@ class MainDashboard(QWidget):
         # Clean up finished workers
         self._active_workers = [w for w in self._active_workers if w.isRunning()]
         self._recalculate_overall()
+
+    # ── Report generation ─────────────────────────────────────────────────────
+
+    def _on_generate_report(self) -> None:
+        """Immediately switch button to New Job state, then generate report in background."""
+        self._header.set_action_state("new_job")
+
+        from src.ui.workers import ReportWorker
+        job = self._window.job_info
+        results = self._window.test_results
+
+        self._report_worker = ReportWorker(job=job, results=results, parent=self)
+        self._report_worker.status.connect(self._on_report_status)
+        self._report_worker.done.connect(self._on_report_done)
+        self._report_worker.error.connect(self._on_report_error)
+        self._report_worker.start()
+
+    def _on_report_status(self, msg: str) -> None:
+        self._header.show_status_message(msg)
+
+    def _on_report_done(self, html_path: str, pdf_path: str) -> None:  # noqa: ARG002
+        import webbrowser
+        webbrowser.open(html_path)
+        self._header.show_status_message(f"Saved: {html_path}")
+
+    def _on_report_error(self, msg: str) -> None:
+        self._header.show_status_message(f"Error: {msg}")
+
+    # ── New Job reset ─────────────────────────────────────────────────────────
+
+    def _on_new_job(self) -> None:
+        """Reset everything for a new job."""
+        # Reset cards
+        for name, card in self._cards.items():  # noqa: B007
+            card.set_status("waiting")
+
+        # Reset results
+        from src.models.test_result import TestStatus
+        for result in self._results.values():
+            result.status = TestStatus.WAITING
+            result.summary = ""
+            result.error_message = ""
+            result.data = {}
+
+        # Reset window state
+        self._window.job_info = None
+        self._window.test_results = []
+        self._window.manual_items = []
+
+        # Reset header
+        self._header.set_action_state("run_all_disabled")
+
+        # Re-run system info
+        self._start_system_info()
 
     # ── Dev helper ────────────────────────────────────────────────────────────
 
