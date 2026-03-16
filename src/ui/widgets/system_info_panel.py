@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import ClassVar
 
 from PySide6.QtCore import Qt
@@ -28,18 +29,14 @@ class SystemInfoPanel(QFrame):
         panel.set_overall("pass")  # update overall badge
     """
 
-    # Data keys to display, in order
-    _KEYS: ClassVar[list[str]] = [
-        "model",
-        "serial",
-        "os",
-        "firmware",
-        "cpu",
-        "ram",
-        "storage",
-        "gpu",
-        "display",
-        "battery",
+    # Maps display labels to callables that extract values from result.data
+    _FIELD_MAP: ClassVar[list[tuple[str, Callable[[dict], str]]]] = [
+        ("Model",    lambda d: d.get("chassis_model") or d.get("board_model") or "—"),
+        ("Serial",   lambda d: d.get("board_serial") or "—"),
+        ("OS",       lambda d: " ".join(filter(None, [d.get("os_name"), d.get("os_version")])) or "—"),
+        ("Firmware", lambda d: d.get("bios_version") or "—"),
+        ("CPU",      lambda d: d.get("processor_marketing") or d.get("processor") or "—"),
+        ("Arch",     lambda d: d.get("machine_arch") or "—"),
     ]
 
     # Badge colours by status
@@ -135,12 +132,12 @@ class SystemInfoPanel(QFrame):
             if item.widget():
                 item.widget().deleteLater()
 
-        # Add rows for each key
-        for key in self._KEYS:
-            value = data.get(key) or "—"
+        # Add rows for each field in the map
+        for label, extractor in self._FIELD_MAP:
+            value = extractor(data)
 
             # Key label (muted)
-            key_lbl = QLabel(key.replace("_", " ").title())
+            key_lbl = QLabel(label)
             key_lbl.setProperty("class", "muted")
             key_lbl.setStyleSheet("font-size: 10px;")
             refresh_style(key_lbl)

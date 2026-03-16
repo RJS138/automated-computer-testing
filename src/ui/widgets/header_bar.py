@@ -54,20 +54,19 @@ def _is_elevated() -> bool:
 def _restart_as_admin() -> None:
     """Re-launch the current process with elevated privileges and quit."""
     os_name = get_os()
-    try:
-        if os_name == "windows":
-            import ctypes as _ctypes
+    if os_name == "windows":
+        import ctypes as _ctypes
 
-            params = " ".join(sys.argv)
-            _ctypes.windll.shell32.ShellExecuteW(  # type: ignore[attr-defined]
-                None, "runas", sys.executable, params, None, 1
-            )
-        else:
-            subprocess.run(["sudo", sys.executable, *sys.argv])
-    finally:
-        app = QApplication.instance()
-        if app is not None:
-            app.quit()
+        params = " ".join(sys.argv)
+        _ctypes.windll.shell32.ShellExecuteW(  # type: ignore[attr-defined]
+            None, "runas", sys.executable, params, None, 1
+        )
+    else:
+        # macOS/Linux: launch elevated process without blocking the GUI thread
+        subprocess.Popen(["sudo", sys.executable, *sys.argv])
+    app = QApplication.instance()
+    if app is not None:
+        app.quit()
 
 
 # ---------------------------------------------------------------------------

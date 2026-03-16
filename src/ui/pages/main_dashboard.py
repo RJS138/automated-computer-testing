@@ -713,7 +713,7 @@ class MainDashboard(QWidget):
     def _on_new_job(self) -> None:
         """Reset everything for a new job."""
         # Reset cards
-        for name, card in self._cards.items():  # noqa: B007
+        for card in self._cards.values():
             card.set_status("waiting")
 
         # Reset results
