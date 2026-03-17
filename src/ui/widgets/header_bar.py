@@ -13,9 +13,10 @@ import os
 import subprocess
 import sys
 
-from PySide6.QtCore import QTimer, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QApplication,
+    QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -23,9 +24,11 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QVBoxLayout,
+    QWidget,
 )
 
 from src.ui.stylesheet import refresh_style
+from src.ui.widgets.toggle_switch import ToggleSwitch
 from src.utils.platform_detect import get_os
 
 # ---------------------------------------------------------------------------
@@ -89,6 +92,7 @@ class HeaderBar(QFrame):
     run_all_clicked = Signal()
     generate_report_clicked = Signal()
     new_job_clicked = Signal()
+    settings_clicked = Signal()
     mode_changed = Signal(str)
     report_type_changed = Signal(str)
 
@@ -113,79 +117,95 @@ class HeaderBar(QFrame):
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 8, 12, 8)
-        root.setSpacing(6)
+        root.setSpacing(4)
 
         # ── Row 1: all controls ──────────────────────────────────────────────
         row1 = QHBoxLayout()
         row1.setSpacing(8)
 
-        # Customer field
-        cust_lbl = QLabel("Customer:")
-        cust_lbl.setStyleSheet("color: #7d8590;")
-        row1.addWidget(cust_lbl)
+        _V = Qt.AlignmentFlag.AlignVCenter
+        _LBL = "color: #7d8590; font-size: 13px;"
+        _TOGGLE_LBL_ON = "color: #e6edf3; font-weight: 600; font-size: 13px;"
+        _TOGGLE_LBL_OFF = "color: #7d8590; font-size: 13px;"
+        _TOGGLE_LBL_ACT = "color: #60a5fa; font-weight: 600; font-size: 13px;"
 
-        self._customer_field = QLineEdit()
-        self._customer_field.setPlaceholderText("Name")
-        self._customer_field.setFixedWidth(130)
-        row1.addWidget(self._customer_field)
+        # Customer field — editable combo showing known jobs
+        cust_lbl = QLabel("Customer:")
+        cust_lbl.setStyleSheet(_LBL)
+        row1.addWidget(cust_lbl, alignment=_V)
+
+        self._customer_combo = QComboBox()
+        self._customer_combo.setEditable(True)
+        self._customer_combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        _le = self._customer_combo.lineEdit()
+        if _le is not None:
+            _le.setPlaceholderText("Name")
+        self._customer_combo.setFixedWidth(160)
+        row1.addWidget(self._customer_combo, alignment=_V)
 
         # Job # field
         job_lbl = QLabel("Job #:")
-        job_lbl.setStyleSheet("color: #7d8590;")
-        row1.addWidget(job_lbl)
+        job_lbl.setStyleSheet(_LBL)
+        row1.addWidget(job_lbl, alignment=_V)
 
         self._job_field = QLineEdit()
         self._job_field.setPlaceholderText("12345")
         self._job_field.setFixedWidth(90)
-        row1.addWidget(self._job_field)
+        row1.addWidget(self._job_field, alignment=_V)
 
         # Device field
         dev_lbl = QLabel("Device:")
-        dev_lbl.setStyleSheet("color: #7d8590;")
-        row1.addWidget(dev_lbl)
+        dev_lbl.setStyleSheet(_LBL)
+        row1.addWidget(dev_lbl, alignment=_V)
 
         self._device_field = QLineEdit()
         self._device_field.setPlaceholderText("Model")
         self._device_field.setFixedWidth(140)
-        row1.addWidget(self._device_field)
+        row1.addWidget(self._device_field, alignment=_V)
 
         # Flexible spacer
         row1.addStretch()
 
-        # ── Mode toggle: Simple | Advanced ──────────────────────────────────
-        self._simple_btn = QPushButton("Simple")
-        self._simple_btn.setProperty("class", "toggle")
-        self._simple_btn.setProperty("checked", "true")
-        self._simple_btn.setFixedHeight(32)
-        refresh_style(self._simple_btn)
-        row1.addWidget(self._simple_btn)
+        # ── Helper: build a labelled toggle container ─────────────────────────
+        def _toggle_group(left: str, right: str) -> tuple[QWidget, QHBoxLayout]:
+            w = QWidget()
+            lay = QHBoxLayout(w)
+            lay.setContentsMargins(0, 0, 0, 0)
+            lay.setSpacing(7)
+            return w, lay
 
-        self._advanced_btn = QPushButton("Advanced")
-        self._advanced_btn.setProperty("class", "toggle")
-        self._advanced_btn.setProperty("checked", "false")
-        self._advanced_btn.setFixedHeight(32)
-        refresh_style(self._advanced_btn)
-        row1.addWidget(self._advanced_btn)
+        # ── Mode toggle: Simple —●— Advanced ─────────────────────────────────
+        mode_row, mode_lay = _toggle_group("Simple", "Advanced")
 
-        # Separator space
-        row1.addSpacing(12)
+        self._simple_lbl = QLabel("Simple")
+        self._simple_lbl.setStyleSheet(_TOGGLE_LBL_ON)
+        mode_lay.addWidget(self._simple_lbl, alignment=_V)
 
-        # ── Report type toggle: Before | After ───────────────────────────────
-        self._before_btn = QPushButton("Before")
-        self._before_btn.setProperty("class", "toggle")
-        self._before_btn.setProperty("checked", "true")
-        self._before_btn.setFixedHeight(32)
-        refresh_style(self._before_btn)
-        row1.addWidget(self._before_btn)
+        self._mode_toggle = ToggleSwitch(checked=False)
+        mode_lay.addWidget(self._mode_toggle, alignment=_V)
 
-        self._after_btn = QPushButton("After")
-        self._after_btn.setProperty("class", "toggle")
-        self._after_btn.setProperty("checked", "false")
-        self._after_btn.setFixedHeight(32)
-        refresh_style(self._after_btn)
-        row1.addWidget(self._after_btn)
+        self._advanced_lbl = QLabel("Advanced")
+        self._advanced_lbl.setStyleSheet(_TOGGLE_LBL_OFF)
+        mode_lay.addWidget(self._advanced_lbl, alignment=_V)
 
-        # Separator space
+        row1.addWidget(mode_row, alignment=_V)
+        row1.addSpacing(16)
+
+        # ── Report toggle: Before —●— After ──────────────────────────────────
+        report_row, report_lay = _toggle_group("Before", "After")
+
+        self._before_lbl = QLabel("Before")
+        self._before_lbl.setStyleSheet(_TOGGLE_LBL_ON)
+        report_lay.addWidget(self._before_lbl, alignment=_V)
+
+        self._report_toggle = ToggleSwitch(checked=False)
+        report_lay.addWidget(self._report_toggle, alignment=_V)
+
+        self._after_lbl = QLabel("After")
+        self._after_lbl.setStyleSheet(_TOGGLE_LBL_OFF)
+        report_lay.addWidget(self._after_lbl, alignment=_V)
+
+        row1.addWidget(report_row, alignment=_V)
         row1.addSpacing(12)
 
         # ── Action button ────────────────────────────────────────────────────
@@ -194,9 +214,19 @@ class HeaderBar(QFrame):
         self._action_btn.setFixedHeight(32)
         self._action_btn.setEnabled(False)
         refresh_style(self._action_btn)
-        row1.addWidget(self._action_btn)
+        row1.addWidget(self._action_btn, alignment=_V)
+
+        self._settings_btn = QPushButton("⚙")
+        self._settings_btn.setFixedSize(32, 32)
+        self._settings_btn.setToolTip("Settings")
+        row1.addWidget(self._settings_btn, alignment=_V)
 
         root.addLayout(row1)
+
+        # store style strings for reuse in _select_*
+        self._toggle_lbl_on = _TOGGLE_LBL_ON
+        self._toggle_lbl_off = _TOGGLE_LBL_OFF
+        self._toggle_lbl_act = _TOGGLE_LBL_ACT
 
         # ── Row 2: elevation warning + status message ────────────────────────
         row2 = QHBoxLayout()
@@ -231,22 +261,34 @@ class HeaderBar(QFrame):
     # ------------------------------------------------------------------
 
     def _connect_signals(self) -> None:
-        # Mode toggles
-        self._simple_btn.clicked.connect(lambda: self._select_mode("simple"))
-        self._advanced_btn.clicked.connect(lambda: self._select_mode("advanced"))
+        # Mode toggle
+        self._mode_toggle.toggled.connect(
+            lambda checked: self._select_mode("advanced" if checked else "simple")
+        )
 
-        # Report type toggles
-        self._before_btn.clicked.connect(lambda: self._select_report_type("before"))
-        self._after_btn.clicked.connect(lambda: self._select_report_type("after"))
+        # Report type toggle
+        self._report_toggle.toggled.connect(
+            lambda checked: self._select_report_type("after" if checked else "before")
+        )
 
         # Action button
         self._action_btn.clicked.connect(self._on_action_clicked)
 
+        # Customer selection → auto-fill
+        self._customer_combo.activated.connect(self._on_customer_activated)
+
         # Job # validation
         self._job_field.textChanged.connect(self._update_action_button)
+        self._customer_combo.editTextChanged.connect(self._update_action_button)
 
         # Restart button
         self._restart_btn.clicked.connect(_restart_as_admin)
+
+        # Settings button
+        self._settings_btn.clicked.connect(self.settings_clicked)
+
+        # Load existing jobs into customer combo
+        self._refresh_customers()
 
     # ------------------------------------------------------------------
     # Public API
@@ -258,7 +300,7 @@ class HeaderBar(QFrame):
 
     def customer(self) -> str:
         """Return current customer text."""
-        return self._customer_field.text()
+        return self._customer_combo.currentText()
 
     def device(self) -> str:
         """Return current device text."""
@@ -266,15 +308,11 @@ class HeaderBar(QFrame):
 
     def mode(self) -> str:
         """Return current mode: 'simple' | 'advanced'."""
-        if self._simple_btn.property("checked") == "true":
-            return "simple"
-        return "advanced"
+        return "advanced" if self._mode_toggle.isChecked() else "simple"
 
     def report_type(self) -> str:
         """Return current report type: 'before' | 'after'."""
-        if self._before_btn.property("checked") == "true":
-            return "before"
-        return "after"
+        return "after" if self._report_toggle.isChecked() else "before"
 
     def set_action_state(self, state: str) -> None:
         """Transition the action button to the given state.
@@ -326,21 +364,19 @@ class HeaderBar(QFrame):
     # ------------------------------------------------------------------
 
     def _select_mode(self, mode: str) -> None:
-        """Switch the mode toggle selection and emit signal."""
-        is_simple = mode == "simple"
-        self._simple_btn.setProperty("checked", "true" if is_simple else "false")
-        self._advanced_btn.setProperty("checked", "false" if is_simple else "true")
-        refresh_style(self._simple_btn)
-        refresh_style(self._advanced_btn)
+        """Update label styles and emit mode_changed signal."""
+        is_advanced = mode == "advanced"
+        self._simple_lbl.setStyleSheet(self._toggle_lbl_off if is_advanced else self._toggle_lbl_on)
+        self._advanced_lbl.setStyleSheet(
+            self._toggle_lbl_act if is_advanced else self._toggle_lbl_off
+        )
         self.mode_changed.emit(mode)
 
     def _select_report_type(self, report_type: str) -> None:
-        """Switch the report type toggle selection and emit signal."""
-        is_before = report_type == "before"
-        self._before_btn.setProperty("checked", "true" if is_before else "false")
-        self._after_btn.setProperty("checked", "false" if is_before else "true")
-        refresh_style(self._before_btn)
-        refresh_style(self._after_btn)
+        """Update label styles and emit report_type_changed signal."""
+        is_after = report_type == "after"
+        self._before_lbl.setStyleSheet(self._toggle_lbl_off if is_after else self._toggle_lbl_on)
+        self._after_lbl.setStyleSheet(self._toggle_lbl_act if is_after else self._toggle_lbl_off)
         self.report_type_changed.emit(report_type)
 
     def _on_action_clicked(self) -> None:
@@ -360,3 +396,41 @@ class HeaderBar(QFrame):
             self.set_action_state("run_all")
         else:
             self.set_action_state("run_all_disabled")
+
+    def _refresh_customers(self) -> None:
+        """Populate the customer combo with jobs found in the reports directory."""
+        from src.utils.file_manager import scan_existing_jobs
+
+        self._known_jobs: list[dict] = scan_existing_jobs()
+
+        self._customer_combo.blockSignals(True)
+        self._customer_combo.clear()
+        for job in self._known_jobs:
+            label = job["customer_name"]
+            if job["job_number"]:
+                label += f"  —  Job #{job['job_number']}"
+            self._customer_combo.addItem(label)
+        # Restore blank state so placeholder shows
+        self._customer_combo.setCurrentIndex(-1)
+        self._customer_combo.blockSignals(False)
+
+    def _on_customer_activated(self, index: int) -> None:
+        """Auto-fill fields and set report type when an existing job is selected."""
+        if index < 0 or index >= len(self._known_jobs):
+            return
+        job = self._known_jobs[index]
+
+        # Fill text fields
+        self._customer_combo.setEditText(job["customer_name"])
+        if job["job_number"]:
+            self._job_field.setText(job["job_number"])
+        if job["device_description"]:
+            self._device_field.setText(job["device_description"])
+
+        # If a before report exists, default to after
+        if job["has_before"] and not self._report_toggle.isChecked():
+            self._report_toggle.setChecked(True)
+            self._select_report_type("after")
+        elif not job["has_before"] and self._report_toggle.isChecked():
+            self._report_toggle.setChecked(False)
+            self._select_report_type("before")
