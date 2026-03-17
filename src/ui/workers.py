@@ -118,7 +118,7 @@ class ReportWorker(QThread):
             # Comparison report (only when both before and after exist)
             other_type = "after" if report_type == "before" else "before"
             other_html = job_dir / other_type / f"{other_type}.html"
-            if other_html.exists() and html_path.exists():
+            if other_html.exists() and html_content:
                 self.status.emit("Generating comparison report…")
                 comparison_html = generate_comparison(job_dir, job)
                 if comparison_html:
