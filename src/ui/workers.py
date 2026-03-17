@@ -65,64 +65,71 @@ class ReportWorker(QThread):
     error = Signal(str)  # error message if generation failed
     status = Signal(str)  # progress messages ("Rendering HTML…", etc.)
 
-    def __init__(self, job, results: list, parent=None) -> None:
+    def __init__(self, job, results: list, settings, parent=None) -> None:
         super().__init__(parent)
         self._job = job
         self._results = results
+        self._settings = settings
 
     def run(self) -> None:
         try:
+            from pathlib import Path
+
+            from src.config import REPORTS_DIR_NAME
             from src.report.diff import generate_comparison
             from src.report.generator import assemble_report
             from src.report.html_render import render_html
             from src.report.pdf_render import render_pdf
-            from src.utils.file_manager import get_job_dir, get_report_dir
 
             job = self._job
             results = self._results
+            fmt = self._settings.output_format  # "html_pdf" | "html_only" | "pdf_only"
             report_type = job.report_type.value
 
             # Build report object
             report = assemble_report(job, results)
 
-            report_dir = get_report_dir(job)
-            job_dir = get_job_dir(job)
+            # Derive save directory from settings.save_path
+            base = Path(self._settings.save_path)
+            report_dir = base / REPORTS_DIR_NAME / job.folder_name() / report_type
+            job_dir = base / REPORTS_DIR_NAME / job.folder_name()
             report_dir.mkdir(parents=True, exist_ok=True)
 
-            self.status.emit("Rendering HTML…")
-            html_content = render_html(report)
             html_path = report_dir / f"{report_type}.html"
-            html_path.write_text(html_content, encoding="utf-8")
-
-            self.status.emit("Rendering PDF…")
             pdf_path = report_dir / f"{report_type}.pdf"
-            pdf_ok = render_pdf(html_content, pdf_path)
 
-            # Check for the other report type for comparison
+            html_content: str = ""
+
+            if fmt in ("html_pdf", "html_only"):
+                self.status.emit("Rendering HTML…")
+                html_content = render_html(report)
+                html_path.write_text(html_content, encoding="utf-8")
+
+            if fmt in ("html_pdf", "pdf_only"):
+                self.status.emit("Rendering PDF…")
+                if not html_content:
+                    # pdf_only: render HTML in-memory to feed to PDF renderer
+                    html_content = render_html(report)
+                render_pdf(html_content, pdf_path)
+
+            # open_path: prefer HTML when available, fall back to PDF
+            open_path: Path = html_path if html_path.exists() else pdf_path
+
+            # Comparison report (only when both before and after exist)
             other_type = "after" if report_type == "before" else "before"
             other_html = job_dir / other_type / f"{other_type}.html"
-            open_path: Path = html_path
-
-            if other_html.exists():
+            if other_html.exists() and html_path.exists():
                 self.status.emit("Generating comparison report…")
                 comparison_html = generate_comparison(job_dir, job)
                 if comparison_html:
                     comp_html_path = job_dir / "comparison.html"
                     comp_html_path.write_text(comparison_html, encoding="utf-8")
-                    comp_pdf_path = job_dir / "comparison.pdf"
-                    render_pdf(comparison_html, comp_pdf_path)
+                    if fmt in ("html_pdf", "pdf_only"):
+                        render_pdf(comparison_html, job_dir / "comparison.pdf")
                     open_path = comp_html_path
 
-            # Determine PDF path for the done signal
-            if pdf_ok:
-                self.status.emit("Reports saved (HTML + PDF)")
-                pdf_path_str = str(pdf_path)
-            else:
-                self.status.emit("HTML report saved (PDF skipped — check logs)")
-                pdf_path_str = ""
-
-            # Emit done with paths
-            self.done.emit(open_path.as_uri(), pdf_path_str)
+            self.status.emit("Reports saved.")
+            self.done.emit(open_path.as_uri(), str(pdf_path) if pdf_path.exists() else "")
 
         except Exception as exc:
             self.error.emit(str(exc))

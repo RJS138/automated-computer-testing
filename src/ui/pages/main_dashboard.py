@@ -691,7 +691,9 @@ class MainDashboard(QWidget):
         job = self._window.job_info
         results = self._window.test_results
 
-        self._report_worker = ReportWorker(job=job, results=results, parent=self)
+        self._report_worker = ReportWorker(
+            job=job, results=results, settings=self._window.settings, parent=self
+        )
         self._report_worker.status.connect(self._on_report_status)
         self._report_worker.done.connect(self._on_report_done)
         self._report_worker.error.connect(self._on_report_error)
