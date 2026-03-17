@@ -20,7 +20,6 @@ Colour tokens
 QSS_DARK = """
 /* ── Global reset ───────────────────────────────────────────── */
 * {
-    font-family: "Segoe UI", "SF Pro Display", "Inter", "Helvetica Neue", Arial, sans-serif;
     font-size: 13px;
     color: #e6edf3;
     outline: none;
@@ -366,6 +365,69 @@ QFrame[class="test-card"][status="error"] {
 
 QFrame[class="test-card"][status="skip"] {
     border-color: #30363d;
+}
+
+/* ── Segmented (split) buttons ──────────────────────────────── */
+QPushButton[class="seg-left"],
+QPushButton[class="seg-right"] {
+    background-color: #161b22;
+    color: #7d8590;
+    border: 1px solid #30363d;
+    padding: 7px 14px;
+    font-weight: 500;
+    min-height: 32px;
+}
+
+QPushButton[class="seg-left"] {
+    border-top-left-radius: 6px;
+    border-bottom-left-radius: 6px;
+    border-top-right-radius: 0px;
+    border-bottom-right-radius: 0px;
+    border-right-width: 0px;
+}
+
+QPushButton[class="seg-right"] {
+    border-top-left-radius: 0px;
+    border-bottom-left-radius: 0px;
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
+}
+
+QPushButton[class="seg-mid"] {
+    background-color: #161b22;
+    color: #7d8590;
+    border: 1px solid #30363d;
+    padding: 7px 14px;
+    font-weight: 500;
+    min-height: 32px;
+    border-radius: 0px;
+    border-right-width: 0px;
+}
+
+QPushButton[class="seg-mid"]:hover {
+    background-color: #1c2128;
+    color: #e6edf3;
+}
+
+QPushButton[class="seg-mid"][checked="true"] {
+    background-color: #1e3a5f;
+    border-color: #3b82f6;
+    color: #60a5fa;
+    font-weight: 600;
+}
+
+QPushButton[class="seg-left"]:hover,
+QPushButton[class="seg-right"]:hover {
+    background-color: #1c2128;
+    color: #e6edf3;
+}
+
+QPushButton[class="seg-left"][checked="true"],
+QPushButton[class="seg-right"][checked="true"] {
+    background-color: #1e3a5f;
+    border-color: #3b82f6;
+    color: #60a5fa;
+    font-weight: 600;
 }
 
 /* ── Separators ─────────────────────────────────────────────── */
