@@ -224,30 +224,15 @@ class CpuTest(BaseTest):
 
         data: dict = {}
 
-        # --- CPU info ---
-        try:
-            import cpuinfo  # type: ignore
-
-            info = cpuinfo.get_cpu_info()
-            data["brand"] = info.get("brand_raw") or "Unknown"
-            data["arch"] = info.get("arch") or "Unknown"
-            # hz_advertised_friendly is None on Apple Silicon
-            data["hz_advertised"] = info.get("hz_advertised_friendly") or None
-        except Exception:
-            data["brand"] = "Unknown"
-            data["arch"] = "Unknown"
-            data["hz_advertised"] = None
-
-        # macOS fallback for clock speed
-        if not data["hz_advertised"] and platform.system() == "Darwin":
-            data["hz_advertised"] = _get_clock_speed_macos()
-
-        # Apple Silicon note when frequency truly isn't available
-        if not data["hz_advertised"] and platform.system() == "Darwin":
-            data["hz_advertised"] = "N/A (Apple Silicon — heterogeneous cores, no single clock)"
-
+        # --- CPU info (basic — hardware identity is in system_info) ---
         data["physical_cores"] = psutil.cpu_count(logical=False) or 0
         data["logical_cores"] = psutil.cpu_count(logical=True) or 0
+        data["brand"] = platform.processor() or "Unknown"
+
+        # Clock speed (macOS only; not available on Apple Silicon)
+        data["hz_advertised"] = None
+        if platform.system() == "Darwin":
+            data["hz_advertised"] = _get_clock_speed_macos()
 
         # --- Idle/baseline temp ---
         loop = asyncio.get_event_loop()
@@ -321,29 +306,35 @@ class CpuTest(BaseTest):
         # --- Determine status ---
         peak = data["temp_peak"]
         idle = data["temp_idle"]
+        threads = data["logical_cores"]
+        dur = duration
+
+        peak_str = f"{peak}°C" if peak is not None else "no temp"
+        idle_str = f"idle {idle}°C" if idle is not None else ""
+        sub = f"{threads} threads · {dur}s stress" + (f" · {idle_str}" if idle_str else "")
 
         if peak is not None and peak >= thresh["fail"]:
+            data["card_sub_detail"] = sub
             self.result.mark_fail(
-                summary=f"CPU overheating: peak {peak}°C (limit {thresh['fail']}°C)",
+                summary=f"Overheating: peak {peak}°C (limit {thresh['fail']}°C)",
                 data=data,
             )
         elif peak is not None and peak >= thresh["load_warn"]:
-            note_suffix = " — see report for spec details" if thresh.get("note") else ""
+            data["card_sub_detail"] = sub
             self.result.mark_warn(
-                summary=f"CPU running hot: peak {peak}°C (warn ≥{thresh['load_warn']}°C{note_suffix})",
+                summary=f"Running hot: peak {peak}°C (warn ≥{thresh['load_warn']}°C)",
                 data=data,
             )
         elif idle is not None and idle >= thresh["idle_warn"]:
+            data["card_sub_detail"] = sub
             self.result.mark_warn(
-                summary=f"CPU idle temp elevated: {idle}°C (warn ≥{thresh['idle_warn']}°C) — check cooling",
+                summary=f"Idle temp elevated: {idle}°C — check cooling",
                 data=data,
             )
         else:
-            freq_str = data.get("hz_advertised") or "N/A"
-            temp_str = f"{peak}°C" if peak is not None else "N/A (see report)"
+            data["card_sub_detail"] = sub
             self.result.mark_pass(
-                summary=f"{data['brand']} — {data['logical_cores']} threads — "
-                f"{freq_str} — peak temp {temp_str}",
+                summary=f"Peak {peak_str} · {threads}T · {dur}s stress",
                 data=data,
             )
 

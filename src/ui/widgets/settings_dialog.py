@@ -89,8 +89,7 @@ class SettingsDialog(QDialog):
 
         # ── Buttons ───────────────────────────────────────────────────────────
         btns = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Save
-            | QDialogButtonBox.StandardButton.Cancel
+            QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
         )
         btns.accepted.connect(self.accept)
         btns.rejected.connect(self.reject)

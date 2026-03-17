@@ -17,6 +17,11 @@ from PySide6.QtWidgets import (
 from ..stylesheet import refresh_style
 
 
+def _list_field(key: str) -> Callable[[dict], str | None]:
+    """Return a lambda that joins a list field with newlines, or None if absent."""
+    return lambda d: "\n".join(d[key]) if d.get(key) else None
+
+
 class SystemInfoPanel(QFrame):
     """
     Fixed-width left-column panel showing hardware summary.
@@ -29,14 +34,37 @@ class SystemInfoPanel(QFrame):
         panel.set_overall("pass")  # update overall badge
     """
 
-    # Maps display labels to callables that extract values from result.data
-    _FIELD_MAP: ClassVar[list[tuple[str, Callable[[dict], str]]]] = [
-        ("Model",    lambda d: d.get("chassis_model") or d.get("board_model") or "—"),
-        ("Serial",   lambda d: d.get("board_serial") or "—"),
-        ("OS",       lambda d: " ".join(filter(None, [d.get("os_name"), d.get("os_version")])) or "—"),
-        ("Firmware", lambda d: d.get("bios_version") or "—"),
-        ("CPU",      lambda d: d.get("processor_marketing") or d.get("processor") or "—"),
-        ("Arch",     lambda d: d.get("machine_arch") or "—"),
+    # Maps display labels to callables that extract values from result.data.
+    # Return None to skip the row entirely.
+    _FIELD_MAP: ClassVar[list[tuple[str, Callable[[dict], str | None]]]] = [
+        (
+            "Model",
+            lambda d: (
+                (d.get("chassis_model") or d.get("board_model") or "—")
+                + (f"  {d['apple_model_number']}" if d.get("apple_model_number") else "")
+            ),
+        ),
+        ("Serial", lambda d: d.get("board_serial") or None),
+        (
+            "OS",
+            lambda d: " ".join(filter(None, [d.get("os_name"), d.get("os_version")])) or None,
+        ),
+        ("Firmware", lambda d: d.get("bios_version") or None),
+        (
+            "CPU",
+            lambda d: (
+                (d.get("processor_marketing") or d.get("processor") or None)
+                and (
+                    (d.get("processor_marketing") or d.get("processor", ""))
+                    + (f"\n{d['cpu_cores']}" if d.get("cpu_cores") else "")
+                )
+            ),
+        ),
+        ("Arch", lambda d: d.get("machine_arch") or None),
+        ("RAM", lambda d: d.get("ram_total") or None),
+        ("GPU", _list_field("gpu_list")),
+        ("Storage", _list_field("storage_list")),
+        ("Fans", _list_field("fan_list")),
     ]
 
     # Badge colours by status
@@ -52,7 +80,7 @@ class SystemInfoPanel(QFrame):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self.setFixedWidth(180)
+        self.setFixedWidth(220)
         self.setProperty("class", "panel")
 
         self._loading_label: QLabel | None = None
@@ -80,17 +108,17 @@ class SystemInfoPanel(QFrame):
         # ── Scroll area for rows (hidden until populate() called) ──────────────────
         self._scroll_area = QScrollArea()
         self._scroll_area.setWidgetResizable(True)
-        self._scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self._scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._scroll_area.hide()
 
         # Container widget for rows
         self._rows_widget = QWidget()
         self._rows_layout = QVBoxLayout(self._rows_widget)
         self._rows_layout.setContentsMargins(0, 0, 0, 0)
-        self._rows_layout.setSpacing(6)
+        self._rows_layout.setSpacing(4)
 
         self._scroll_area.setWidget(self._rows_widget)
-        outer.addWidget(self._scroll_area)
+        outer.addWidget(self._scroll_area, stretch=1)
 
         # ── Separator line ────────────────────────────────────────────────────────
         self._separator = QFrame()
@@ -107,9 +135,6 @@ class SystemInfoPanel(QFrame):
         self._apply_overall_style("waiting")
         outer.addWidget(self._overall_label)
 
-        # ── Stretch remaining space ───────────────────────────────────────────────
-        outer.addStretch()
-
     def set_loading(self) -> None:
         """Show 'Loading…' state; hide scroll area and overall badge."""
         if self._loading_label:
@@ -122,42 +147,45 @@ class SystemInfoPanel(QFrame):
             self._overall_label.hide()
 
     def populate(self, data: dict) -> None:
-        """Populate rows from system_info result. Keys not in data show as '—'."""
+        """Populate rows from system_info result. Rows returning None are skipped."""
         if not self._rows_layout or not self._scroll_area or not self._loading_label:
             return
 
         # Clear previous rows
         while self._rows_layout.count():
             item = self._rows_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+            if item is not None:
+                w = item.widget()
+                if w is not None:
+                    w.deleteLater()
 
-        # Add rows for each field in the map
+        # Add rows for each field — skip if extractor returns None
         for label, extractor in self._FIELD_MAP:
             value = extractor(data)
+            if value is None:
+                continue
 
-            # Key label (muted)
-            key_lbl = QLabel(label)
+            # Section separator above each group of key+value
+            key_lbl = QLabel(label.upper())
             key_lbl.setProperty("class", "muted")
-            key_lbl.setStyleSheet("font-size: 10px;")
+            key_lbl.setStyleSheet("font-size: 9px; letter-spacing: 0.5px; margin-top: 6px;")
             refresh_style(key_lbl)
 
-            # Value label
             value_lbl = QLabel(str(value))
             value_lbl.setStyleSheet("font-size: 11px;")
             value_lbl.setWordWrap(True)
+            value_lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
 
-            # Add to layout
             self._rows_layout.addWidget(key_lbl)
             self._rows_layout.addWidget(value_lbl)
 
-        # Add spacing at end
         self._rows_layout.addStretch()
 
         # Hide loading label; show scroll area, separator, and overall badge
         self._loading_label.hide()
         self._scroll_area.show()
-        self._separator.show()
+        if self._separator:
+            self._separator.show()
         if self._overall_label:
             self._overall_label.show()
 

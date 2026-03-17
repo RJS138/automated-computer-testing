@@ -115,9 +115,7 @@ class TestRowWidget(QWidget):
 
         if name in _MANUAL_TESTS:
             tag = QLabel("MANUAL")
-            tag.setStyleSheet(
-                "color: #60a5fa; font-size: 9px; font-weight: 600;"
-            )
+            tag.setStyleSheet("color: #60a5fa; font-size: 9px; font-weight: 600;")
             name_row.addWidget(tag)
         elif name in _ADV_TESTS:
             tag = QLabel("ADV")
@@ -138,7 +136,7 @@ class TestRowWidget(QWidget):
 
         # Status label
         self._status_lbl = QLabel("WAITING")
-        self._status_lbl.setStyleSheet(f"color: #7d8590; font-size: 10px; font-weight: 600;")
+        self._status_lbl.setStyleSheet("color: #7d8590; font-size: 10px; font-weight: 600;")
         self._status_lbl.setFixedWidth(60)
         row.addWidget(self._status_lbl)
 
@@ -169,9 +167,7 @@ class TestRowWidget(QWidget):
             label = "RUNNING…"
         self._status_lbl.setText(label)
         color = _STATUS_COLORS.get(status, "#7d8590")
-        self._status_lbl.setStyleSheet(
-            f"color: {color}; font-size: 10px; font-weight: 600;"
-        )
+        self._status_lbl.setStyleSheet(f"color: {color}; font-size: 10px; font-weight: 600;")
 
         # Update detail line
         if summary and status != "waiting":

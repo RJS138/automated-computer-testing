@@ -36,6 +36,68 @@ def _get_info_windows() -> dict:
             info["os_build"] = sys.BuildNumber
             info["install_date"] = sys.InstallDate
 
+        # CPU details
+        try:
+            procs = c.Win32_Processor()
+            if procs:
+                cpu = procs[0]
+                info["processor_marketing"] = cpu.Name.strip() if cpu.Name else None
+                physical = getattr(cpu, "NumberOfCores", None)
+                logical = getattr(cpu, "NumberOfLogicalProcessors", None)
+                if physical and logical:
+                    info["cpu_cores"] = f"{physical} cores / {logical} threads"
+                elif physical:
+                    info["cpu_cores"] = f"{physical} cores"
+        except Exception:
+            pass
+
+        # RAM total
+        try:
+            total_bytes = sum(int(m.Capacity) for m in c.Win32_PhysicalMemory() if m.Capacity)
+            if total_bytes:
+                info["ram_total"] = f"{total_bytes / (1024**3):.0f} GB"
+        except Exception:
+            pass
+
+        # GPU(s)
+        try:
+            gpu_list = []
+            for gpu in c.Win32_VideoController():
+                name = (gpu.Name or "").strip()
+                if not name:
+                    continue
+                vram_bytes = getattr(gpu, "AdapterRAM", None)
+                vram_str = (
+                    f"{int(vram_bytes) / (1024**3):.0f} GB VRAM"
+                    if vram_bytes and int(vram_bytes) > 0
+                    else ""
+                )
+                entry = name
+                if vram_str:
+                    entry += f" ({vram_str})"
+                gpu_list.append(entry)
+            if gpu_list:
+                info["gpu_list"] = gpu_list
+        except Exception:
+            pass
+
+        # Storage
+        try:
+            storage_list = []
+            for disk in c.Win32_DiskDrive():
+                name = (disk.Model or disk.Caption or "").strip()
+                size_bytes = int(disk.Size) if disk.Size else 0
+                size_gb = size_bytes / (1024**3)
+                entry = name
+                if size_gb:
+                    entry += f" · {size_gb:.0f} GB"
+                if entry:
+                    storage_list.append(entry)
+            if storage_list:
+                info["storage_list"] = storage_list
+        except Exception:
+            pass
+
     except Exception as exc:
         info["error"] = str(exc)
     return info
@@ -43,6 +105,7 @@ def _get_info_windows() -> dict:
 
 def _get_info_darwin() -> dict:
     """Query system info on macOS using system_profiler, sw_vers, and sysctl."""
+    import json
     import re
 
     info: dict = {}
@@ -84,6 +147,10 @@ def _get_info_darwin() -> dict:
                 info["bios_version"] = line.split(":", 1)[1].strip()
             elif line.startswith("Chip:") or line.startswith("Processor Name:"):
                 info["processor_marketing"] = line.split(":", 1)[1].strip()
+            elif line.startswith("Total Number of Cores:"):
+                info["cpu_cores"] = line.split(":", 1)[1].strip()
+            elif line.startswith("Memory:"):
+                info["ram_total"] = line.split(":", 1)[1].strip()
     except Exception:
         pass
 
@@ -133,6 +200,96 @@ def _get_info_darwin() -> dict:
     except Exception:
         pass
 
+    # GPU(s) from SPDisplaysDataType
+    try:
+        result = subprocess.run(
+            ["system_profiler", "SPDisplaysDataType", "-json"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        gpu_data = json.loads(result.stdout)
+        gpu_list = []
+        for gpu in gpu_data.get("SPDisplaysDataType", []):
+            name = gpu.get("_name", "").strip()
+            if not name:
+                continue
+            vram = gpu.get("spdisplays_vram", "").strip()
+            cores = gpu.get("spdisplays_cores", "").strip()
+            parts = [name]
+            details = []
+            if vram and vram.lower() not in ("shared", "dynamic, max"):
+                details.append(vram)
+            if cores:
+                details.append(f"{cores}-core")
+            if details:
+                parts.append(f"({', '.join(details)})")
+            gpu_list.append(" ".join(parts))
+        if gpu_list:
+            info["gpu_list"] = gpu_list
+    except Exception:
+        pass
+
+    # Storage from SPStorageDataType — deduplicated by physical device name
+    try:
+        result = subprocess.run(
+            ["system_profiler", "SPStorageDataType", "-json"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        storage_data = json.loads(result.stdout)
+        seen_devices: set[str] = set()
+        storage_list = []
+        for vol in storage_data.get("SPStorageDataType", []):
+            phys = vol.get("physical_drive") or {}
+            device_name = phys.get("device_name", "").strip()
+            # Deduplicate: multiple volumes can share one physical drive
+            dedup_key = device_name or vol.get("bsd_name", vol.get("_name", ""))
+            if dedup_key in seen_devices:
+                continue
+            seen_devices.add(dedup_key)
+            size_bytes = vol.get("size_in_bytes", 0)
+            size_bytes = size_bytes if isinstance(size_bytes, int) else 0
+            size_gb = size_bytes / (1024**3)
+            medium = phys.get("medium_type", "") or phys.get("protocol", "")
+            display = device_name or vol.get("_name", "Unknown")
+            entry = display
+            if size_gb:
+                entry += f" · {size_gb:.0f} GB"
+            if medium:
+                entry += f" ({medium.upper()})"
+            storage_list.append(entry)
+        if storage_list:
+            info["storage_list"] = storage_list
+    except Exception:
+        pass
+
+    # Fans from SPPowerDataType
+    try:
+        result = subprocess.run(
+            ["system_profiler", "SPPowerDataType", "-json"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        power_data = json.loads(result.stdout)
+        fan_list = []
+        for entry in power_data.get("SPPowerDataType", []):
+            # Key varies by macOS version / hardware
+            fans_rpm = entry.get("sppower_cpu_fan_speed_rpm")
+            if isinstance(fans_rpm, list):
+                for i, rpm in enumerate(fans_rpm, 1):
+                    fan_list.append(f"Fan {i}: {rpm} RPM")
+            elif isinstance(fans_rpm, (int, float)):
+                fan_list.append(f"Fan: {fans_rpm} RPM")
+            elif isinstance(fans_rpm, str):
+                fan_list.append(f"Fan: {fans_rpm}")
+        if fan_list:
+            info["fan_list"] = fan_list
+    except Exception:
+        pass
+
     info["bios_vendor"] = "Apple"
     info["board_manufacturer"] = "Apple"
     info["chassis_manufacturer"] = "Apple"
@@ -164,17 +321,89 @@ def _get_info_linux() -> dict:
 
     # OS info
     try:
-        result = subprocess.run(
-            ["cat", "/etc/os-release"], capture_output=True, text=True, timeout=3
-        )
-        for line in result.stdout.splitlines():
-            if line.startswith("PRETTY_NAME="):
-                info["os_name"] = line.split("=", 1)[1].strip('"')
+        with open("/etc/os-release") as f:
+            for line in f:
+                if line.startswith("PRETTY_NAME="):
+                    info["os_name"] = line.split("=", 1)[1].strip().strip('"')
     except Exception:
         pass
 
     info["os_version"] = platform.release()
     info["os_build"] = platform.version()
+
+    # CPU details
+    try:
+        result = subprocess.run(["lscpu"], capture_output=True, text=True, timeout=5)
+        for line in result.stdout.splitlines():
+            if line.startswith("Model name:"):
+                info["processor_marketing"] = line.split(":", 1)[1].strip()
+            elif line.startswith("CPU(s):"):
+                logical = line.split(":", 1)[1].strip()
+                info["cpu_cores"] = f"{logical} CPUs"
+            elif line.startswith("Core(s) per socket:"):
+                info["_linux_cores_per_socket"] = line.split(":", 1)[1].strip()
+            elif line.startswith("Socket(s):"):
+                info["_linux_sockets"] = line.split(":", 1)[1].strip()
+        # Build a better core string if available
+        cps = info.pop("_linux_cores_per_socket", None)
+        sockets = info.pop("_linux_sockets", None)
+        if cps and sockets:
+            physical = int(cps) * int(sockets)
+            info["cpu_cores"] = f"{physical} cores"
+    except Exception:
+        pass
+
+    # RAM total
+    try:
+        import psutil
+
+        total_bytes = psutil.virtual_memory().total
+        info["ram_total"] = f"{total_bytes / (1024**3):.0f} GB"
+    except Exception:
+        pass
+
+    # GPU(s) via lspci
+    try:
+        result = subprocess.run(["lspci", "-mm"], capture_output=True, text=True, timeout=5)
+        gpu_list = []
+        for line in result.stdout.splitlines():
+            lower = line.lower()
+            if "vga" in lower or "display" in lower or "3d" in lower:
+                # lspci -mm format: slot "class" "vendor" "device" ...
+                parts = line.split('"')
+                # parts[3] = vendor, parts[5] = device
+                vendor = parts[3] if len(parts) > 3 else ""
+                device = parts[5] if len(parts) > 5 else ""
+                name = f"{vendor} {device}".strip()
+                if name:
+                    gpu_list.append(name)
+        if gpu_list:
+            info["gpu_list"] = gpu_list
+    except Exception:
+        pass
+
+    # Storage via lsblk
+    try:
+        result = subprocess.run(
+            ["lsblk", "-d", "-o", "NAME,SIZE,MODEL,TYPE", "--noheadings"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        storage_list = []
+        for line in result.stdout.splitlines():
+            parts = line.split()
+            if len(parts) < 2:
+                continue
+            name, size = parts[0], parts[1]
+            model = " ".join(parts[2:-1]) if len(parts) > 3 else ""
+            entry = model.strip() or f"/dev/{name}"
+            entry += f" · {size}"
+            storage_list.append(entry)
+        if storage_list:
+            info["storage_list"] = storage_list
+    except Exception:
+        pass
 
     return info
 

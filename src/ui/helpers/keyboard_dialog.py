@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 
-from PySide6.QtCore import QRectF, Qt
+from PySide6.QtCore import QEvent, QRectF, Qt
 from PySide6.QtGui import (
     QColor,
     QFont,
@@ -20,6 +20,7 @@ from PySide6.QtGui import (
     QPen,
 )
 from PySide6.QtWidgets import (
+    QApplication,
     QComboBox,
     QDialog,
     QHBoxLayout,
@@ -36,45 +37,46 @@ _LAYOUT_ORDER = ["macbook_us", "tkl_us", "full_us"]
 
 # ── Key mapping (identical to tkinter version) ────────────────────────────
 
-_KEYSYM_MAP: dict[int, str] = {
-    Qt.Key_Escape: "escape",
-    Qt.Key_F1: "f1",
-    Qt.Key_F2: "f2",
-    Qt.Key_F3: "f3",
-    Qt.Key_F4: "f4",
-    Qt.Key_F5: "f5",
-    Qt.Key_F6: "f6",
-    Qt.Key_F7: "f7",
-    Qt.Key_F8: "f8",
-    Qt.Key_F9: "f9",
-    Qt.Key_F10: "f10",
-    Qt.Key_F11: "f11",
-    Qt.Key_F12: "f12",
-    Qt.Key_Backspace: "backspace",
-    Qt.Key_Delete: "delete",
-    Qt.Key_Tab: "tab",
-    Qt.Key_Backtab: "tab",
-    Qt.Key_CapsLock: "caps_lock",
-    Qt.Key_Return: "enter",
-    Qt.Key_Enter: "enter",
-    Qt.Key_Shift: "shift",
-    Qt.Key_Control: "ctrl",
-    Qt.Key_Alt: "alt",
-    Qt.Key_Meta: "meta",
-    Qt.Key_Space: "space",
-    Qt.Key_Left: "left",
-    Qt.Key_Right: "right",
-    Qt.Key_Up: "up",
-    Qt.Key_Down: "down",
-    Qt.Key_Insert: "insert",
-    Qt.Key_Home: "home",
-    Qt.Key_End: "end",
-    Qt.Key_PageUp: "page_up",
-    Qt.Key_PageDown: "page_down",
-    Qt.Key_Print: "print_screen",
-    Qt.Key_ScrollLock: "scroll_lock",
-    Qt.Key_Pause: "pause",
-    Qt.Key_NumLock: "num_lock",
+_K = Qt.Key
+_KEYSYM_MAP: dict[Qt.Key, str] = {
+    _K.Key_Escape: "escape",
+    _K.Key_F1: "f1",
+    _K.Key_F2: "f2",
+    _K.Key_F3: "f3",
+    _K.Key_F4: "f4",
+    _K.Key_F5: "f5",
+    _K.Key_F6: "f6",
+    _K.Key_F7: "f7",
+    _K.Key_F8: "f8",
+    _K.Key_F9: "f9",
+    _K.Key_F10: "f10",
+    _K.Key_F11: "f11",
+    _K.Key_F12: "f12",
+    _K.Key_Backspace: "backspace",
+    _K.Key_Delete: "delete",
+    _K.Key_Tab: "tab",
+    _K.Key_Backtab: "tab",
+    _K.Key_CapsLock: "caps_lock",
+    _K.Key_Return: "enter",
+    _K.Key_Enter: "enter",
+    _K.Key_Shift: "shift",
+    _K.Key_Control: "ctrl",
+    _K.Key_Alt: "alt",
+    _K.Key_Meta: "meta",
+    _K.Key_Space: "space",
+    _K.Key_Left: "left",
+    _K.Key_Right: "right",
+    _K.Key_Up: "up",
+    _K.Key_Down: "down",
+    _K.Key_Insert: "insert",
+    _K.Key_Home: "home",
+    _K.Key_End: "end",
+    _K.Key_PageUp: "page_up",
+    _K.Key_PageDown: "page_down",
+    _K.Key_Print: "print_screen",
+    _K.Key_ScrollLock: "scroll_lock",
+    _K.Key_Pause: "pause",
+    _K.Key_NumLock: "num_lock",
 }
 
 _CHAR_TO_NAME: dict[str, str] = {
@@ -114,7 +116,7 @@ _CHAR_TO_NAME: dict[str, str] = {
 }
 
 
-def _normalize_key(qt_key: int) -> str | None:
+def _normalize_key(qt_key: Qt.Key) -> str | None:
     return _KEYSYM_MAP.get(qt_key)
 
 
@@ -297,7 +299,7 @@ class _KeyboardCanvas(QWidget):
                     painter.drawRect(rect)
 
                     painter.setPen(QColor(tc))
-                    painter.drawText(rect, Qt.AlignCenter, item.label)
+                    painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, item.label)
 
                     if item.capturable:
                         self._key_rects.append((item.id, rect))
@@ -308,7 +310,7 @@ class _KeyboardCanvas(QWidget):
         painter.end()
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
-        if event.button() == Qt.RightButton:
+        if event.button() == Qt.MouseButton.RightButton:
             pos = event.position()
             for key_id, rect in self._key_rects:
                 if rect.contains(pos):
@@ -399,12 +401,12 @@ class KeyboardDialog(QDialog):
         hint.setStyleSheet(
             f"color: #555; background: {_BG}; font-family: Courier; font-size: 10px;"
         )
-        hint.setAlignment(Qt.AlignCenter)
+        hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         root_layout.addWidget(hint)
 
         # ── Bottom buttons ───────────────────────────────────────────
         btn_row = QHBoxLayout()
-        btn_row.setAlignment(Qt.AlignCenter)
+        btn_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self._fail_btn = make_dialog_btn("Fail", "#8b1a1a", "#a02020")
         self._fail_btn.clicked.connect(lambda: self._finish("fail"))
@@ -418,7 +420,7 @@ class KeyboardDialog(QDialog):
             "QPushButton:enabled { background: #1a6b1a; color: white; }"
             "QPushButton:enabled:hover { background: #228822; }"
         )
-        self._pass_btn.setCursor(Qt.ArrowCursor)
+        self._pass_btn.setCursor(Qt.CursorShape.ArrowCursor)
         self._pass_btn.clicked.connect(lambda: self._finish("pass"))
         btn_row.addWidget(self._pass_btn)
 
@@ -449,9 +451,9 @@ class KeyboardDialog(QDialog):
         all_done = count >= total
         self._pass_btn.setEnabled(all_done)
         if all_done:
-            self._pass_btn.setCursor(Qt.PointingHandCursor)
+            self._pass_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         else:
-            self._pass_btn.setCursor(Qt.ArrowCursor)
+            self._pass_btn.setCursor(Qt.CursorShape.ArrowCursor)
 
     def _on_layout_changed(self, index: int) -> None:
         lid = self._layout_combo.itemData(index)
@@ -476,13 +478,32 @@ class KeyboardDialog(QDialog):
     def run(self) -> int:
         """Show full-screen and run the dialog. Use instead of exec()."""
         self.showFullScreen()
-        return super().exec()
+        return super().exec()  # Qt dialog event loop, not shell
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        app = QApplication.instance()
+        if app is not None:
+            app.installEventFilter(self)
+
+    def hideEvent(self, event) -> None:
+        super().hideEvent(event)
+        app = QApplication.instance()
+        if app is not None:
+            app.removeEventFilter(self)
+
+    def eventFilter(self, obj, event) -> bool:
+        """Intercept all key events so child widgets can't steal keyboard focus."""
+        t = event.type()
+        if t == QEvent.Type.KeyPress:
+            self.keyPressEvent(event)
+            return True
+        if t == QEvent.Type.KeyRelease:
+            self.keyReleaseEvent(event)
+            return True
+        return super().eventFilter(obj, event)
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
-        # Don't let Escape close the dialog
-        if event.key() == Qt.Key_Escape:
-            return
-
         # Try Qt key code first
         name = _normalize_key(event.key())
         # Fallback: character
@@ -493,7 +514,7 @@ class KeyboardDialog(QDialog):
 
     def keyReleaseEvent(self, event: QKeyEvent) -> None:
         # Caps Lock on macOS: also register on release
-        if event.key() == Qt.Key_CapsLock:
+        if event.key() == Qt.Key.Key_CapsLock:
             self._register_name("caps_lock")
 
     def closeEvent(self, event) -> None:

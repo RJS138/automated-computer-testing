@@ -292,32 +292,49 @@ class BatteryTest(BaseTest):
             elif cycle_count >= cycle_thresh["warn"]:
                 cycle_issue = "warn"
 
+        # Build shared display strings
+        health_str = f"{health_pct:.0f}%" if health_pct is not None else "?"
+        cycle_str = f"{cycle_count} cycles" if cycle_count is not None else ""
+        charged_str = f"{data['percent_charged']:.0f}% charged"
+        charger_str = (
+            f" · {data['charger_watts']}W"
+            if data.get("charger_watts")
+            else (" · plugged in" if data.get("plugged_in") else "")
+        )
+        condition_str = (
+            f" · {data['condition']}"
+            if data.get("condition") and data["condition"] != "Good"
+            else ""
+        )
+        data["card_sub_detail"] = charged_str + charger_str + condition_str
+
         # Status — health_pct drives primary status; cycle count can escalate PASS→WARN
         if health_pct is not None and health_pct < BATTERY_HEALTH_WARN:
             self.result.mark_fail(
-                summary=f"Battery health critically low: {health_pct}% of design capacity",
+                summary=f"Health critical: {health_str} of design capacity",
                 data=data,
             )
         elif health_pct is not None and health_pct < BATTERY_HEALTH_GOOD:
             self.result.mark_warn(
-                summary=f"Battery degraded: {health_pct}% of design capacity",
+                summary=f"Degraded: {health_str} health",
                 data=data,
             )
         elif cycle_issue == "fail":
             self.result.mark_warn(
-                summary=f"Battery cycle count very high: {cycle_count} cycles (≥{cycle_thresh['fail']}) — replace soon",
+                summary=f"Cycle count high: {cycle_count} (≥{cycle_thresh['fail']}) — replace soon",
                 data=data,
             )
         elif cycle_issue == "warn":
             self.result.mark_warn(
-                summary=f"Battery cycle count elevated: {cycle_count} cycles (≥{cycle_thresh['warn']})",
+                summary=f"Cycle count elevated: {cycle_count} (≥{cycle_thresh['warn']})",
                 data=data,
             )
         else:
-            health_str = f"{health_pct}%" if health_pct is not None else "Unknown"
-            cycle_str = f" — {cycle_count} cycles" if cycle_count is not None else ""
+            summary_parts = [f"Health {health_str}"]
+            if cycle_str:
+                summary_parts.append(cycle_str)
             self.result.mark_pass(
-                summary=f"Battery {data['percent_charged']}% charged — health {health_str}{cycle_str}",
+                summary=" · ".join(summary_parts),
                 data=data,
             )
 

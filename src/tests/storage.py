@@ -476,48 +476,65 @@ class StorageTest(BaseTest):
         reallocated = any(d.get("reallocated_sectors") not in (None, 0, "0") for d in drives)
         no_smart = not drives or all(d.get("smart_status") in (None, "Unknown") for d in drives)
 
+        # Build reusable display strings
+        write = speed.get("write_mb_s")
+        read = speed.get("read_mb_s")
+        speed_str = (
+            f"R {read} · W {write} MB/s" if read and write else (f"R {read} MB/s" if read else "")
+        )
+        poh = drives[0].get("power_on_hours") if drives else None
+        pct_used = drives[0].get("percentage_used") if drives else None
+        drive_str = f"{len(drives)} drive{'s' if len(drives) != 1 else ''}"
+        sub_parts = [drive_str]
+        if poh is not None:
+            sub_parts.append(f"{poh:,}h on")
+        if pct_used is not None:
+            sub_parts.append(f"{pct_used}% wear")
+        data["card_sub_detail"] = " · ".join(sub_parts)
+
         if failed:
             self.result.mark_fail(
-                summary="SMART reports drive FAILURE — immediate backup recommended!",
+                summary="SMART FAILURE — backup immediately!",
                 data=data,
             )
         elif drive_temp_fail:
             self.result.mark_fail(
-                summary="Drive overheating — check cooling immediately",
+                summary="Drive overheating — check cooling",
                 data=data,
             )
         elif speed_status == "fail":
             self.result.mark_fail(
-                summary=f"Storage performance critical: {speed_note}",
+                summary=f"Speed critical: {speed_note}",
                 data=data,
             )
         elif reallocated:
             self.result.mark_warn(
-                summary="Reallocated sectors detected — drive may be failing",
+                summary="Reallocated sectors — drive may be failing",
                 data=data,
             )
         elif drive_temp_warn:
             self.result.mark_warn(
-                summary="Drive temperature elevated — check airflow",
+                summary="Drive temp elevated — check airflow",
                 data=data,
             )
         elif speed_status == "warn":
             self.result.mark_warn(
-                summary=f"Storage underperforming: {speed_note}",
+                summary=f"Underperforming: {speed_note}",
                 data=data,
             )
         elif no_smart:
+            data["card_sub_detail"] = speed_str or data["card_sub_detail"]
             self.result.mark_warn(
-                summary="Could not read SMART data (smartctl missing or permission denied)",
+                summary="No SMART data — install smartmontools",
                 data=data,
             )
         else:
-            write = speed.get("write_mb_s", "?")
-            read = speed.get("read_mb_s", "?")
-            poh = drives[0].get("power_on_hours") if drives else None
-            poh_str = f" — {poh}h power-on" if poh is not None else ""
+            combined = (
+                f"{speed_str} · {data['card_sub_detail']}" if speed_str else data["card_sub_detail"]
+            )
+            data["card_sub_detail"] = combined
             self.result.mark_pass(
-                summary=f"{len(drives)} drive(s) SMART OK{poh_str} — Read {read} MB/s / Write {write} MB/s",
+                summary=f"SMART OK · {speed_str}" if speed_str else f"SMART OK · {drive_str}",
                 data=data,
             )
 

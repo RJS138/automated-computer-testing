@@ -244,9 +244,7 @@ class MainDashboard(QWidget):
         self._cards: dict[str, DashboardCard] = {}
         self._results: dict[str, TestResult] = {}
         # Shared checkbox state — read/written by both card grid and TestSectionList
-        self._test_enabled: dict[str, bool] = {
-            entry["name"]: True for entry in self._TEST_REGISTRY
-        }
+        self._test_enabled: dict[str, bool] = {entry["name"]: True for entry in self._TEST_REGISTRY}
         self._si_result: TestResult | None = None
         self._si_worker: TestWorker | None = None
 
@@ -481,7 +479,9 @@ class MainDashboard(QWidget):
         from src.models.job import JobInfo, ReportType
 
         # Build JobInfo from header fields
-        report_type = ReportType.AFTER if self._header.report_type() == "after" else ReportType.BEFORE
+        report_type = (
+            ReportType.AFTER if self._header.report_type() == "after" else ReportType.BEFORE
+        )
         self._window.job_info = JobInfo(
             customer_name=self._header.customer(),
             device_description=self._header.device(),
@@ -554,7 +554,11 @@ class MainDashboard(QWidget):
         result.data = {}
         card = self._cards[name]
         card.set_status("running")
-        on_done = self._on_parallel_test_done if entry["group"] == "parallel" else self._on_sequential_test_done
+        on_done = (
+            self._on_parallel_test_done
+            if entry["group"] == "parallel"
+            else self._on_sequential_test_done
+        )
         worker = self._make_worker(entry, result, on_done=on_done)
         self._active_workers.append(worker)
         worker.start()

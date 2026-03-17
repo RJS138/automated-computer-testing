@@ -531,6 +531,109 @@ def _get_bluetooth_windows() -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Physical NIC enumeration
+# ---------------------------------------------------------------------------
+
+
+def _get_physical_nics_macos() -> dict:
+    """Count physical NICs via networksetup -listallhardwareports."""
+    nics: dict[str, int] = {"wifi": 0, "ethernet": 0, "thunderbolt": 0, "usb": 0, "other": 0}
+    try:
+        r = subprocess.run(
+            ["networksetup", "-listallhardwareports"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        current_port: str | None = None
+        for line in r.stdout.splitlines():
+            line = line.strip()
+            if line.startswith("Hardware Port:"):
+                current_port = line.split(":", 1)[1].strip().lower()
+            elif line.startswith("Device:") and current_port is not None:
+                if "wi-fi" in current_port or "airport" in current_port:
+                    nics["wifi"] += 1
+                elif "thunderbolt" in current_port:
+                    nics["thunderbolt"] += 1
+                elif "usb" in current_port:
+                    nics["usb"] += 1
+                elif "ethernet" in current_port:
+                    nics["ethernet"] += 1
+                else:
+                    nics["other"] += 1
+                current_port = None
+    except Exception:
+        pass
+    nics["total"] = sum(nics.values())
+    return nics
+
+
+def _get_physical_nics_windows() -> dict:
+    """Count physical NICs via WMI Win32_NetworkAdapter(PhysicalAdapter=True)."""
+    nics: dict[str, int] = {"wifi": 0, "ethernet": 0, "other": 0}
+    try:
+        import wmi  # type: ignore
+
+        c = wmi.WMI()
+        for nic in c.Win32_NetworkAdapter(PhysicalAdapter=True):
+            name = (nic.Name or "").lower()
+            if any(k in name for k in ("wireless", "wi-fi", "wifi", "802.11", "wlan")):
+                nics["wifi"] += 1
+            elif any(k in name for k in ("ethernet", "gigabit", "lan", "realtek", "intel")):
+                nics["ethernet"] += 1
+            else:
+                nics["other"] += 1
+    except Exception:
+        pass
+    nics["total"] = sum(nics.values())
+    return nics
+
+
+def _get_physical_nics_linux() -> dict:
+    """Count physical NICs via /sys/class/net (device symlink = physical)."""
+    from pathlib import Path
+
+    nics: dict[str, int] = {"wifi": 0, "ethernet": 0, "other": 0}
+    try:
+        for iface in Path("/sys/class/net").iterdir():
+            if not (iface / "device").exists():
+                continue  # skip virtual (lo, docker0, veth*, etc.)
+            if (iface / "wireless").exists() or (iface / "phy80211").exists():
+                nics["wifi"] += 1
+            else:
+                nics["ethernet"] += 1
+    except Exception:
+        pass
+    nics["total"] = sum(nics.values())
+    return nics
+
+
+def _format_nics(nics: dict) -> str:
+    total = nics.get("total", 0)
+    if total == 0:
+        return ""
+    parts = []
+    for key, label in [
+        ("wifi", "Wi-Fi"),
+        ("ethernet", "Ethernet"),
+        ("thunderbolt", "Thunderbolt"),
+        ("usb", "USB LAN"),
+        ("other", "Other"),
+    ]:
+        n = nics.get(key, 0)
+        if n == 1:
+            parts.append(label)
+        elif n > 1:
+            parts.append(f"{n}x {label}")
+    label_str = ", ".join(parts)
+    return (
+        f"{total} NIC{'s' if total != 1 else ''}: {label_str}"
+        if label_str
+        else f"{total} NIC{'s' if total != 1 else ''}"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Bluetooth — Linux
 # ---------------------------------------------------------------------------
 
@@ -585,8 +688,14 @@ class NetworkTest(BaseTest):
         loop = asyncio.get_event_loop()
         sys = platform.system()
 
-        # Adapters
+        # Adapters + physical NIC count
         adapters = await loop.run_in_executor(None, _get_adapters)
+        if sys == "Darwin":
+            nics = await loop.run_in_executor(None, _get_physical_nics_macos)
+        elif sys == "Windows":
+            nics = await loop.run_in_executor(None, _get_physical_nics_windows)
+        else:
+            nics = await loop.run_in_executor(None, _get_physical_nics_linux)
 
         # Wi-Fi
         if sys == "Darwin":
@@ -616,6 +725,7 @@ class NetworkTest(BaseTest):
 
         data: dict = {
             "adapters": adapters,
+            "nics": nics,
             "wifi": wifi,
             "bluetooth": bluetooth,
             "ping_target": PING_TARGET,
@@ -623,39 +733,56 @@ class NetworkTest(BaseTest):
             "ping_rtt_ms": rtt_ms,
         }
 
-        # Overall status
+        # Build display strings
+        ssid = wifi.get("ssid") or ("Connected" if wifi.get("connected") else None)
+        dl = wifi.get("download_mbps")
+        bt_available = bluetooth.get("available", False)
+        bt_enabled = bluetooth.get("enabled", False)
+        bt_devs = bluetooth.get("devices_connected", 0)
+
+        # Bluetooth — primary label for summary line
+        if bt_available and bt_enabled and bt_devs:
+            bt_label = f"BT On · {bt_devs} device{'s' if bt_devs != 1 else ''} connected"
+        elif bt_available and bt_enabled:
+            bt_label = "BT On"
+        elif bt_available:
+            bt_label = "BT Off"
+        else:
+            bt_label = "No Bluetooth"
+
+        # Sub-detail: SSID, download speed, NIC inventory
+        sub_parts = []
+        if ssid:
+            sub_parts.append(f"'{ssid}'")
+        if dl:
+            sub_parts.append(f"{dl} Mbps ↓")
+        nic_str = _format_nics(nics)
+        if nic_str:
+            sub_parts.append(nic_str)
+        data["card_sub_detail"] = " · ".join(sub_parts)
+
+        # Overall status — BT promoted into summary
         active = [a for a in adapters if a["is_up"]]
         if not active:
             self.result.mark_fail(
-                summary="No active network adapters found",
+                summary=f"No active network adapters · {bt_label}",
                 data=data,
             )
         elif not wifi.get("connected"):
             nets = wifi.get("available_networks", [])
-            ssids = ", ".join(n.get("ssid", "?") for n in nets[:4] if n.get("ssid"))
-            note = f"Available: {ssids}" if ssids else "No networks in range"
             self.result.mark_warn(
-                summary=f"Wi-Fi not connected — {len(nets)} network(s) visible. {note}",
+                summary=f"Wi-Fi not connected · {len(nets)} networks visible · {bt_label}",
                 data=data,
             )
         elif not reachable:
             self.result.mark_warn(
-                summary=(
-                    f"Connected to '{wifi.get('ssid')}' but no internet (ping {PING_TARGET} failed)"
-                ),
+                summary=f"No internet — ping {PING_TARGET} failed · {bt_label}",
                 data=data,
             )
         else:
-            dl = wifi.get("download_mbps")
-            dl_str = f" — {dl} Mbps ↓" if dl else ""
-            bt_str = (
-                " — BT " + ("OK" if bluetooth.get("enabled") else "off")
-                if bluetooth.get("available")
-                else ""
-            )
-            ssid = wifi.get("ssid") or "Connected"
+            rtt_str = f"{rtt_ms} ms" if rtt_ms else "OK"
             self.result.mark_pass(
-                summary=(f"Wi-Fi '{ssid}' — Ping {rtt_ms} ms{dl_str}{bt_str}"),
+                summary=f"Wi-Fi · ping {rtt_str} · {bt_label}",
                 data=data,
             )
 

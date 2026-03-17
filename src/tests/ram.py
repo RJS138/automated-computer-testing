@@ -205,12 +205,31 @@ class RamTest(BaseTest):
         data["scan_message"] = scan_msg
         data.update(scan_metrics)
 
-        summary = f"{data['total_gb']} GB total, {data['used_percent']}% used — {scan_msg}"
+        # Build card display lines
+        patterns = scan_metrics.get("patterns_tested", 1)
+        write_mb_s = scan_metrics.get("ram_write_mb_s")
+        read_mb_s = scan_metrics.get("ram_read_mb_s")
+
+        bw_parts = []
+        if write_mb_s:
+            bw_parts.append(f"W {write_mb_s:,} MB/s")
+        if read_mb_s:
+            bw_parts.append(f"R {read_mb_s:,} MB/s")
+        bw_str = " · ".join(bw_parts)
+
+        data["card_sub_detail"] = bw_str or f"{data['total_gb']} GB · {data['used_percent']}% used"
 
         if not scan_ok:
-            self.result.mark_fail(summary=summary, data=data)
+            self.result.mark_fail(
+                summary=f"Memory error: {scan_msg}",
+                data=data,
+            )
         else:
-            self.result.mark_pass(summary=summary, data=data)
+            pat_str = f"{patterns} pattern{'s' if patterns > 1 else ''}"
+            self.result.mark_pass(
+                summary=f"Scan OK · {pat_str} · {scan_mb} MB",
+                data=data,
+            )
 
         return self.result
 

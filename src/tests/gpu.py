@@ -309,6 +309,26 @@ class GpuTest(BaseTest):
                 if g["name"] not in nvidia_names:
                     gpus.append(g)
 
+        # On Apple Silicon, enrich with live GPU metrics from mactop
+        if sys == "Darwin" and gpus:
+            try:
+                from .cpu import _read_mactop_sample
+
+                sample = await loop.run_in_executor(None, _read_mactop_sample)
+                if sample:
+                    soc = sample.get("soc_metrics", {})
+                    gpu_temp = soc.get("gpu_temp")
+                    gpu_usage = soc.get("gpu_usage") or soc.get("gpu_util")
+                    gpu_power = soc.get("gpu_power")
+                    if gpu_temp and float(gpu_temp) > 0:
+                        gpus[0]["temp_c"] = round(float(gpu_temp), 1)
+                    if gpu_usage is not None:
+                        gpus[0]["utilization_pct"] = round(float(gpu_usage), 1)
+                    if gpu_power is not None:
+                        gpus[0]["power_w"] = round(float(gpu_power), 2)
+            except Exception:
+                pass
+
         # Annotate each GPU with temp thresholds and collect issues
         temp_issues: list[tuple[str, str, float]] = []  # (severity, name, temp)
         for g in gpus:
@@ -326,27 +346,47 @@ class GpuTest(BaseTest):
 
         data: dict = {"gpus": gpus}
 
+        # Build sub-detail line (temp, VRAM, cores, Metal)
+        if gpus:
+            g0 = gpus[0]
+            sub_parts = []
+            if g0.get("temp_c") is not None:
+                sub_parts.append(f"{g0['temp_c']}°C")
+            if g0.get("utilization_pct") is not None:
+                sub_parts.append(f"{g0['utilization_pct']:.0f}% util")
+            if g0.get("vram_total_mb"):
+                sub_parts.append(f"{round(g0['vram_total_mb'] / 1024)} GB VRAM")
+            elif g0.get("vram_note"):
+                sub_parts.append(g0["vram_note"])
+            if g0.get("metal_support"):
+                sub_parts.append(g0["metal_support"])
+            data["card_sub_detail"] = " · ".join(sub_parts)
+
         if not gpus:
             self.result.mark_warn(
-                summary="No GPU detected or query failed",
+                summary="No GPU detected",
                 data=data,
             )
         elif any(sev == "fail" for sev, _, _ in temp_issues):
             worst = next((n, t) for sev, n, t in temp_issues if sev == "fail")
             self.result.mark_fail(
-                summary=f"GPU overheating: {worst[0]} at {worst[1]}°C",
+                summary=f"Overheating: {worst[1]}°C",
                 data=data,
             )
         elif any(sev == "warn" for sev, _, _ in temp_issues):
             worst = next((n, t) for sev, n, t in temp_issues if sev == "warn")
             self.result.mark_warn(
-                summary=f"GPU running hot: {worst[0]} at {worst[1]}°C — see report",
+                summary=f"Running hot: {worst[1]}°C — check cooling",
                 data=data,
             )
         else:
-            names = ", ".join(g.get("name", "Unknown") for g in gpus)
+            g0 = gpus[0]
+            cores = g0.get("gpu_cores")
+            name = g0.get("name", "Unknown")
+            core_str = f" · {cores}-core" if cores else ""
+            temp_str = f" · {g0['temp_c']}°C" if g0.get("temp_c") is not None else ""
             self.result.mark_pass(
-                summary=f"{len(gpus)} GPU(s): {names}",
+                summary=f"{name}{core_str}{temp_str}",
                 data=data,
             )
 

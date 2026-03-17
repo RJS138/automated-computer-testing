@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QFrame,
     QHBoxLayout,
     QLabel,
+    QProgressBar,
     QPushButton,
     QSizePolicy,
     QVBoxLayout,
@@ -25,6 +26,20 @@ _STATUS_COLORS: dict[str, str] = {
     "error": "#ef4444",
     "skip": "#7d8590",
 }
+
+_PROGRESS_BAR_QSS = """
+QProgressBar {
+    border: none;
+    border-radius: 4px;
+    background-color: #21262d;
+    max-height: 7px;
+    min-height: 7px;
+}
+QProgressBar::chunk {
+    background-color: #3b82f6;
+    border-radius: 4px;
+}
+"""
 
 
 class DashboardCard(QFrame):
@@ -47,13 +62,23 @@ class DashboardCard(QFrame):
         self.setProperty("class", "test-card")
         self.setProperty("status", "waiting")
 
+        # Fixed height — all cards uniform; text wraps within this budget
+        self.setFixedHeight(190)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+        # Elapsed-time ticker (1 Hz, only active while running)
+        self._elapsed_s: int = 0
+        self._ticker = QTimer(self)
+        self._ticker.setInterval(1000)
+        self._ticker.timeout.connect(self._tick)
+
         self._build_ui()
 
     # ── UI construction ───────────────────────────────────────────────────────
 
     def _build_ui(self) -> None:
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(10, 8, 10, 8)
+        outer.setContentsMargins(14, 12, 14, 10)
         outer.setSpacing(4)
 
         # ── Top row: name label + checkbox ────────────────────────────────────
@@ -62,7 +87,7 @@ class DashboardCard(QFrame):
 
         self._name_lbl = QLabel(self._display_name)
         self._name_lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        self._name_lbl.setStyleSheet("font-weight: 600;")
+        self._name_lbl.setStyleSheet("font-weight: 700; font-size: 17px;")
         header.addWidget(self._name_lbl)
 
         header.addStretch()
@@ -76,17 +101,38 @@ class DashboardCard(QFrame):
 
         # ── Status badge ──────────────────────────────────────────────────────
         self._badge_lbl = QLabel("WAITING")
-        self._badge_lbl.setStyleSheet(f"color: {_STATUS_COLORS['waiting']}; font-size: 12px;")
+        self._badge_lbl.setStyleSheet(
+            f"color: {_STATUS_COLORS['waiting']}; font-size: 13px; font-weight: 600;"
+        )
         outer.addWidget(self._badge_lbl)
 
-        # ── Detail lines ──────────────────────────────────────────────────────
+        # ── Running state: progress bar + elapsed timer ───────────────────────
+        self._progress_bar = QProgressBar()
+        self._progress_bar.setRange(0, 0)  # indeterminate
+        self._progress_bar.setTextVisible(False)
+        self._progress_bar.setStyleSheet(_PROGRESS_BAR_QSS)
+        self._progress_bar.hide()
+        outer.addWidget(self._progress_bar)
+
+        self._timer_lbl = QLabel("0s")
+        self._timer_lbl.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        self._timer_lbl.setStyleSheet("color: #60a5fa; font-size: 22px; font-weight: 700;")
+        self._timer_lbl.hide()
+        outer.addWidget(self._timer_lbl)
+
+        # ── Done state: detail lines ───────────────────────────────────────────
         self._detail_lbl = QLabel("")
-        self._detail_lbl.setStyleSheet("color: #7d8590; font-size: 12px;")
+        self._detail_lbl.setStyleSheet("color: #e6edf3; font-size: 15px; font-weight: 500;")
+        self._detail_lbl.setWordWrap(True)
         outer.addWidget(self._detail_lbl)
 
         self._sub_detail_lbl = QLabel("")
-        self._sub_detail_lbl.setStyleSheet("color: #7d8590; font-size: 12px;")
+        self._sub_detail_lbl.setStyleSheet("color: #7d8590; font-size: 13px;")
+        self._sub_detail_lbl.setWordWrap(True)
         outer.addWidget(self._sub_detail_lbl)
+
+        # Push button to bottom
+        outer.addStretch(1)
 
         # ── Run button (right-aligned) ────────────────────────────────────────
         btn_row = QHBoxLayout()
@@ -101,15 +147,35 @@ class DashboardCard(QFrame):
     # ── Public API ────────────────────────────────────────────────────────────
 
     def set_status(self, status: str, detail: str = "", sub_detail: str = "") -> None:
-        """Update the card's status badge, border colour, detail lines, and button label."""
+        """Update badge, border colour, running/done widgets, and button label."""
         status = status.lower()
         color = _STATUS_COLORS.get(status, "#7d8590")
 
         self._badge_lbl.setText(status.upper())
-        self._badge_lbl.setStyleSheet(f"color: {color}; font-size: 12px;")
+        self._badge_lbl.setStyleSheet(f"color: {color}; font-size: 13px; font-weight: 600;")
 
-        self._detail_lbl.setText(detail)
-        self._sub_detail_lbl.setText(sub_detail)
+        is_running = status == "running"
+
+        if is_running:
+            # Reset and start elapsed timer
+            self._elapsed_s = 0
+            self._timer_lbl.setText("0s")
+            if not self._ticker.isActive():
+                self._ticker.start()
+            # Show running widgets, hide detail lines
+            self._progress_bar.show()
+            self._timer_lbl.show()
+            self._detail_lbl.hide()
+            self._sub_detail_lbl.hide()
+        else:
+            # Stop timer, hide running widgets, show detail lines
+            self._ticker.stop()
+            self._progress_bar.hide()
+            self._timer_lbl.hide()
+            self._detail_lbl.setText(detail)
+            self._sub_detail_lbl.setText(sub_detail)
+            self._detail_lbl.show()
+            self._sub_detail_lbl.show()
 
         self._run_btn.setText("▶ Run" if status == "waiting" else "↺ Re-run")
 
@@ -139,6 +205,16 @@ class DashboardCard(QFrame):
         self._run_btn.setEnabled(not active)
 
     # ── Private slots ─────────────────────────────────────────────────────────
+
+    def _tick(self) -> None:
+        """Increment the elapsed timer display by one second."""
+        self._elapsed_s += 1
+        if self._elapsed_s < 60:
+            self._timer_lbl.setText(f"{self._elapsed_s}s")
+        else:
+            m = self._elapsed_s // 60
+            s = self._elapsed_s % 60
+            self._timer_lbl.setText(f"{m}:{s:02d}")
 
     def _on_run_clicked(self) -> None:
         self.run_requested.emit(self._name)

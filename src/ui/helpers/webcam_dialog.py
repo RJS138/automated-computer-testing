@@ -48,8 +48,11 @@ class WebcamDialog(QDialog):
         except ImportError:
             pass
 
-        # Probe for cameras
+        # Probe for cameras (silence OpenCV's stderr noise for missing indices)
         if self._cv2 is not None:
+            _set_log = getattr(self._cv2, "setLogLevel", None)
+            if _set_log is not None:
+                _set_log(0)  # LOG_LEVEL_SILENT
             for i in range(5):
                 try:
                     cap_probe = self._cv2.VideoCapture(i)
@@ -58,6 +61,8 @@ class WebcamDialog(QDialog):
                     cap_probe.release()
                 except Exception:
                     pass
+            if _set_log is not None:
+                _set_log(3)  # restore to LOG_LEVEL_WARNING
 
         self._no_cameras = not self._available_indices or self._cv2 is None
 
@@ -81,7 +86,7 @@ class WebcamDialog(QDialog):
             f"color: #4a9eff; background: {_BG}; font-family: Courier; "
             "font-size: 16px; font-weight: bold;"
         )
-        title.setAlignment(Qt.AlignCenter)
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         root.addWidget(title)
 
         if platform.system() == "Darwin":
@@ -109,7 +114,7 @@ class WebcamDialog(QDialog):
         root.addStretch()
 
         btn_row = QHBoxLayout()
-        btn_row.setAlignment(Qt.AlignCenter)
+        btn_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         fail_btn = make_dialog_btn("Fail", "#8b1a1a", "#a02020")
         fail_btn.clicked.connect(lambda: self._finish("fail"))
@@ -165,7 +170,7 @@ class WebcamDialog(QDialog):
 
         # Preview area
         self._preview_label = QLabel()
-        self._preview_label.setAlignment(Qt.AlignCenter)
+        self._preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._preview_label.setStyleSheet("background: #0d0d0d;")
         root.addWidget(self._preview_label, 1)
 
@@ -174,12 +179,12 @@ class WebcamDialog(QDialog):
         hint.setStyleSheet(
             f"color: #555; background: {_BG}; font-family: Courier; font-size: 10px;"
         )
-        hint.setAlignment(Qt.AlignCenter)
+        hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         root.addWidget(hint)
 
         # Bottom buttons
         btn_row = QHBoxLayout()
-        btn_row.setAlignment(Qt.AlignCenter)
+        btn_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         fail_btn = make_dialog_btn("Fail", "#8b1a1a", "#a02020")
         fail_btn.clicked.connect(lambda: self._finish("fail"))
@@ -275,7 +280,7 @@ class WebcamDialog(QDialog):
 
         h, w, ch = frame_rgb.shape
         bytes_per_line = ch * w
-        q_img = QImage(frame_rgb.data, w, h, bytes_per_line, QImage.Format_RGB888)
+        q_img = QImage(frame_rgb.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
         pixmap = QPixmap.fromImage(q_img)
         self._preview_label.setPixmap(pixmap)
 
@@ -294,7 +299,7 @@ class WebcamDialog(QDialog):
             self._finish("fail")
         elif key == "s":
             self._finish("skip")
-        elif event.key() == Qt.Key_Escape:
+        elif event.key() == Qt.Key.Key_Escape:
             return
 
     def closeEvent(self, event) -> None:
