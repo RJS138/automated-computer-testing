@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
-import sys
+import platform
+from pathlib import Path
 
 from PySide6.QtCore import QTimer
-from PySide6.QtGui import QCloseEvent
+from PySide6.QtGui import QCloseEvent, QFont
 from PySide6.QtWidgets import QApplication, QMainWindow
 
 from src.models.job import JobInfo
+from src.models.settings import Settings
 from src.models.test_result import TestResult
 from src.ui.stylesheet import QSS_DARK
+from src.utils.file_manager import find_usb_drive
 
 
 class TouchstoneWindow(QMainWindow):
@@ -33,13 +36,26 @@ class TouchstoneWindow(QMainWindow):
         self.test_results = []
         self.manual_items = []
 
+        # Default save path — detect USB once at startup
+        _usb = find_usb_drive()
+        self.settings = Settings(
+            save_path=str(_usb) if _usb else str(Path.home() / "touchstone_reports")
+        )
+
         # ── Window properties ────────────────────────────────────
         self.setWindowTitle("Touchstone")
         self.setMinimumSize(900, 650)
 
-        # ── Stylesheet ───────────────────────────────────────────
+        # ── Font (set per-platform to avoid alias-lookup cost) ───
         app = QApplication.instance()
-        if app is not None:
+        if isinstance(app, QApplication):
+            _sys = platform.system()
+            if _sys == "Darwin":
+                app.setFont(QFont("Helvetica Neue", 13))
+            elif _sys == "Windows":
+                app.setFont(QFont("Segoe UI", 10))
+            else:
+                app.setFont(QFont("DejaVu Sans", 10))
             app.setStyleSheet(QSS_DARK)
 
         # ── Central widget: MainDashboard ────────────────────────
@@ -59,7 +75,7 @@ class TouchstoneWindow(QMainWindow):
 
     # ── Show ─────────────────────────────────────────────────────
 
-    def showEvent(self, event) -> None:  # type: ignore[override]
+    def showEvent(self, event) -> None:
         super().showEvent(event)
         # Centre on screen
         screen = QApplication.primaryScreen()
@@ -72,6 +88,5 @@ class TouchstoneWindow(QMainWindow):
 
     # ── Close ────────────────────────────────────────────────────
 
-    def closeEvent(self, event: QCloseEvent) -> None:  # type: ignore[override]
+    def closeEvent(self, event: QCloseEvent) -> None:
         event.accept()
-        sys.exit(0)

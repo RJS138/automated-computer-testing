@@ -244,6 +244,7 @@ class MainDashboard(QWidget):
         self._cards: dict[str, DashboardCard] = {}
         self._results: dict[str, TestResult] = {}
         self._si_result: TestResult | None = None
+        self._si_worker: TestWorker | None = None
 
         # ── Run-all state ─────────────────────────────────────────────────────
         self._running_all: bool = False
@@ -282,44 +283,46 @@ class MainDashboard(QWidget):
         self._report_options.hide()
         right_layout.addWidget(self._report_options)
 
+        # Single scroll area wrapping both test sections
+        right_scroll = QScrollArea()
+        right_scroll.setWidgetResizable(True)
+        right_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        right_content = QWidget()
+        right_content_layout = QVBoxLayout(right_content)
+        right_content_layout.setContentsMargins(0, 0, 0, 0)
+        right_content_layout.setSpacing(8)
+
         # Automated section title
         auto_title = QLabel("AUTOMATED TESTS")
         auto_title.setProperty("class", "section-title")
-        right_layout.addWidget(auto_title)
+        right_content_layout.addWidget(auto_title)
 
-        # Automated grid (3 columns) inside a scroll area
-        auto_scroll = QScrollArea()
-        auto_scroll.setWidgetResizable(True)
-        auto_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-
+        # Automated grid (3 columns)
         auto_container = QWidget()
         auto_grid = QGridLayout(auto_container)
         auto_grid.setContentsMargins(0, 0, 0, 0)
         auto_grid.setSpacing(6)
-
-        auto_scroll.setWidget(auto_container)
-        right_layout.addWidget(auto_scroll)
+        right_content_layout.addWidget(auto_container)
 
         # Manual section title
         manual_title = QLabel("MANUAL TESTS")
         manual_title.setProperty("class", "section-title")
-        right_layout.addWidget(manual_title)
+        right_content_layout.addWidget(manual_title)
 
-        # Manual grid (4 columns) inside a scroll area
-        manual_scroll = QScrollArea()
-        manual_scroll.setWidgetResizable(True)
-        manual_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-
+        # Manual grid (4 columns)
         manual_container = QWidget()
         manual_grid = QGridLayout(manual_container)
         manual_grid.setContentsMargins(0, 0, 0, 0)
         manual_grid.setSpacing(6)
+        right_content_layout.addWidget(manual_container)
 
-        manual_scroll.setWidget(manual_container)
-        right_layout.addWidget(manual_scroll)
+        right_content_layout.addStretch()
+        right_scroll.setWidget(right_content)
+        right_layout.addWidget(right_scroll, stretch=1)
 
-        body_layout.addWidget(right_col)
-        main_layout.addLayout(body_layout)
+        body_layout.addWidget(right_col, stretch=1)
+        main_layout.addLayout(body_layout, stretch=1)
 
         # ── Populate cards from registry ──────────────────────────────────────
         auto_col = 0
@@ -368,6 +371,7 @@ class MainDashboard(QWidget):
         self._header.run_all_clicked.connect(self._on_run_all)
         self._header.generate_report_clicked.connect(self._on_generate_report)
         self._header.new_job_clicked.connect(self._on_new_job)
+        self._header.settings_clicked.connect(self._on_settings_clicked)
 
         # Keep report worker alive while it runs
         self._report_worker: object | None = None
@@ -401,7 +405,7 @@ class MainDashboard(QWidget):
 
         self._si_result = TestResult(name="system_info", display_name="System Info")
 
-        worker = TestWorker(
+        self._si_worker = TestWorker(
             name="system_info",
             module="system_info",
             cls_name="SystemInfoTest",
@@ -409,8 +413,8 @@ class MainDashboard(QWidget):
             mode=TestMode.QUICK,
             parent=self,
         )
-        worker.finished.connect(self._on_system_info_done)
-        worker.start()
+        self._si_worker.finished.connect(self._on_system_info_done)
+        self._si_worker.start()
 
     def _on_system_info_done(self, name: str) -> None:
         """Populate the info panel once system_info completes."""
@@ -452,9 +456,7 @@ class MainDashboard(QWidget):
         from src.models.job import JobInfo, ReportType
 
         # Build JobInfo from header fields
-        report_type = (
-            ReportType.AFTER if self._header.report_type() == "after" else ReportType.BEFORE
-        )
+        report_type = ReportType.AFTER if self._header.report_type() == "after" else ReportType.BEFORE
         self._window.job_info = JobInfo(
             customer_name=self._header.customer(),
             device_description=self._header.device(),
@@ -528,11 +530,7 @@ class MainDashboard(QWidget):
         result.data = {}
         card = self._cards[name]
         card.set_status("running")
-        on_done = (
-            self._on_parallel_test_done
-            if entry["group"] == "parallel"
-            else self._on_sequential_test_done
-        )
+        on_done = self._on_parallel_test_done if entry["group"] == "parallel" else self._on_sequential_test_done
         worker = self._make_worker(entry, result, on_done=on_done)
         self._active_workers.append(worker)
         worker.start()
@@ -674,7 +672,10 @@ class MainDashboard(QWidget):
         result = self._results.get(name)
         card = self._cards.get(name)
         if result and card:
-            card.set_status(result.status.value, result.summary or "", result.error_message or "")
+            sub = result.data.get("card_sub_detail", "") if result.data else ""
+            if not sub and result.error_message:
+                sub = result.error_message
+            card.set_status(result.status.value, result.summary or "", sub)
         # Clean up finished workers
         self._active_workers = [w for w in self._active_workers if w.isRunning()]
         self._recalculate_overall()
@@ -709,6 +710,18 @@ class MainDashboard(QWidget):
         self._header.show_status_message(f"Error: {msg}")
 
     # ── New Job reset ─────────────────────────────────────────────────────────
+
+    def _on_settings_clicked(self) -> None:
+        """Open the settings modal."""
+        import copy
+
+        from PySide6.QtWidgets import QDialog
+
+        from src.ui.widgets.settings_dialog import SettingsDialog
+
+        dlg = SettingsDialog(copy.copy(self._window.settings), parent=self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            self._window.settings = dlg.result_settings()
 
     def _on_new_job(self) -> None:
         """Reset everything for a new job."""
