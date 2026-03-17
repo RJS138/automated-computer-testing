@@ -48,8 +48,8 @@ from src.ui.helpers.usb_dialog import UsbDialog
 from src.ui.helpers.webcam_dialog import WebcamDialog
 from src.ui.widgets.dashboard_card import DashboardCard
 from src.ui.widgets.header_bar import HeaderBar
-from src.ui.widgets.report_options_panel import ReportOptionsPanel
 from src.ui.widgets.system_info_panel import SystemInfoPanel
+from src.ui.widgets.test_section_list import TestSectionList
 from src.ui.workers import TestWorker
 
 
@@ -243,6 +243,10 @@ class MainDashboard(QWidget):
         # ── Cards and results dicts ───────────────────────────────────────────
         self._cards: dict[str, DashboardCard] = {}
         self._results: dict[str, TestResult] = {}
+        # Shared checkbox state — read/written by both card grid and TestSectionList
+        self._test_enabled: dict[str, bool] = {
+            entry["name"]: True for entry in self._TEST_REGISTRY
+        }
         self._si_result: TestResult | None = None
         self._si_worker: TestWorker | None = None
 
@@ -278,15 +282,10 @@ class MainDashboard(QWidget):
         self._right_layout.setSpacing(8)
         right_layout = self._right_layout  # local alias for readability below
 
-        # Report options panel (Advanced mode only — hidden by default)
-        self._report_options = ReportOptionsPanel(self)
-        self._report_options.hide()
-        right_layout.addWidget(self._report_options)
-
         # Single scroll area wrapping both test sections
-        right_scroll = QScrollArea()
-        right_scroll.setWidgetResizable(True)
-        right_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._card_scroll = QScrollArea()
+        self._card_scroll.setWidgetResizable(True)
+        self._card_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
         right_content = QWidget()
         right_content_layout = QVBoxLayout(right_content)
@@ -318,8 +317,19 @@ class MainDashboard(QWidget):
         right_content_layout.addWidget(manual_container)
 
         right_content_layout.addStretch()
-        right_scroll.setWidget(right_content)
-        right_layout.addWidget(right_scroll, stretch=1)
+        self._card_scroll.setWidget(right_content)
+        right_layout.addWidget(self._card_scroll, stretch=1)
+
+        # Advanced mode: sectioned row list (hidden by default — shown when mode="advanced")
+        _display_names = {e["name"]: e["display_name"] for e in self._TEST_REGISTRY}
+        self._section_list = TestSectionList(
+            test_enabled=self._test_enabled,
+            display_names=_display_names,
+            parent=right_col,
+        )
+        self._section_list.hide()
+        self._section_list.run_requested.connect(self._on_run_requested)
+        right_layout.addWidget(self._section_list, stretch=1)
 
         body_layout.addWidget(right_col, stretch=1)
         main_layout.addLayout(body_layout, stretch=1)
@@ -382,20 +392,35 @@ class MainDashboard(QWidget):
     # ── Mode switching ────────────────────────────────────────────────────────
 
     def _on_mode_changed(self, mode: str) -> None:
-        """Show/hide advanced-only cards and report options panel based on selected mode."""
+        """Switch between Simple (card grid) and Advanced (section list) views."""
+        if self._running_all:
+            return  # ignore mode changes during a run
+
         is_advanced = mode == "advanced"
+
+        # Show/hide advanced-only cards in the simple grid
         for entry in self._TEST_REGISTRY:
             if entry["advanced_only"]:
                 card = self._cards.get(entry["name"])
                 if card is not None:
-                    if is_advanced:
-                        card.show()
-                    else:
-                        card.hide()
+                    card.setVisible(is_advanced)
+
+        # Checkboxes visible on cards in advanced mode
+        for entry in self._TEST_REGISTRY:
             card = self._cards.get(entry["name"])
             if card is not None:
                 card.set_advanced(is_advanced)
-        self._report_options.setVisible(is_advanced)
+
+        if is_advanced:
+            # Switch to section list
+            self._section_list.sync_checkboxes()
+            if any(r.status.value != "waiting" for r in self._results.values()):
+                self._section_list.init_from_results(self._results)
+            self._card_scroll.hide()
+            self._section_list.show()
+        else:
+            self._section_list.hide()
+            self._card_scroll.show()
 
     # ── System info ───────────────────────────────────────────────────────────
 
@@ -444,7 +469,7 @@ class MainDashboard(QWidget):
         all_done = all(
             r.status.value not in incomplete
             for name, r in self._results.items()
-            if self._cards.get(name) and self._cards[name].is_checked()
+            if self._test_enabled.get(name, True)
         )
         if all_done and not self._running_all:
             self._header.set_action_state("generate_report")
@@ -474,8 +499,7 @@ class MainDashboard(QWidget):
         for entry in self._TEST_REGISTRY:
             if entry["kind"] != "automated":
                 continue
-            card = self._cards.get(entry["name"])
-            if card is None or not card.is_checked():
+            if not self._test_enabled.get(entry["name"], True):
                 continue
             if entry["advanced_only"] and self._header.mode() != "advanced":
                 continue
@@ -584,9 +608,7 @@ class MainDashboard(QWidget):
         self._manual_queue: list[dict] = [
             entry
             for entry in self._TEST_REGISTRY
-            if entry["kind"] == "manual"
-            and self._cards.get(entry["name"]) is not None
-            and self._cards[entry["name"]].is_checked()
+            if entry["kind"] == "manual" and self._test_enabled.get(entry["name"], True)
         ]
         self._run_next_manual()
 
@@ -668,7 +690,7 @@ class MainDashboard(QWidget):
         self._recalculate_overall()
 
     def _apply_result(self, name: str) -> None:
-        """Update the card for a completed test and clean up the worker."""
+        """Update card and section list row for a completed test, clean up worker."""
         result = self._results.get(name)
         card = self._cards.get(name)
         if result and card:
@@ -676,6 +698,8 @@ class MainDashboard(QWidget):
             if not sub and result.error_message:
                 sub = result.error_message
             card.set_status(result.status.value, result.summary or "", sub)
+        if result:
+            self._section_list.update_row(name, result.status.value, result.summary or "")
         # Clean up finished workers
         self._active_workers = [w for w in self._active_workers if w.isRunning()]
         self._recalculate_overall()
@@ -747,6 +771,11 @@ class MainDashboard(QWidget):
 
         # Reset header
         self._header.set_action_state("run_all_disabled")
+
+        # Reset all checkboxes to enabled
+        for key in self._test_enabled:
+            self._test_enabled[key] = True
+        self._section_list.sync_checkboxes()
 
         # Re-run system info
         self._start_system_info()
