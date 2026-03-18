@@ -39,6 +39,14 @@ QDialog > QWidget {
     background-color: #0d1117;
 }
 
+/* Labels must stay transparent — the QDialog > QWidget rule above has higher
+   specificity (0,0,2) than QLabel (0,0,1) so we need an equal-specificity rule
+   placed after it to win the tiebreaker. */
+QDialog QLabel,
+QMainWindow QLabel {
+    background-color: transparent;
+}
+
 /* ── QStackedWidget page containers ─────────────────────────── */
 QStackedWidget {
     background-color: #0d1117;
