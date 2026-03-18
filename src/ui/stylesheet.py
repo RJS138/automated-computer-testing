@@ -190,6 +190,28 @@ QPushButton[class="toggle"][checked="true"] {
     color: #60a5fa;
 }
 
+/* ── Icon buttons (32×32 square, SVG icon, no border at rest) ──── */
+QPushButton[class="icon-btn"] {
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 0;
+    min-width: 32px;
+    min-height: 32px;
+    max-width: 32px;
+    max-height: 32px;
+}
+
+QPushButton[class="icon-btn"]:hover {
+    background-color: #21262d;
+    border-color: #30363d;
+}
+
+QPushButton[class="icon-btn"]:pressed {
+    background-color: #161b22;
+    border-color: #30363d;
+}
+
 /* ── Line Edits ─────────────────────────────────────────────── */
 QLineEdit {
     background-color: #161b22;
