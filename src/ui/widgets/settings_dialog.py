@@ -98,6 +98,7 @@ class SettingsDialog(QDialog):
         cancel_btn.clicked.connect(self.reject)
         save_btn = QPushButton("Save")
         save_btn.setProperty("class", "primary")
+        save_btn.setDefault(True)
         save_btn.clicked.connect(self.accept)
         btn_row.addWidget(cancel_btn)
         btn_row.addWidget(save_btn)

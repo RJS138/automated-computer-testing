@@ -50,6 +50,8 @@ def _settings_icon() -> QIcon:
         '</svg>'
     )
     renderer = QSvgRenderer(QByteArray(svg.encode()))
+    if not renderer.isValid():
+        return QIcon()
     px = QPixmap(16, 16)
     px.fill(Qt.GlobalColor.transparent)
     painter = QPainter(px)
