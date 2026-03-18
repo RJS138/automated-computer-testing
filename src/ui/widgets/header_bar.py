@@ -52,7 +52,9 @@ def _settings_icon() -> QIcon:
     renderer = QSvgRenderer(QByteArray(svg.encode()))
     if not renderer.isValid():
         return QIcon()
-    px = QPixmap(16, 16)
+    # Render at 2× so the icon is crisp on Retina / HiDPI displays.
+    px = QPixmap(32, 32)
+    px.setDevicePixelRatio(2.0)
     px.fill(Qt.GlobalColor.transparent)
     painter = QPainter(px)
     renderer.render(painter)

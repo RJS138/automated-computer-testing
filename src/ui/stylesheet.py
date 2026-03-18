@@ -85,8 +85,6 @@ QLabel[class="section-title"] {
     font-size: 11px;
     font-weight: 600;
     color: #7d8590;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
 }
 
 /* ── Buttons ────────────────────────────────────────────────── */

@@ -107,7 +107,7 @@ class SettingsDialog(QDialog):
     # ── Helpers ───────────────────────────────────────────────────────────────
 
     def _section_label(self, text: str) -> QLabel:
-        lbl = QLabel(text)
+        lbl = QLabel(text.upper())
         lbl.setProperty("class", "section-title")
         return lbl
 
