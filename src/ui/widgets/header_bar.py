@@ -13,7 +13,9 @@ import os
 import subprocess
 import sys
 
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import QByteArray, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QIcon, QPainter, QPixmap
+from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -34,6 +36,27 @@ from src.utils.platform_detect import get_os
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _settings_icon() -> QIcon:
+    """Return a crisp SVG sliders icon as a QIcon."""
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
+        ' stroke="#7d8590" stroke-width="1.5" stroke-linecap="round"'
+        ' stroke-linejoin="round">'
+        '<path d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0'
+        'M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0'
+        'm-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0'
+        'm-9.75 0h9.75"/>'
+        '</svg>'
+    )
+    renderer = QSvgRenderer(QByteArray(svg.encode()))
+    px = QPixmap(16, 16)
+    px.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(px)
+    renderer.render(painter)
+    painter.end()
+    return QIcon(px)
+
 
 _ACTION_STATES = frozenset({"run_all", "run_all_disabled", "generate_report", "new_job"})
 
@@ -216,8 +239,11 @@ class HeaderBar(QFrame):
         refresh_style(self._action_btn)
         row1.addWidget(self._action_btn, alignment=_V)
 
-        self._settings_btn = QPushButton("⚙")
+        self._settings_btn = QPushButton()
+        self._settings_btn.setProperty("class", "icon-btn")
         self._settings_btn.setFixedSize(32, 32)
+        self._settings_btn.setIcon(_settings_icon())
+        self._settings_btn.setIconSize(QSize(16, 16))
         self._settings_btn.setToolTip("Settings")
         row1.addWidget(self._settings_btn, alignment=_V)
 
