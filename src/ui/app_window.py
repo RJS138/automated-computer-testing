@@ -6,7 +6,7 @@ import platform
 from pathlib import Path
 
 from PySide6.QtCore import QTimer
-from PySide6.QtGui import QCloseEvent, QFont
+from PySide6.QtGui import QCloseEvent, QColor, QFont, QPalette
 from PySide6.QtWidgets import QApplication, QMainWindow
 
 from src.models.job import JobInfo
@@ -14,6 +14,40 @@ from src.models.settings import Settings
 from src.models.test_result import TestResult
 from src.ui.stylesheet import QSS_DARK
 from src.utils.file_manager import find_usb_drive
+
+
+def _dark_palette() -> QPalette:
+    """QPalette matching the app's dark theme tokens.
+
+    Fills in anywhere QSS doesn't reach (focus rings, OS-drawn scrollbars,
+    native selection highlights, etc.) so Fusion renders consistently.
+    """
+    p = QPalette()
+    # Window / background
+    p.setColor(QPalette.ColorRole.Window,          QColor("#0d1117"))
+    p.setColor(QPalette.ColorRole.WindowText,      QColor("#e6edf3"))
+    # Input fields
+    p.setColor(QPalette.ColorRole.Base,            QColor("#161b22"))
+    p.setColor(QPalette.ColorRole.AlternateBase,   QColor("#1c2128"))
+    p.setColor(QPalette.ColorRole.Text,            QColor("#e6edf3"))
+    p.setColor(QPalette.ColorRole.PlaceholderText, QColor("#7d8590"))
+    # Buttons
+    p.setColor(QPalette.ColorRole.Button,          QColor("#21262d"))
+    p.setColor(QPalette.ColorRole.ButtonText,      QColor("#e6edf3"))
+    p.setColor(QPalette.ColorRole.BrightText,      QColor("#ffffff"))
+    # Selection / highlight
+    p.setColor(QPalette.ColorRole.Highlight,       QColor("#1e3a5f"))
+    p.setColor(QPalette.ColorRole.HighlightedText, QColor("#e6edf3"))
+    # Links
+    p.setColor(QPalette.ColorRole.Link,            QColor("#3b82f6"))
+    # Tooltips
+    p.setColor(QPalette.ColorRole.ToolTipBase,     QColor("#21262d"))
+    p.setColor(QPalette.ColorRole.ToolTipText,     QColor("#e6edf3"))
+    # Disabled state — muted versions
+    for role in (QPalette.ColorRole.WindowText, QPalette.ColorRole.Text,
+                 QPalette.ColorRole.ButtonText):
+        p.setColor(QPalette.ColorGroup.Disabled, role, QColor("#484f58"))
+    return p
 
 
 class TouchstoneWindow(QMainWindow):
@@ -56,6 +90,8 @@ class TouchstoneWindow(QMainWindow):
                 app.setFont(QFont("Segoe UI", 10))
             else:
                 app.setFont(QFont("DejaVu Sans", 10))
+            app.setStyle("Fusion")
+            app.setPalette(_dark_palette())
             app.setStyleSheet(QSS_DARK)
 
         # ── Central widget: MainDashboard ────────────────────────
