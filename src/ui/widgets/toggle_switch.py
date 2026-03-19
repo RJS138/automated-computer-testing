@@ -3,16 +3,15 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Property, QEasingCurve, QPropertyAnimation, Qt, Signal
-from PySide6.QtGui import QColor, QPainter
-from PySide6.QtWidgets import QWidget
-
-_COLOR_ON = QColor("#3b82f6")  # accent blue — "advanced"
-_COLOR_OFF = QColor("#30363d")  # dark border  — "simple"
-_COLOR_THUMB = QColor("#ffffff")
+from PySide6.QtGui import QColor, QPainter, QPalette
+from PySide6.QtWidgets import QApplication, QWidget
 
 
 class ToggleSwitch(QWidget):
     """Pill-shaped toggle: dot slides left (off/simple) ↔ right (on/advanced).
+
+    Reads the active QPalette at paint time so it responds immediately to
+    runtime theme switches without a restart.
 
     Signals
     -------
@@ -75,14 +74,20 @@ class ToggleSwitch(QWidget):
         w, h = self.width(), self.height()
         r = h / 2.0
 
-        # Interpolate track colour: grey → blue
-        off_r, off_g, off_b = _COLOR_OFF.red(), _COLOR_OFF.green(), _COLOR_OFF.blue()
-        on_r, on_g, on_b = _COLOR_ON.red(), _COLOR_ON.green(), _COLOR_ON.blue()
+        # Read palette at paint time — responds to runtime theme switches.
+        # Button role = off-track colour (bg-elevated token in both themes).
+        # Highlight role = on-track colour (accent token in both themes).
+        palette = QApplication.palette()
+        color_off = palette.color(QPalette.ColorRole.Button)
+        color_on  = palette.color(QPalette.ColorRole.Highlight)
+        color_thumb = palette.color(QPalette.ColorRole.BrightText)
+
+        # Interpolate track colour between off and on
         t = self._pos
         track = QColor(
-            int(off_r + (on_r - off_r) * t),
-            int(off_g + (on_g - off_g) * t),
-            int(off_b + (on_b - off_b) * t),
+            int(color_off.red()   + (color_on.red()   - color_off.red())   * t),
+            int(color_off.green() + (color_on.green() - color_off.green()) * t),
+            int(color_off.blue()  + (color_on.blue()  - color_off.blue())  * t),
         )
 
         p.setBrush(track)
@@ -95,7 +100,7 @@ class ToggleSwitch(QWidget):
         travel = w - thumb_d - 2 * margin
         thumb_x = int(margin + self._pos * travel)
 
-        p.setBrush(_COLOR_THUMB)
+        p.setBrush(color_thumb)
         p.drawEllipse(thumb_x, margin, thumb_d, thumb_d)
 
         p.end()
