@@ -53,6 +53,7 @@ QStackedWidget (index 0 = setup, index 1 = dashboard)
 | `src/ui/widgets/header_bar.py` | **Rewrite** — remove job fields, add simple/advanced toggle |
 | `src/ui/app_window.py` | **Modify** — switch central widget to QStackedWidget |
 | `src/ui/pages/main_dashboard.py` | **Delete** — replaced by test_dashboard_page.py |
+| `src/ui/widgets/test_section_list.py` | **Delete** — advanced mode now handled by `CategorySection.set_advanced()` |
 
 ---
 
@@ -97,9 +98,8 @@ Vertically centred in the window, max-width 520px:
 
 ### 2.3 Recent Jobs Panel
 
-- Populated by `scan_existing_jobs()` from `file_manager.py` at page load
-- Sorted by most-recently-modified first, capped at 10 entries
-- Each row shows: customer + device description, job#, date, Before badge, After badge
+- Populated by `scan_existing_jobs()` from `file_manager.py` at page load. The returned list is sorted by `Path(entry["folder_path"]).stat().st_mtime` descending (most-recently-modified first) inside `JobSetupPage` — `scan_existing_jobs()` returns alphabetical order. Capped at 10 entries.
+- Each row shows: customer + device description, job#, date derived from `Path(entry["folder_path"]).stat().st_mtime` (formatted as "Mon DD"), Before badge, After badge
   - Badge is `pass`-coloured if that report exists, `muted`-coloured if not
 - Clicking a row pre-fills Customer Name, Job #, Device Description from the job metadata. Before/After is set to whichever report **does not yet exist** for that job (i.e., if Before exists → select After). If both exist → leave current selection.
 - Panel is collapsed by default. Toggle arrow expands/collapses with a `QPropertyAnimation` on `maximumHeight`.
@@ -136,20 +136,26 @@ All test execution logic from `main_dashboard.py` is preserved unchanged:
 
 **On entry (after "Start Testing"):**
 1. Reset all `TestResult` objects to `WAITING`
-2. Auto-run the parallel group immediately (system_info runs first alongside others)
-3. Sequential queue starts after parallel group completes
+2. `system_info` is launched immediately and independently (same as today — it is not in `_TEST_REGISTRY` and not part of the parallel group; it runs via a separate `_start_system_info()` call at page entry). When it completes, `DeviceBanner` populates and Generate Report becomes enabled.
+3. The main parallel group (network, battery, gpu, display) and sequential queue (cpu → ram → storage) are launched only when the user clicks **Run All** — not automatically on page entry.
+4. Sequential queue starts after parallel group completes
+
+**`--dev-manual` flag:** `app_window.py` currently calls `self._dashboard.dev_trigger_display()` on `MainDashboard`. After Phase 2:
+- `TestDashboardPage` must expose the same `dev_trigger_display()` method
+- `app_window.py` preserves the existing dummy `JobInfo` pre-population (`window.job_info = JobInfo(customer_name="Dev", ...)`) so tests can run without going through `JobSetupPage`
+- `app_window.py` switches the stack directly to index 1 (bypassing `JobSetupPage`) and calls `self._stack.widget(1).dev_trigger_display()`
 
 ### 3.3 Test Category Mapping
 
 | Category | Tests (in order) |
 |---|---|
-| ⚡ Performance | cpu, ram, storage |
+| ⚡ Performance | cpu, ram, storage (+ smart_deep, ram_extended in Advanced mode) |
 | 📡 Connectivity | network, usb_a, usb_c, hdmi |
 | 🖥 Display & Input | display, keyboard, touchpad |
 | 🔊 Audio & Video | speakers, webcam |
-| 🔋 Power | battery, fan |
+| 🔋 Power | battery (+ fan in Advanced mode) |
 
-Advanced-only tests (smart_deep, ram_extended) appear in Performance when Advanced mode is active.
+Advanced-only tests: `smart_deep`, `ram_extended` (Performance), `fan` (Power). These are hidden in Simple mode and shown in Advanced mode. `fan` retains its existing `advanced_only: True` classification.
 
 ---
 
@@ -203,7 +209,7 @@ Horizontal strip, `bg-base` background, `border-subtle` bottom border:
 | OS | `os_name` + `os_version` |
 | CPU | `processor_marketing` + `cpu_cores` |
 | RAM | `ram_total` |
-| STORAGE | first item from `storage_list` (model + size) |
+| STORAGE | `storage_list[0]` — already a pre-formatted string (e.g. `"512 GB NVMe"`); show as-is |
 
 ### 5.3 Overall Badge
 
@@ -211,7 +217,9 @@ Horizontal strip, `bg-base` background, `border-subtle` bottom border:
 
 ### 5.4 Report Generation
 
-"Generate Report" button emits a `generate_report_requested` signal. `TestDashboardPage` connects this to the existing `ReportWorker` logic (unchanged from current implementation). After generation, a status message is shown in the header bar elevation row (or a toast — same mechanism as current).
+"Generate Report" button emits a `generate_report_requested` signal. `TestDashboardPage` connects this to the existing `ReportWorker` logic (unchanged from current implementation).
+
+After generation, status feedback is shown via a `QLabel` in `TestDashboardPage` itself — a fixed status bar at the very bottom of the page (outside the scrollable area), `text-muted` text, auto-cleared after 3 seconds via `QTimer`. This replaces the `HeaderBar.show_status_message()` pattern from the current implementation. The existing elevation-warning row in `HeaderBar` is preserved but only used for the admin privilege warning.
 
 ---
 
@@ -235,12 +243,17 @@ Horizontal strip, `bg-base` background, `border-subtle` bottom border:
 ### 6.2 Advanced Mode
 
 `CategorySection.set_advanced(enabled: bool)`:
-- In Performance: shows/hides `smart_deep` and `ram_extended` cards; column count adjusts accordingly
-- Other categories: no change (no advanced-only tests outside Performance)
+- In Performance: adds/removes `smart_deep` and `ram_extended` cards from the grid
+- In Power: adds/removes `fan` card from the grid (`fan` is `advanced_only: True`)
+- Other categories: no change (no advanced-only tests in Connectivity, Display & Input, or Audio & Video)
 
 ### 6.3 Card Updates
 
-`CategorySection.update_card(result: TestResult)` — finds the `DashboardCard` for `result.name`, calls its existing `update(result)` method. Header badges update simultaneously.
+`CategorySection` maintains a `dict[str, DashboardCard]` keyed by `result.name` for O(1) lookup.
+
+`CategorySection.update_card(result: TestResult)` — looks up the card via `self._cards[result.name]`, calls its existing `update(result)` method, then updates the corresponding header mini-badge colour.
+
+Advanced tests are added to the grid when `set_advanced(True)` is called and removed when `set_advanced(False)` is called. The grid is rebuilt (cards removed and re-added) rather than hidden, to avoid empty grid cells. Column count is fixed per category regardless of advanced mode — the extra cards wrap to new rows in the 3-column Performance grid.
 
 ---
 
@@ -264,8 +277,8 @@ Mode is toggled via the segmented button in the header bar. `TestDashboardPage` 
 ## 9. State Reset ("← New Job")
 
 When the technician clicks "← New Job":
-1. If any tests are `RUNNING`: show a `QMessageBox` confirmation ("Tests are still running. Return to job setup?")
-2. Cancel/interrupt running workers
+1. If any tests are `RUNNING`: show a `QMessageBox` confirmation ("Tests are still running. Return to job setup? Running tests will finish in the background.")
+2. Do **not** cancel running workers — `TestWorker` threads run to completion. Results arriving after navigation are silently discarded (worker checks `window.job_info` is still set before updating UI).
 3. Reset all `TestResult` objects to `WAITING` status
 4. Clear `window.job_info`, `window.test_results`, `window.manual_items`
 5. Clear `DeviceBanner` fields back to `—`
