@@ -28,31 +28,39 @@ The app is a **PySide6 desktop GUI** that walks a technician through PC diagnost
 ### Page Flow
 
 ```
-TouchstoneWindow → MainDashboard (single page)
-Manual tests launch full-screen QDialog helpers; no page-to-page navigation.
+TouchstoneWindow (QMainWindow)
+  └─ QStackedWidget
+       ├─ index 0: JobSetupPage     (startup — fill job info, then Start Testing)
+       └─ index 1: TestDashboardPage (test execution — categories, Run All, Generate Report)
 ```
 
-`MainDashboard` is set as the central widget of `TouchstoneWindow` at startup and never replaced. All test execution, manual dialogs, and report generation happen within it. Shared state lives on the window instance: `window.job_info`, `window.test_results`, `window.manual_items`.
+`app_window.py` owns the `QStackedWidget`. Navigating between pages is done by calling `setCurrentIndex()`. Shared state lives on the window instance: `window.job_info`, `window.test_results`, `window.manual_items`.
+
+- **"▶ Start Testing"** (JobSetupPage) → validates Customer Name + Job #, emits `start_testing(job_info)`, app_window switches to index 1 and calls `TestDashboardPage.on_page_entered(job_info)`.
+- **"← New Job"** (TestDashboardPage header) → confirms if tests running, resets state, emits `new_job_requested`, app_window switches to index 0 and calls `JobSetupPage.reload_recent_jobs()`.
 
 ### Main Window (`src/ui/app_window.py`)
 
-- `TouchstoneWindow(QMainWindow)` — `MainDashboard` as central widget, dark theme applied at QApplication level
+- `TouchstoneWindow(QMainWindow)` — `QStackedWidget` as central widget, dark theme applied at QApplication level
 - Shared state: `job_info`, `test_results`, `manual_items`
+- `--dev-manual` flag: pre-populates a dummy `JobInfo`, switches to index 1, fires `dev_trigger_display()` after 500 ms
 
 ### Automated Tests (`src/tests/`)
 
 - All tests are `async`, subclass `BaseTest`, and populate a `TestResult` in-place via `mark_pass()` / `mark_warn()` / `mark_fail()`.
-- `MainDashboard` runs each test in a **`TestWorker(QThread)`** whose `run()` calls `asyncio.run(test.safe_run())`. Two groups:
-  - **Parallel** (fast/info): `system_info`, `network`, `battery`, `gpu`, `display`
-  - **Sequential** (resource-intensive): `cpu` → `ram` → `storage`
+- `TestDashboardPage` runs each test in a **`TestWorker(QThread)`** whose `run()` calls `asyncio.run(test.safe_run())`. Three groups:
+  - **system_info**: launched independently on page entry; result populates `DeviceBanner` and enables Generate Report
+  - **Parallel** (on Run All): `network`, `battery`, `gpu` (+ `fan` in Advanced mode)
+  - **Sequential** (after parallel): `cpu` → `ram` → `storage` (+ `smart_deep`, `ram_extended` in Advanced mode)
 - Test durations are controlled by constants in `src/config.py` (`CPU_STRESS_QUICK`, etc.).
+- Advanced-only tests (`smart_deep`, `ram_extended`, `fan`) are hidden/skipped in Simple mode.
 
 ### Manual Tests
 
-- Manual tests (LCD, keyboard, touchpad, speakers, USB-A/C, HDMI, webcam) are defined in `_TEST_REGISTRY` in `MainDashboard`.
-- `MainDashboard._run_manual_queue()` executes checked manual tests in sequence after automated tests complete.
+- Manual tests (display, keyboard, touchpad, speakers, USB-A, USB-C, HDMI, webcam) are defined in `_TEST_REGISTRY` in `TestDashboardPage`.
+- `TestDashboardPage._run_manual_queue()` runs all enabled manual tests in sequence after automated tests complete (Run All path only). Individual cards can also be triggered manually via `run_requested` signal.
 - Each manual test launches a `QDialog` helper from `src/ui/helpers/`.
-- Helpers run in-process via `dialog.exec()` (blocks until closed). Result is read from `dialog.result_str`.
+- Helpers run in-process via `dialog.run()` (blocks until closed). Result is read from `dialog.result_str`.
 
 ### Helper Dialogs (`src/ui/helpers/`)
 
@@ -105,8 +113,8 @@ Templates live in `src/report/templates/`.
 ### Stylesheet (`src/ui/stylesheet.py`)
 
 Single `QSS_DARK` string applied at app level. Key color tokens:
-- Background `#0d1117`, Surface `#161b22`, Border `#30363d`
-- Accent `#3b82f6`, Text `#e6edf3`, Muted `#7d8590`
+- Background `#09090b`, Surface `#18181b`, Border `#3f3f46`
+- Accent `#3b82f6`, Text `#fafafa`, Muted `#71717a`
 - Pass `#22c55e`, Warn `#f59e0b`, Fail `#ef4444`
 
 Dynamic QSS properties (set via `setProperty` + `unpolish`/`polish`):
@@ -125,4 +133,4 @@ Dynamic QSS properties (set via `setProperty` + `unpolish`/`polish`):
 
 ### Manual Test Dialog Flow
 
-`MainDashboard._run_next_manual()` pops the next manual item from the queue and launches its dialog. After the dialog closes, `_on_manual_result(result: str)` handles `"pass"` / `"fail"` / `"skip"`. On any result the queue advances to the next item; when empty, report generation is triggered.
+`TestDashboardPage._run_manual_queue()` iterates enabled manual tests in registry order and calls `_run_single_manual(entry)` for each. The dialog is created, `dialog.run()` is called (blocks), result is read from `dialog.result_str`, `TestResult` is updated, and the card is refreshed. After all manual tests complete, `_on_all_tests_done()` clears the running-all state. Individual manual tests can also be triggered by clicking a card's Run button.
