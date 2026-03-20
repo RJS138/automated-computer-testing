@@ -412,20 +412,14 @@ class TestDashboardPage(QWidget):
     # ── Manual tests ──────────────────────────────────────────────────────────
 
     def _run_manual_queue(self) -> None:
-        self._manual_queue = [
+        queue = [
             e
             for e in self._TEST_REGISTRY
             if e["kind"] == "manual" and self._test_enabled.get(e["name"], True)
         ]
-        self._run_next_manual()
-
-    def _run_next_manual(self) -> None:
-        if not self._manual_queue:
-            self._on_all_tests_done()
-            return
-        entry = self._manual_queue.pop(0)
-        self._run_single_manual(entry)
-        self._run_next_manual()
+        for entry in queue:
+            self._run_single_manual(entry)
+        self._on_all_tests_done()
 
     def _run_single_manual(self, entry: dict) -> None:
         name = entry["name"]
@@ -495,6 +489,8 @@ class TestDashboardPage(QWidget):
 
     def _on_new_job(self) -> None:
         any_running = any(w.isRunning() for w in self._active_workers)
+        if self._si_worker is not None and self._si_worker.isRunning():
+            any_running = True
         if any_running:
             reply = QMessageBox.question(
                 self,
