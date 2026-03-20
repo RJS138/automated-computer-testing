@@ -239,7 +239,12 @@ class JobSetupPage(QWidget):
                 item.widget().deleteLater()
 
         jobs = scan_existing_jobs()
-        jobs.sort(key=lambda j: j["folder_path"].stat().st_mtime, reverse=True)
+        for j in jobs:
+            try:
+                j["_mtime"] = j["folder_path"].stat().st_mtime
+            except OSError:
+                j["_mtime"] = 0.0
+        jobs.sort(key=lambda j: j["_mtime"], reverse=True)
         jobs = jobs[:10]
 
         if not jobs:
@@ -281,7 +286,7 @@ class JobSetupPage(QWidget):
         )
         layout.addWidget(name_lbl, 0, 0)
 
-        mtime = job["folder_path"].stat().st_mtime
+        mtime = job.get("_mtime", 0.0)
         dt = datetime.fromtimestamp(mtime)
         date_str = f"{dt.strftime('%b')} {dt.day}"
         meta_lbl = QLabel(f"{job['job_number']}  ·  {date_str}")
