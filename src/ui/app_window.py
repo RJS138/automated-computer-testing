@@ -1,166 +1,152 @@
-"""Main application window for Touchstone."""
+"""TouchstoneWindow — application main window."""
 
 from __future__ import annotations
 
-import platform
-from pathlib import Path
+import sys
 
 from PySide6.QtCore import QTimer
-from PySide6.QtGui import QCloseEvent, QColor, QFont, QPalette
-from PySide6.QtWidgets import QApplication, QMainWindow
+from PySide6.QtGui import QColor, QPalette
+from PySide6.QtWidgets import QApplication, QMainWindow, QStackedWidget
 
-from src.models.job import JobInfo
+from src.models.job import JobInfo, ReportType
 from src.models.settings import Settings
 from src.models.test_result import TestResult
-from src.ui.stylesheet import QSS_DARK, QSS_LIGHT
-from src.utils.file_manager import find_usb_drive
+from src.ui.pages.job_setup_page import JobSetupPage
+from src.ui.pages.test_dashboard_page import TestDashboardPage
+from src.ui.stylesheet import QSS_DARK, QSS_LIGHT, refresh_style
 from src.utils.theme_prefs import load_theme, save_theme
 
 
-def _dark_palette() -> QPalette:
-    """QPalette matching the dark theme tokens."""
-    p = QPalette()
-    p.setColor(QPalette.ColorRole.Window,          QColor("#09090b"))
-    p.setColor(QPalette.ColorRole.WindowText,      QColor("#fafafa"))
-    p.setColor(QPalette.ColorRole.Base,            QColor("#18181b"))
-    p.setColor(QPalette.ColorRole.AlternateBase,   QColor("#27272a"))
-    p.setColor(QPalette.ColorRole.Text,            QColor("#fafafa"))
-    p.setColor(QPalette.ColorRole.PlaceholderText, QColor("#71717a"))
-    p.setColor(QPalette.ColorRole.Button,          QColor("#27272a"))
-    p.setColor(QPalette.ColorRole.ButtonText,      QColor("#fafafa"))
-    p.setColor(QPalette.ColorRole.BrightText,      QColor("#ffffff"))
-    p.setColor(QPalette.ColorRole.Highlight,       QColor("#3b82f6"))
-    p.setColor(QPalette.ColorRole.HighlightedText, QColor("#fafafa"))
-    p.setColor(QPalette.ColorRole.Link,            QColor("#3b82f6"))
-    p.setColor(QPalette.ColorRole.ToolTipBase,     QColor("#27272a"))
-    p.setColor(QPalette.ColorRole.ToolTipText,     QColor("#fafafa"))
-    for role in (QPalette.ColorRole.WindowText, QPalette.ColorRole.Text,
-                 QPalette.ColorRole.ButtonText):
-        p.setColor(QPalette.ColorGroup.Disabled, role, QColor("#52525b"))
-    return p
-
-
-def _light_palette() -> QPalette:
-    """QPalette matching the light theme tokens."""
-    p = QPalette()
-    p.setColor(QPalette.ColorRole.Window,          QColor("#f5f4f1"))
-    p.setColor(QPalette.ColorRole.WindowText,      QColor("#1c1917"))
-    p.setColor(QPalette.ColorRole.Base,            QColor("#fafaf9"))
-    p.setColor(QPalette.ColorRole.AlternateBase,   QColor("#e7e5e4"))
-    p.setColor(QPalette.ColorRole.Text,            QColor("#1c1917"))
-    p.setColor(QPalette.ColorRole.PlaceholderText, QColor("#a8a29e"))
-    p.setColor(QPalette.ColorRole.Button,          QColor("#e7e5e4"))
-    p.setColor(QPalette.ColorRole.ButtonText,      QColor("#1c1917"))
-    p.setColor(QPalette.ColorRole.BrightText,      QColor("#ffffff"))
-    p.setColor(QPalette.ColorRole.Highlight,       QColor("#2563eb"))
-    p.setColor(QPalette.ColorRole.HighlightedText, QColor("#fafafa"))
-    p.setColor(QPalette.ColorRole.Link,            QColor("#2563eb"))
-    p.setColor(QPalette.ColorRole.ToolTipBase,     QColor("#e7e5e4"))
-    p.setColor(QPalette.ColorRole.ToolTipText,     QColor("#1c1917"))
-    for role in (QPalette.ColorRole.WindowText, QPalette.ColorRole.Text,
-                 QPalette.ColorRole.ButtonText):
-        p.setColor(QPalette.ColorGroup.Disabled, role, QColor("#a8a29e"))
-    return p
-
-
 class TouchstoneWindow(QMainWindow):
-    """QMainWindow with MainDashboard as its central widget.
-
-    Shared state:
-        job_info       — populated when Run All is clicked
-        test_results   — populated as tests complete
-        manual_items   — populated by manual tests
-    """
-
-    job_info: JobInfo | None
-    test_results: list[TestResult]
-    manual_items: list[TestResult]
+    """Application main window with two-page QStackedWidget flow."""
 
     def __init__(self, dev_manual: bool = False) -> None:
         super().__init__()
 
-        self.job_info = None
+        # Shared state
+        self.job_info: JobInfo | None = None
+        self.test_results: list[TestResult] = []
+        self.manual_items: list[TestResult] = []
+        self.settings: Settings = Settings()
+
+        # Theme
+        theme = load_theme()
+        self._apply_theme(theme)
+
+        self.setWindowTitle("Touchstone")
+        self.setMinimumSize(900, 640)
+
+        # Stack: index 0 = JobSetupPage, index 1 = TestDashboardPage
+        self._stack = QStackedWidget()
+        self._setup_page = JobSetupPage(self)
+        self._dashboard = TestDashboardPage(self, self)
+        self._stack.addWidget(self._setup_page)
+        self._stack.addWidget(self._dashboard)
+        self.setCentralWidget(self._stack)
+
+        # Navigation signals
+        self._setup_page.start_testing.connect(self._on_start_testing)
+        self._dashboard.new_job_requested.connect(self._on_new_job_requested)
+
+        # Elevation warning
+        if not self._is_admin():
+            self._dashboard._header.show_elevation_warning()
+
+        # Load recent jobs for setup page
+        self._setup_page.reload_recent_jobs()
+
+        if dev_manual:
+            self._start_dev_manual()
+        else:
+            self._stack.setCurrentIndex(0)
+
+    # ── Navigation ────────────────────────────────────────────────────────────
+
+    def _on_start_testing(self, job_info: JobInfo) -> None:
+        self.job_info = job_info
         self.test_results = []
         self.manual_items = []
+        self._stack.setCurrentIndex(1)
+        self._dashboard.on_page_entered(job_info)
 
-        # Default save path — detect USB once at startup
-        _usb = find_usb_drive()
-        self.settings = Settings(
-            save_path=str(_usb) if _usb else str(Path.home() / "touchstone_reports")
+    def _on_new_job_requested(self) -> None:
+        self._stack.setCurrentIndex(0)
+        self._setup_page.reload_recent_jobs()
+
+    # ── Dev manual ────────────────────────────────────────────────────────────
+
+    def _start_dev_manual(self) -> None:
+        """Bypass JobSetupPage and go straight to test dashboard with a dummy job."""
+        self.job_info = JobInfo(
+            customer_name="Dev",
+            device_description="Test Device",
+            job_number="DEV-001",
+            report_type=ReportType.BEFORE,
         )
+        self.test_results = []
+        self.manual_items = []
+        self._stack.setCurrentIndex(1)
+        self._dashboard.on_page_entered(self.job_info)
+        QTimer.singleShot(500, self._dashboard.dev_trigger_display)
 
-        # ── Window properties ────────────────────────────────────
-        self.setWindowTitle("Touchstone")
-        self.setMinimumSize(900, 650)
+    # ── Theme ─────────────────────────────────────────────────────────────────
 
-        # ── Apply Fusion style + theme ───────────────────────────
-        self._current_theme = "dark"  # default; overwritten below if app is available
+    def _apply_theme(self, theme: str) -> None:
         app = QApplication.instance()
-        if isinstance(app, QApplication):
-            _sys = platform.system()
-            if _sys == "Darwin":
-                app.setFont(QFont("Helvetica Neue", 13))
-            elif _sys == "Windows":
-                app.setFont(QFont("Segoe UI", 11))   # spec: 11px (was 10 in old code)
-            else:
-                app.setFont(QFont("DejaVu Sans", 11))  # spec: 11px (was 10 in old code)
-            app.setStyle("Fusion")
-            self._current_theme = load_theme()
-            if self._current_theme == "light":
-                app.setPalette(_light_palette())
-                app.setStyleSheet(QSS_LIGHT)
-            else:
-                app.setPalette(_dark_palette())
-                app.setStyleSheet(QSS_DARK)
-
-        # ── Central widget: MainDashboard ────────────────────────
-        from src.ui.pages.main_dashboard import MainDashboard
-
-        self._dashboard = MainDashboard(self)
-        self.setCentralWidget(self._dashboard)
-
-        # ── Dev-manual trigger ───────────────────────────────────
-        if dev_manual:
-            self.job_info = JobInfo(
-                customer_name="Dev",
-                device_description="Dev device",
-                job_number="0",
-            )
-            QTimer.singleShot(500, self._dashboard.dev_trigger_display)
-
-    # ── Theme ─────────────────────────────────────────────────────
-
-    def set_theme(self, theme: str) -> None:
-        """Switch between "dark" and "light" themes at runtime. No restart needed."""
-        app = QApplication.instance()
-        if not isinstance(app, QApplication):
+        if app is None:
             return
         if theme == "light":
-            app.setPalette(_light_palette())
             app.setStyleSheet(QSS_LIGHT)
+            app.setPalette(self._light_palette())
         else:
-            app.setPalette(_dark_palette())
             app.setStyleSheet(QSS_DARK)
+            app.setPalette(self._dark_palette())
+
+    def set_theme(self, theme: str) -> None:
         save_theme(theme)
-        self._current_theme = theme
+        self._apply_theme(theme)
+        refresh_style(self)
 
-    @property
-    def current_theme(self) -> str:
-        return self._current_theme
+    @staticmethod
+    def _dark_palette() -> QPalette:
+        pal = QPalette()
+        pal.setColor(QPalette.ColorRole.Window,          QColor("#09090b"))
+        pal.setColor(QPalette.ColorRole.WindowText,      QColor("#fafafa"))
+        pal.setColor(QPalette.ColorRole.Base,            QColor("#18181b"))
+        pal.setColor(QPalette.ColorRole.AlternateBase,   QColor("#27272a"))
+        pal.setColor(QPalette.ColorRole.Text,            QColor("#fafafa"))
+        pal.setColor(QPalette.ColorRole.Button,          QColor("#27272a"))
+        pal.setColor(QPalette.ColorRole.ButtonText,      QColor("#fafafa"))
+        pal.setColor(QPalette.ColorRole.Highlight,       QColor("#3b82f6"))
+        pal.setColor(QPalette.ColorRole.HighlightedText, QColor("#ffffff"))
+        pal.setColor(QPalette.ColorRole.BrightText,      QColor("#ffffff"))
+        return pal
 
-    # ── Show ─────────────────────────────────────────────────────
+    @staticmethod
+    def _light_palette() -> QPalette:
+        pal = QPalette()
+        pal.setColor(QPalette.ColorRole.Window,          QColor("#f9fafb"))
+        pal.setColor(QPalette.ColorRole.WindowText,      QColor("#111827"))
+        pal.setColor(QPalette.ColorRole.Base,            QColor("#ffffff"))
+        pal.setColor(QPalette.ColorRole.AlternateBase,   QColor("#f3f4f6"))
+        pal.setColor(QPalette.ColorRole.Text,            QColor("#111827"))
+        pal.setColor(QPalette.ColorRole.Button,          QColor("#e5e7eb"))
+        pal.setColor(QPalette.ColorRole.ButtonText,      QColor("#111827"))
+        pal.setColor(QPalette.ColorRole.Highlight,       QColor("#3b82f6"))
+        pal.setColor(QPalette.ColorRole.HighlightedText, QColor("#ffffff"))
+        pal.setColor(QPalette.ColorRole.BrightText,      QColor("#ffffff"))
+        return pal
 
-    def showEvent(self, event) -> None:
-        super().showEvent(event)
-        screen = QApplication.primaryScreen()
-        if screen is not None:
-            geom = screen.availableGeometry()
-            self.move(
-                geom.center().x() - self.width() // 2,
-                geom.center().y() - self.height() // 2,
-            )
+    # ── Admin check ───────────────────────────────────────────────────────────
 
-    # ── Close ────────────────────────────────────────────────────
-
-    def closeEvent(self, event: QCloseEvent) -> None:
-        event.accept()
+    @staticmethod
+    def _is_admin() -> bool:
+        try:
+            if sys.platform == "win32":
+                import ctypes
+                return bool(ctypes.windll.shell32.IsUserAnAdmin())
+            else:
+                import os
+                return os.geteuid() == 0
+        except Exception:
+            return True
