@@ -231,4 +231,7 @@ reports/
 docs/superpowers/
 
 # ISO build — staged binary (built by build-iso.sh, not tracked in git)
-scripts/iso-config/config/includes.chroot/usr/
+scripts/iso-config/config/includes.chroot/usr/.worktrees/
+
+# Git worktrees
+.worktrees/
