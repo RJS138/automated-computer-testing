@@ -157,6 +157,7 @@ class CategorySection(QFrame):
         self._anim = QPropertyAnimation(self._collapsible, b"maximumHeight")
         self._anim.setDuration(200)
         self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._anim.finished.connect(self._on_anim_finished)
 
         self._header_widget.mousePressEvent = lambda _e: self._toggle_expanded()
 
@@ -192,7 +193,8 @@ class CategorySection(QFrame):
             if name in self._badges:
                 self._badges[name].setVisible(enabled)
             elif enabled:
-                short = self._short_names.get(name, name)
+                display_name = next((dn for n, dn, _ in self._tests if n == name), name)
+                short = self._short_names.get(name, display_name)
                 badge = _MiniBadge(short)
                 self._badges[name] = badge
                 self._badges_layout.addWidget(badge)
@@ -237,3 +239,7 @@ class CategorySection(QFrame):
             self._anim.setStartValue(current)
             self._anim.setEndValue(0)
             self._anim.start()
+
+    def _on_anim_finished(self) -> None:
+        if not self._expanded:
+            self._collapsible.hide()
