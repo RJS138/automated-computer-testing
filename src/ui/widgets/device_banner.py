@@ -21,8 +21,8 @@ _OVERALL_STYLES: dict[str, tuple[str, str, str]] = {
     "fail":    ("#2e1414", "#ef4444", "#ef4444"),
     "error":   ("#2e1414", "#ef4444", "#ef4444"),
     "running": ("#1e3a5f", "#60a5fa", "#60a5fa"),
-    "waiting": ("#161b22", "#30363d", "#7d8590"),
-    "skip":    ("#161b22", "#30363d", "#7d8590"),
+    "waiting": ("#18181b", "#3f3f46", "#71717a"),
+    "skip":    ("#18181b", "#3f3f46", "#71717a"),
 }
 
 _STATUS_PRIORITY = ["fail", "error", "warn", "skip", "pass", "running", "waiting"]
@@ -39,14 +39,14 @@ class _SpecField(QWidget):
 
         self._lbl = QLabel(label.upper())
         self._lbl.setStyleSheet(
-            "font-size: 10px; font-weight: 700; color: #7d8590; "
+            "font-size: 10px; font-weight: 700; color: #71717a; "
             "letter-spacing: 0.05em; background: transparent;"
         )
         layout.addWidget(self._lbl)
 
         self._val = QLabel("—")
         self._val.setStyleSheet(
-            "font-size: 13px; font-weight: 600; color: #7d8590; "
+            "font-size: 13px; font-weight: 600; color: #71717a; "
             "font-family: monospace; background: transparent;"
         )
         layout.addWidget(self._val)
@@ -54,14 +54,14 @@ class _SpecField(QWidget):
     def set_value(self, text: str) -> None:
         self._val.setText(text)
         self._val.setStyleSheet(
-            "font-size: 13px; font-weight: 600; color: #e6edf3; "
+            "font-size: 13px; font-weight: 600; color: #fafafa; "
             "font-family: monospace; background: transparent;"
         )
 
     def clear(self) -> None:
         self._val.setText("—")
         self._val.setStyleSheet(
-            "font-size: 13px; font-weight: 600; color: #7d8590; "
+            "font-size: 13px; font-weight: 600; color: #71717a; "
             "font-family: monospace; background: transparent;"
         )
 
@@ -80,7 +80,7 @@ class DeviceBanner(QFrame):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setStyleSheet(
-            "QFrame { background-color: #0d1117; border-bottom: 1px solid #30363d; }"
+            "QFrame { background-color: #09090b; border-bottom: 1px solid #3f3f46; }"
         )
         self._fields: dict[str, _SpecField] = {}
         self._build_ui()
@@ -134,13 +134,13 @@ class DeviceBanner(QFrame):
         self._report_btn.setEnabled(False)
         self._report_btn.setStyleSheet(
             "QPushButton {"
-            "  background: #161b22; color: #7d8590; "
-            "  border: 1px solid #30363d; border-radius: 6px; "
+            "  background: #18181b; color: #71717a; "
+            "  border: 1px solid #3f3f46; border-radius: 6px; "
             "  font-size: 11px; font-weight: 700; "
             "}"
-            "QPushButton:enabled { color: #e6edf3; }"
+            "QPushButton:enabled { color: #fafafa; }"
             "QPushButton:enabled:hover { border-color: #3b82f6; color: #3b82f6; }"
-            "QPushButton:disabled { color: #7d8590; }"
+            "QPushButton:disabled { color: #71717a; }"
         )
         self._report_btn.clicked.connect(self.generate_report_requested)
         outer.addWidget(self._report_btn)
