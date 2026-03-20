@@ -257,6 +257,8 @@ class TestDashboardPage(QWidget):
             return  # navigated away before system_info finished
         if self._si_result is not None:
             self._banner.update_from_result(self._si_result)
+            if self._si_result not in self._window.test_results:
+                self._window.test_results.append(self._si_result)
         self._recalculate_overall()
 
     # ── Run All ───────────────────────────────────────────────────────────────
@@ -391,17 +393,22 @@ class TestDashboardPage(QWidget):
             if section.card(name) is not None:
                 section.update_card(result)
                 break
+        if result not in self._window.test_results:
+            self._window.test_results.append(result)
         self._active_workers = [w for w in self._active_workers if w.isRunning()]
         self._recalculate_overall()
 
     def _recalculate_overall(self) -> None:
         self._banner.update_overall(list(self._results.values()))
 
+        is_advanced = self._header.mode() == "advanced"
+        adv_only = {e["name"]: e["advanced_only"] for e in self._TEST_REGISTRY}
         incomplete = {TestStatus.WAITING, TestStatus.RUNNING}
         all_done = all(
             self._results[name].status not in incomplete
             for name in self._results
             if self._test_enabled.get(name, True)
+            and (not adv_only.get(name, False) or is_advanced)
         )
         if all_done and self._running_all:
             self._running_all = False
