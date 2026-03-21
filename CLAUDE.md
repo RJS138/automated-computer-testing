@@ -113,14 +113,40 @@ Templates live in `src/report/templates/`.
 ### Stylesheet (`src/ui/stylesheet.py`)
 
 Single `QSS_DARK` string applied at app level. Key color tokens:
-- Background `#09090b`, Surface `#18181b`, Border `#3f3f46`
+- Background `#09090b`, Surface `#18181b`, Elevated `#27272a`, Border `#3f3f46`
 - Accent `#3b82f6`, Text `#fafafa`, Muted `#71717a`
 - Pass `#22c55e`, Warn `#f59e0b`, Fail `#ef4444`
 
-Dynamic QSS properties (set via `setProperty` + `unpolish`/`polish`):
-- `QFrame[class="test-card"][status="running/pass/warn/fail/error/skip"]` — border color
-- `QPushButton[class="primary"]` — accent fill
-- `QPushButton[class="toggle"][checked="true"]` — selected state
+**Design rules (do not break these):**
+- No `border: 1px solid` anywhere — use background color differences to distinguish elements. Inputs use `#27272a` bg, surfaces use `#18181b`, page bg is `#09090b`.
+- No borders on containers (panels, cards, form sections) — background tint only.
+
+**QSS property selectors are unreliable — do not use them for toggled state.**
+`setProperty("class", "seg-left")` + `[checked="true"]` selectors silently fail when set in `__init__` before the widget is shown. `refresh_style` (unpolish/polish) is also a no-op before first show. **Always use direct `setStyleSheet()` for any state that changes.** Define ON/OFF style constants at module level and swap them explicitly:
+```python
+# Good — reliable
+btn.setStyleSheet(_SEG_L_ON if selected else _SEG_L_OFF)
+
+# Bad — silently fails before widget is shown
+btn.setProperty("checked", "true")
+refresh_style(btn)
+```
+
+**Vertical centering in QHBoxLayout:** use per-widget alignment, not layout-level:
+```python
+# Good
+row.addWidget(btn, 0, Qt.AlignmentFlag.AlignVCenter)
+
+# Bad — does not reliably center fixed-height items
+row.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+row.addWidget(btn)
+```
+
+### Dashboard UI Structure (`src/ui/widgets/`)
+
+- `DashboardCard` — flat row (52px tall, `#18181b` bg, 8px radius) showing one test. Layout: `[name] → [detail/elapsed] → [STATUS text] → [Run btn]`. All items added with `AlignVCenter`. Status shown as coloured text, no background pill.
+- `CategorySection` — collapsible section header + `QVBoxLayout` of `DashboardCard` rows (5px spacing). No grid, no mini-badges. Header is plain uppercase label + collapse arrow.
+- Segmented buttons (Simple/Advanced, Before/After, format picker) all use direct `_SEG_L_ON/OFF` / `_SEG_R_ON/OFF` style constants — see `src/ui/widgets/header_bar.py` for the pattern.
 
 ### PyInstaller Notes
 

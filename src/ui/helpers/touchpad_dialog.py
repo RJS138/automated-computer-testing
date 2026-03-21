@@ -87,7 +87,7 @@ class _ZoneWidget(QFrame):
         super().__init__()
         self._dialog = dialog
         self._zone_type = zone_type
-        self.setStyleSheet("QFrame { background: #111111; border: 1px solid #2a2a2a; }")
+        self.setStyleSheet("QFrame { background: #111111; border: none; }")
 
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignCenter)
@@ -121,7 +121,7 @@ class _ZoneWidget(QFrame):
             self.setCursor(Qt.SizeVerCursor)
 
     def _activate(self, count: int) -> None:
-        self.setStyleSheet("QFrame { background: #0d1f0d; border: 1px solid #2a2a2a; }")
+        self.setStyleSheet("QFrame { background: #0d1f0d; border: none; }")
         self._count_label.setText(str(count))
         self._count_label.setStyleSheet(
             "color: #2a8a2a; font-family: Courier; font-size: 28px; font-weight: bold; border: none;"

@@ -372,7 +372,7 @@ class KeyboardDialog(QDialog):
 
         self._layout_combo = QComboBox()
         self._layout_combo.setStyleSheet(
-            "QComboBox { background: #252525; color: #cccccc; border: 1px solid #444; "
+            "QComboBox { background: #2e2e2e; color: #cccccc; border: none; "
             "padding: 4px 14px; font-family: Courier; font-size: 11px; }"
             "QComboBox::drop-down { border: none; }"
             "QComboBox QAbstractItemView { background: #252525; color: #cccccc; "

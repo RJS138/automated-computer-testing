@@ -345,7 +345,7 @@ class SpeakersDialog(QDialog):
         self._code_entry.setMaxLength(4)
         self._code_entry.setFixedWidth(120)
         self._code_entry.setStyleSheet(
-            "QLineEdit { background: #252525; color: white; border: 1px solid #444; "
+            "QLineEdit { background: #2e2e2e; color: white; border: none; "
             "padding: 6px; font-family: Courier; font-size: 18px; font-weight: bold; }"
         )
         self._code_entry.returnPressed.connect(self._confirm_code)
