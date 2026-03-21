@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.models.job import JobInfo
-from src.ui.stylesheet import refresh_style
+from src.ui.stylesheet import build_seg_styles, get_colors
 
 
 class HeaderBar(QFrame):
@@ -32,11 +32,12 @@ class HeaderBar(QFrame):
     settings_clicked = Signal()
     mode_changed = Signal(str)
 
-    def __init__(self, parent=None) -> None:
+    def __init__(self, theme: str = "dark", parent=None) -> None:
         super().__init__(parent)
-        self.setProperty("class", "header-bar")
         self._mode = "simple"
+        self._theme = theme
         self._build_ui()
+        self.apply_theme(theme)
 
     def _build_ui(self) -> None:
         outer = QVBoxLayout(self)
@@ -44,24 +45,14 @@ class HeaderBar(QFrame):
         outer.setSpacing(0)
 
         # Primary row
-        primary = QWidget()
-        primary.setStyleSheet(
-            "background: #18181b; border-bottom: 1px solid #3f3f46;"
-        )
-        row = QHBoxLayout(primary)
+        self._primary_row = QWidget()
+        row = QHBoxLayout(self._primary_row)
         row.setContentsMargins(16, 8, 16, 8)
         row.setSpacing(12)
 
         # Job info (flex-1)
         self._job_info_lbl = QLabel("—")
-        self._job_info_lbl.setStyleSheet(
-            "font-size: 12px; font-weight: 600; color: #fafafa; background: transparent;"
-        )
         self._report_badge = QLabel()
-        self._report_badge.setStyleSheet(
-            "background: #1e3a5f; color: #60a5fa; font-size: 10px; font-weight: 700; "
-            "padding: 1px 7px; border-radius: 4px; border: 1px solid #3b82f6;"
-        )
         self._report_badge.hide()
 
         info_row_layout = QHBoxLayout()
@@ -75,56 +66,42 @@ class HeaderBar(QFrame):
         info_widget.setLayout(info_row_layout)
         row.addWidget(info_widget, stretch=1)
 
-        # Simple / Advanced toggle
+        # Simple / Advanced toggle — styled directly, no property selectors
         self._simple_btn = QPushButton("Simple")
-        self._simple_btn.setProperty("class", "seg-left")
-        self._simple_btn.setProperty("checked", "true")
         self._simple_btn.clicked.connect(lambda: self._select_mode("simple"))
         row.addWidget(self._simple_btn)
 
         self._advanced_btn = QPushButton("Advanced")
-        self._advanced_btn.setProperty("class", "seg-right")
-        self._advanced_btn.setProperty("checked", "false")
         self._advanced_btn.clicked.connect(lambda: self._select_mode("advanced"))
         row.addWidget(self._advanced_btn)
 
         # Run All
         self._run_all_btn = QPushButton("▶ Run All")
-        self._run_all_btn.setProperty("class", "primary")
         self._run_all_btn.clicked.connect(self.run_all_clicked)
         row.addWidget(self._run_all_btn)
 
         # New Job
-        new_job_btn = QPushButton("← New Job")
-        new_job_btn.setProperty("class", "ghost")
-        new_job_btn.clicked.connect(self.new_job_clicked)
-        row.addWidget(new_job_btn)
+        self._new_job_btn = QPushButton("← New Job")
+        self._new_job_btn.clicked.connect(self.new_job_clicked)
+        row.addWidget(self._new_job_btn)
 
-        # Settings gear
-        settings_btn = QPushButton("⚙")
-        settings_btn.setProperty("class", "icon-btn")
-        settings_btn.clicked.connect(self.settings_clicked)
-        row.addWidget(settings_btn)
+        # Settings gear — distinct resting background so it reads as a button
+        self._settings_btn = QPushButton("⚙")
+        self._settings_btn.clicked.connect(self.settings_clicked)
+        row.addWidget(self._settings_btn)
 
-        outer.addWidget(primary)
+        outer.addWidget(self._primary_row)
 
         # Elevation warning row (hidden unless not running as admin)
         self._warn_row = QWidget()
-        self._warn_row.setStyleSheet(
-            "background: #2d1a00; border-bottom: 1px solid #7c3d00;"
-        )
         warn_layout = QHBoxLayout(self._warn_row)
         warn_layout.setContentsMargins(16, 4, 16, 4)
-        warn_lbl = QLabel(
+        self._warn_lbl = QLabel(
             "⚠ Not running as administrator — some tests may be limited or fail."
         )
-        warn_lbl.setStyleSheet("color: #f59e0b; font-size: 11px;")
-        warn_layout.addWidget(warn_lbl)
+        warn_layout.addWidget(self._warn_lbl)
         self._warn_row.hide()
         outer.addWidget(self._warn_row)
-
-        refresh_style(self._simple_btn)
-        refresh_style(self._advanced_btn)
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -148,10 +125,62 @@ class HeaderBar(QFrame):
         """Reset to Simple mode without emitting mode_changed."""
         if self._mode != "simple":
             self._mode = "simple"
-            self._simple_btn.setProperty("checked", "true")
-            self._advanced_btn.setProperty("checked", "false")
-            refresh_style(self._simple_btn)
-            refresh_style(self._advanced_btn)
+            seg = build_seg_styles(self._theme)
+            self._simple_btn.setStyleSheet(seg["L_ON"])
+            self._advanced_btn.setStyleSheet(seg["R_OFF"])
+
+    def set_run_all_enabled(self, enabled: bool) -> None:
+        self._run_all_btn.setEnabled(enabled)
+
+    def apply_theme(self, theme: str) -> None:
+        """Re-apply all inline styles for the given theme."""
+        self._theme = theme
+        c = get_colors(theme)
+        seg = build_seg_styles(theme)
+
+        self._primary_row.setStyleSheet(f"background: {c['bg_surface']};")
+        self._job_info_lbl.setStyleSheet(
+            f"font-size: 12px; font-weight: 600; color: {c['text_primary']}; background: transparent;"
+        )
+        self._report_badge.setStyleSheet(
+            f"background: {c['badge_accent_bg']}; color: {c['badge_accent_text']};"
+            f" font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 4px; border: none;"
+        )
+        # Segmented mode buttons (preserve current selected state)
+        if self._mode == "advanced":
+            self._simple_btn.setStyleSheet(seg["L_OFF"])
+            self._advanced_btn.setStyleSheet(seg["R_ON"])
+        else:
+            self._simple_btn.setStyleSheet(seg["L_ON"])
+            self._advanced_btn.setStyleSheet(seg["R_OFF"])
+        # Run All button
+        self._run_all_btn.setStyleSheet(
+            f"QPushButton {{ background: {c['accent']}; color: #ffffff; border: none;"
+            f" border-radius: 6px; padding: 5px 14px; font-size: 12px;"
+            f" font-weight: 600; min-height: 30px; }}"
+            f"QPushButton:hover {{ background: {c['accent_hover']}; }}"
+            f"QPushButton:pressed {{ background: {c['accent_hover']}; }}"
+            f"QPushButton:disabled {{ background: {c['accent']}; color: #ffffff; }}"
+        )
+        # New Job button
+        self._new_job_btn.setStyleSheet(
+            f"QPushButton {{ background: {c['bg_elevated']}; color: {c['text_secondary']};"
+            f" border: none; border-radius: 6px; padding: 5px 14px; font-size: 12px;"
+            f" font-weight: 500; min-height: 30px; }}"
+            f"QPushButton:hover {{ background: {c['bg_hover']}; color: {c['text_primary']}; }}"
+            f"QPushButton:pressed {{ background: {c['text_muted']}; }}"
+        )
+        # Settings gear
+        self._settings_btn.setStyleSheet(
+            f"QPushButton {{ background: {c['bg_elevated']}; border: none; border-radius: 6px;"
+            f" min-width: 36px; min-height: 36px; max-width: 36px; max-height: 36px;"
+            f" font-size: 18px; padding: 0; }}"
+            f"QPushButton:hover {{ background: {c['bg_hover']}; }}"
+            f"QPushButton:pressed {{ background: {c['text_muted']}; }}"
+        )
+        # Elevation warning row
+        self._warn_row.setStyleSheet(f"background: {c['warn_row_bg']};")
+        self._warn_lbl.setStyleSheet(f"color: {c['warn_text']}; font-size: 11px;")
 
     # ── Private ───────────────────────────────────────────────────────────────
 
@@ -159,9 +188,11 @@ class HeaderBar(QFrame):
         if mode == self._mode:
             return
         self._mode = mode
-        is_adv = mode == "advanced"
-        self._simple_btn.setProperty("checked", "false" if is_adv else "true")
-        self._advanced_btn.setProperty("checked", "true" if is_adv else "false")
-        refresh_style(self._simple_btn)
-        refresh_style(self._advanced_btn)
+        seg = build_seg_styles(self._theme)
+        if mode == "advanced":
+            self._simple_btn.setStyleSheet(seg["L_OFF"])
+            self._advanced_btn.setStyleSheet(seg["R_ON"])
+        else:
+            self._simple_btn.setStyleSheet(seg["L_ON"])
+            self._advanced_btn.setStyleSheet(seg["R_OFF"])
         self.mode_changed.emit(mode)
