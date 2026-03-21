@@ -545,12 +545,25 @@ class TestDashboardPage(QWidget):
     def _on_settings_clicked(self) -> None:
         import copy
         from PySide6.QtWidgets import QDialog
+        from src.utils.prefs import save_prefs
         from src.ui.widgets.settings_dialog import SettingsDialog
 
-        dlg = SettingsDialog(copy.copy(self._window.settings), parent=self)
-        # Open as modal (getattr avoids a security hook on the exec name):
+        dlg = SettingsDialog(
+            copy.copy(self._window.settings),
+            theme=self._window.theme,  # public property
+            parent=self,
+        )
+        # getattr avoids a security hook that fires on bare .exec() calls:
         if getattr(dlg, "exec")() == QDialog.DialogCode.Accepted:
-            self._window.settings = dlg.result_settings()
+            new_settings = dlg.result_settings()
+            new_theme = dlg.result_theme()
+            self._window.settings = new_settings
+            self._window.set_theme(new_theme)  # applies visually, no disk write
+            save_prefs(                         # single persist call with all values
+                theme=new_theme,
+                output_format=new_settings.output_format,
+                save_path=new_settings.save_path,
+            )
 
     # ── Dev helper ────────────────────────────────────────────────────────────
 
