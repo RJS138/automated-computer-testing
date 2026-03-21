@@ -33,6 +33,7 @@ from src.ui.helpers.speakers_dialog import SpeakersDialog
 from src.ui.helpers.touchpad_dialog import TouchpadDialog
 from src.ui.helpers.usb_dialog import UsbDialog
 from src.ui.helpers.webcam_dialog import WebcamDialog
+from src.ui.stylesheet import get_colors
 from src.ui.widgets.category_section import CategorySection
 from src.ui.widgets.device_banner import DeviceBanner
 from src.ui.widgets.header_bar import HeaderBar
@@ -126,9 +127,10 @@ class TestDashboardPage(QWidget):
         ),
     ]
 
-    def __init__(self, window, parent=None) -> None:
+    def __init__(self, window, theme: str = "dark", parent=None) -> None:
         super().__init__(parent)
         self._window = window
+        self._theme = theme
 
         self._results: dict[str, TestResult] = {}
         self._test_enabled: dict[str, bool] = {e["name"]: True for e in self._TEST_REGISTRY}
@@ -152,29 +154,31 @@ class TestDashboardPage(QWidget):
                 name=entry["name"], display_name=entry["display_name"]
             )
 
+        self.apply_theme(theme)
+
     def _build_ui(self) -> None:
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
 
-        self._header = HeaderBar(self)
+        self._header = HeaderBar(theme=self._theme, parent=self)
         self._header.run_all_clicked.connect(self._on_run_all)
         self._header.new_job_clicked.connect(self._on_new_job)
         self._header.settings_clicked.connect(self._on_settings_clicked)
         self._header.mode_changed.connect(self._on_mode_changed)
         outer.addWidget(self._header)
 
-        self._banner = DeviceBanner(self)
+        self._banner = DeviceBanner(theme=self._theme, parent=self)
         self._banner.generate_report_requested.connect(self._on_generate_report)
         outer.addWidget(self._banner)
 
-        scroll = QScrollArea()
+        self._scroll = QScrollArea()
+        scroll = self._scroll  # local alias for rest of _build_ui
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setStyleSheet("QScrollArea { border: none; background: #09090b; }")
 
-        scroll_content = QWidget()
-        scroll_content.setStyleSheet("background: #09090b;")
+        self._scroll_content = QWidget()
+        scroll_content = self._scroll_content  # local alias
         scroll_layout = QVBoxLayout(scroll_content)
         scroll_layout.setContentsMargins(16, 12, 16, 12)
         scroll_layout.setSpacing(8)
@@ -185,6 +189,7 @@ class TestDashboardPage(QWidget):
                 tests=tests,
                 col_count=col_count,
                 short_names=short_names,
+                theme=self._theme,
             )
             self._category_sections.append(section)
             scroll_layout.addWidget(section)
@@ -198,10 +203,6 @@ class TestDashboardPage(QWidget):
 
         # Status bar (outside scroll, at bottom of page)
         self._status_bar = QLabel("")
-        self._status_bar.setStyleSheet(
-            "color: #71717a; font-size: 11px; padding: 4px 16px; "
-            "background: #09090b; border-top: 1px solid #27272a;"
-        )
         self._status_bar.hide()
         outer.addWidget(self._status_bar)
 
@@ -228,6 +229,23 @@ class TestDashboardPage(QWidget):
         self._header.set_job_info(job_info)
         self._header.reset_mode()
         self._start_system_info()
+
+    def apply_theme(self, theme: str) -> None:
+        """Re-apply all inline styles and propagate to child widgets."""
+        self._theme = theme
+        c = get_colors(theme)
+        self._scroll.setStyleSheet(
+            f"QScrollArea {{ border: none; background: {c['bg_base']}; }}"
+        )
+        self._scroll_content.setStyleSheet(f"background: {c['bg_base']};")
+        self._status_bar.setStyleSheet(
+            f"color: {c['text_muted']}; font-size: 11px; padding: 4px 16px;"
+            f" background: {c['bg_base']}; border-top: 1px solid {c['border_subtle']};"
+        )
+        self._header.apply_theme(theme)
+        self._banner.apply_theme(theme)
+        for section in self._category_sections:
+            section.apply_theme(theme)
 
     # ── Mode switch ───────────────────────────────────────────────────────────
 
@@ -551,16 +569,16 @@ class TestDashboardPage(QWidget):
         dlg = SettingsDialog(
             copy.copy(self._window.settings),
             theme=self._window.theme,  # public property
+            window=self._window,       # enables live preview
             parent=self,
         )
         # getattr avoids a security hook that fires on bare .exec() calls:
         if getattr(dlg, "exec")() == QDialog.DialogCode.Accepted:
             new_settings = dlg.result_settings()
-            new_theme = dlg.result_theme()
             self._window.settings = new_settings
-            self._window.set_theme(new_theme)  # applies visually, no disk write
-            save_prefs(                         # single persist call with all values
-                theme=new_theme,
+            # Theme already applied live; just persist all prefs
+            save_prefs(
+                theme=self._window.theme,
                 output_format=new_settings.output_format,
                 save_path=new_settings.save_path,
             )
