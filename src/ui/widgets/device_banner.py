@@ -13,16 +13,17 @@ from PySide6.QtWidgets import (
 )
 
 from src.models.test_result import TestResult
+from src.ui.stylesheet import get_colors
 
-_OVERALL_STYLES: dict[str, tuple[str, str, str]] = {
-    # status: (bg, border, text)
-    "pass":    ("#1a2e20", "#22c55e", "#22c55e"),
-    "warn":    ("#2d2006", "#f59e0b", "#f59e0b"),
-    "fail":    ("#2e1414", "#ef4444", "#ef4444"),
-    "error":   ("#2e1414", "#ef4444", "#ef4444"),
-    "running": ("#1e3a5f", "#60a5fa", "#60a5fa"),
-    "waiting": ("#18181b", "#3f3f46", "#71717a"),
-    "skip":    ("#18181b", "#3f3f46", "#71717a"),
+_OVERALL_STYLES: dict[str, tuple[str, str]] = {
+    # status: (bg, text)
+    "pass":    ("#1a2e20", "#22c55e"),
+    "warn":    ("#2d2006", "#f59e0b"),
+    "fail":    ("#2e1414", "#ef4444"),
+    "error":   ("#2e1414", "#ef4444"),
+    "running": ("#1e3a5f", "#60a5fa"),
+    "waiting": ("#27272a", "#71717a"),
+    "skip":    ("#27272a", "#71717a"),
 }
 
 _STATUS_PRIORITY = ["fail", "error", "warn", "skip", "pass", "running", "waiting"]
@@ -33,36 +34,49 @@ class _SpecField(QWidget):
 
     def __init__(self, label: str, parent=None) -> None:
         super().__init__(parent)
+        self._has_value = False
+        self._theme = "dark"
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(2)
 
         self._lbl = QLabel(label.upper())
-        self._lbl.setStyleSheet(
-            "font-size: 10px; font-weight: 700; color: #71717a; "
-            "letter-spacing: 0.05em; background: transparent;"
-        )
         layout.addWidget(self._lbl)
 
         self._val = QLabel("—")
-        self._val.setStyleSheet(
-            "font-size: 13px; font-weight: 600; color: #71717a; "
-            "font-family: monospace; background: transparent;"
-        )
         layout.addWidget(self._val)
 
+        self.apply_theme("dark")  # initial styles
+
     def set_value(self, text: str) -> None:
+        self._has_value = True
         self._val.setText(text)
+        c = get_colors(self._theme)
         self._val.setStyleSheet(
-            "font-size: 13px; font-weight: 600; color: #fafafa; "
-            "font-family: monospace; background: transparent;"
+            f"font-size: 13px; font-weight: 600; color: {c['text_primary']};"
+            f" font-family: monospace; background: transparent;"
         )
 
     def clear(self) -> None:
+        self._has_value = False
         self._val.setText("—")
+        c = get_colors(self._theme)
         self._val.setStyleSheet(
-            "font-size: 13px; font-weight: 600; color: #71717a; "
-            "font-family: monospace; background: transparent;"
+            f"font-size: 13px; font-weight: 600; color: {c['text_muted']};"
+            f" font-family: monospace; background: transparent;"
+        )
+
+    def apply_theme(self, theme: str) -> None:
+        self._theme = theme
+        c = get_colors(theme)
+        self._lbl.setStyleSheet(
+            f"font-size: 10px; font-weight: 700; color: {c['text_muted']};"
+            f" letter-spacing: 0.05em; background: transparent;"
+        )
+        val_color = c["text_primary"] if self._has_value else c["text_muted"]
+        self._val.setStyleSheet(
+            f"font-size: 13px; font-weight: 600; color: {val_color};"
+            f" font-family: monospace; background: transparent;"
         )
 
 
@@ -77,13 +91,11 @@ class DeviceBanner(QFrame):
 
     generate_report_requested = Signal()
 
-    def __init__(self, parent=None) -> None:
+    def __init__(self, theme: str = "dark", parent=None) -> None:
         super().__init__(parent)
-        self.setStyleSheet(
-            "QFrame { background-color: #09090b; border-bottom: 1px solid #3f3f46; }"
-        )
         self._fields: dict[str, _SpecField] = {}
-        self._build_ui()
+        self._build_ui()       # must run first — creates _report_btn and _fields
+        self.apply_theme(theme)
 
     def _build_ui(self) -> None:
         outer = QHBoxLayout(self)
@@ -132,20 +144,31 @@ class DeviceBanner(QFrame):
         self._report_btn = QPushButton("Generate\nReport")
         self._report_btn.setFixedSize(82, 48)
         self._report_btn.setEnabled(False)
-        self._report_btn.setStyleSheet(
-            "QPushButton {"
-            "  background: #18181b; color: #71717a; "
-            "  border: 1px solid #3f3f46; border-radius: 6px; "
-            "  font-size: 11px; font-weight: 700; "
-            "}"
-            "QPushButton:enabled { color: #fafafa; }"
-            "QPushButton:enabled:hover { border-color: #3b82f6; color: #3b82f6; }"
-            "QPushButton:disabled { color: #71717a; }"
-        )
         self._report_btn.clicked.connect(self.generate_report_requested)
         outer.addWidget(self._report_btn)
 
     # ── Public API ────────────────────────────────────────────────────────────
+
+    def apply_theme(self, theme: str) -> None:
+        """Re-apply all inline styles for the given theme."""
+        c = get_colors(theme)
+        self.setStyleSheet(
+            f"QFrame {{ background-color: {c['bg_surface']}; border: none; }}"
+        )
+        for field in self._fields.values():
+            field.apply_theme(theme)
+        self._report_btn.setStyleSheet(
+            f"QPushButton {{"
+            f"  background: {c['bg_elevated']}; color: {c['text_muted']};"
+            f"  border: none; border-radius: 6px;"
+            f"  font-size: 11px; font-weight: 700;"
+            f"}}"
+            f"QPushButton:enabled {{ color: {c['text_primary']}; }}"
+            f"QPushButton:enabled:hover {{"
+            f"  background: {c['bg_hover']}; color: {c['text_primary']};"
+            f"}}"
+            f"QPushButton:disabled {{ color: {c['text_muted']}; }}"
+        )
 
     def update_from_result(self, result: TestResult) -> None:
         """Populate fields from system_info result.data and enable Generate Report."""
@@ -196,9 +219,9 @@ class DeviceBanner(QFrame):
         self._apply_overall_style(status)
 
     def _apply_overall_style(self, status: str) -> None:
-        bg, border, text_color = _OVERALL_STYLES.get(status, _OVERALL_STYLES["waiting"])
+        bg, text_color = _OVERALL_STYLES.get(status, _OVERALL_STYLES["waiting"])
         self._overall.setStyleSheet(
-            f"QFrame {{ background: {bg}; border: 1px solid {border}; border-radius: 6px; }}"
+            f"QFrame {{ background: {bg}; border: none; border-radius: 6px; }}"
         )
         self._ov_title.setStyleSheet(
             f"font-size: 10px; font-weight: 700; color: {text_color}; background: transparent;"
