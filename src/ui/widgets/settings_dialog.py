@@ -171,7 +171,18 @@ class SettingsDialog(QDialog):
         """Re-apply button styles. Called at init and can be called on theme change."""
         c = get_colors(theme)
         seg = build_seg_styles(theme)
-        self.setStyleSheet(f"QDialog {{ background-color: {c['bg_base']}; }}")
+        self.setStyleSheet(
+            f"QDialog {{ background-color: {c['bg_base']}; }}"
+            f"QLineEdit {{"
+            f"  background-color: {c['bg_elevated']}; color: {c['text_primary']};"
+            f"  border: none; border-radius: 6px; padding: 6px 10px; min-height: 30px;"
+            f"  font-size: 13px;"
+            f"}}"
+            f"QPlainTextEdit {{"
+            f"  background-color: {c['bg_elevated']}; color: {c['text_primary']};"
+            f"  border: none; border-radius: 6px; padding: 6px 10px; font-size: 13px;"
+            f"}}"
+        )
         # Appearance (Dark/Light) buttons — preserve current selection
         self._btn_dark.setStyleSheet(
             seg["L_ON"] if self._selected_theme == "dark" else seg["L_OFF"]
