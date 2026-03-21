@@ -146,6 +146,7 @@ class DeviceBanner(QFrame):
             "font-size: 13px; font-weight: 700; background: transparent;"
         )
         ov_layout.addWidget(self._ov_value)
+        self._ov_status = "waiting"
         self._apply_overall_style("waiting")
         outer.addWidget(self._overall)
 
@@ -181,6 +182,7 @@ class DeviceBanner(QFrame):
             f"}}"
             f"QPushButton:disabled {{ color: {c['text_muted']}; }}"
         )
+        self._apply_overall_style(self._ov_status)
 
     def update_from_result(self, result: TestResult) -> None:
         """Populate fields from system_info result.data and enable Generate Report."""
@@ -231,6 +233,7 @@ class DeviceBanner(QFrame):
         self._apply_overall_style(status)
 
     def _apply_overall_style(self, status: str) -> None:
+        self._ov_status = status
         styles = _OVERALL_STYLES_LIGHT if getattr(self, "_theme", "dark") == "light" else _OVERALL_STYLES
         bg, text_color = styles.get(status, styles["waiting"])
         self._overall.setStyleSheet(
