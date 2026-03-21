@@ -14,7 +14,7 @@ from src.models.test_result import TestResult
 from src.ui.pages.job_setup_page import JobSetupPage
 from src.ui.pages.test_dashboard_page import TestDashboardPage
 from src.ui.stylesheet import QSS_DARK, QSS_LIGHT, refresh_style
-from src.utils.theme_prefs import load_theme, save_theme
+from src.utils.prefs import load_prefs, save_prefs
 
 
 class TouchstoneWindow(QMainWindow):
@@ -30,8 +30,11 @@ class TouchstoneWindow(QMainWindow):
         self.settings: Settings = Settings()
 
         # Theme
-        theme = load_theme()
-        self._apply_theme(theme)
+        prefs = load_prefs()
+        self._theme = prefs["theme"]
+        self.settings.output_format = prefs["output_format"]
+        self.settings.save_path = prefs["save_path"]
+        self._apply_theme(self._theme)
 
         self.setWindowTitle("Touchstone")
         self.setMinimumSize(900, 640)
@@ -103,9 +106,15 @@ class TouchstoneWindow(QMainWindow):
             app.setPalette(self._dark_palette())
 
     def set_theme(self, theme: str) -> None:
-        save_theme(theme)
+        """Apply theme visually. Does NOT persist to disk — caller's responsibility."""
+        self._theme = theme
         self._apply_theme(theme)
         refresh_style(self)
+
+    @property
+    def theme(self) -> str:
+        """Currently active theme name ("dark" or "light")."""
+        return self._theme
 
     @staticmethod
     def _dark_palette() -> QPalette:
