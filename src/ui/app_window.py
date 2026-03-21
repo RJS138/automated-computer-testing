@@ -14,7 +14,7 @@ from src.models.test_result import TestResult
 from src.ui.pages.job_setup_page import JobSetupPage
 from src.ui.pages.test_dashboard_page import TestDashboardPage
 from src.ui.stylesheet import QSS_DARK, QSS_LIGHT, refresh_style
-from src.utils.prefs import load_prefs, save_prefs
+from src.utils.prefs import load_prefs
 
 
 class TouchstoneWindow(QMainWindow):

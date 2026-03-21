@@ -22,7 +22,9 @@ def load_prefs() -> dict[str, str]:
     """
     try:
         data = json.loads(_PREFS_PATH.read_text())
-        return {k: data.get(k, v) for k, v in _DEFAULTS.items()}
+        result = {k: data.get(k, v) for k, v in _DEFAULTS.items()}
+        result["theme"] = "light" if result["theme"] == "light" else "dark"
+        return result
     except Exception:
         return dict(_DEFAULTS)
 
