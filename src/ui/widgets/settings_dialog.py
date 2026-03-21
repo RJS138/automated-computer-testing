@@ -16,61 +16,36 @@ from PySide6.QtWidgets import (
 )
 
 from src.models.settings import Settings
-
-_SEG_L_OFF = (
-    "QPushButton { background: #3f3f46; color: #a1a1aa; border: none;"
-    " border-top-left-radius: 6px; border-bottom-left-radius: 6px;"
-    " border-top-right-radius: 0; border-bottom-right-radius: 0;"
-    " padding: 5px 14px; font-size: 12px; font-weight: 500; min-height: 30px; }"
-    "QPushButton:hover { background: #52525b; color: #fafafa; }"
-)
-_SEG_L_ON = (
-    "QPushButton { background: #3b82f6; color: #ffffff; border: none;"
-    " border-top-left-radius: 6px; border-bottom-left-radius: 6px;"
-    " border-top-right-radius: 0; border-bottom-right-radius: 0;"
-    " padding: 5px 14px; font-size: 12px; font-weight: 600; min-height: 30px; }"
-    "QPushButton:hover { background: #2563eb; color: #ffffff; }"
-)
-_SEG_M_OFF = (
-    "QPushButton { background: #3f3f46; color: #a1a1aa; border: none; border-radius: 0;"
-    " padding: 5px 14px; font-size: 12px; font-weight: 500; min-height: 30px;"
-    " margin-left: 2px; margin-right: 2px; }"
-    "QPushButton:hover { background: #52525b; color: #fafafa; }"
-)
-_SEG_M_ON = (
-    "QPushButton { background: #3b82f6; color: #ffffff; border: none; border-radius: 0;"
-    " padding: 5px 14px; font-size: 12px; font-weight: 600; min-height: 30px;"
-    " margin-left: 2px; margin-right: 2px; }"
-    "QPushButton:hover { background: #2563eb; color: #ffffff; }"
-)
-_SEG_R_OFF = (
-    "QPushButton { background: #3f3f46; color: #a1a1aa; border: none;"
-    " border-top-left-radius: 0; border-bottom-left-radius: 0;"
-    " border-top-right-radius: 6px; border-bottom-right-radius: 6px;"
-    " padding: 5px 14px; font-size: 12px; font-weight: 500; min-height: 30px; }"
-    "QPushButton:hover { background: #52525b; color: #fafafa; }"
-)
-_SEG_R_ON = (
-    "QPushButton { background: #3b82f6; color: #ffffff; border: none;"
-    " border-top-left-radius: 0; border-bottom-left-radius: 0;"
-    " border-top-right-radius: 6px; border-bottom-right-radius: 6px;"
-    " padding: 5px 14px; font-size: 12px; font-weight: 600; min-height: 30px; }"
-    "QPushButton:hover { background: #2563eb; color: #ffffff; }"
-)
+from src.ui.stylesheet import build_seg_styles, get_colors
 
 
 class SettingsDialog(QDialog):
     """Modal dialog for report output settings.
 
     Usage:
-        dlg = SettingsDialog(copy(window.settings), theme=window.theme, parent=self)
+        dlg = SettingsDialog(
+            copy(window.settings), theme=window.theme, window=window, parent=self
+        )
         if dlg.exec() == QDialog.DialogCode.Accepted:
-            window.settings = dlg.result_settings()
-            window.set_theme(dlg.result_theme())
+            new_settings = dlg.result_settings()
+            window.settings = new_settings
+            save_prefs(
+                theme=window.theme,
+                output_format=new_settings.output_format,
+                save_path=new_settings.save_path,
+            )
     """
 
-    def __init__(self, settings: Settings, theme: str = "dark", parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        theme: str = "dark",
+        window=None,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
+        self._original_theme = theme
+        self._window = window
         self._selected_theme: str = theme
         self._settings = settings  # caller passes a copy; no need to copy again
         self.setWindowTitle("Settings")
@@ -97,8 +72,6 @@ class SettingsDialog(QDialog):
         theme_row.addStretch()
         root.addLayout(theme_row)
 
-        self._select_theme(theme)  # apply initial visual state
-
         # ── Output Format ─────────────────────────────────────────────────────
         root.addWidget(self._section_label("Output Format"))
 
@@ -119,8 +92,6 @@ class SettingsDialog(QDialog):
         fmt_row.addWidget(self._btn_pdf_only)
         fmt_row.addStretch()
         root.addLayout(fmt_row)
-
-        self._select_format(settings.output_format)  # applies styles directly
 
         # ── Save Location ─────────────────────────────────────────────────────
         root.addWidget(self._section_label("Save Location"))
@@ -150,27 +121,18 @@ class SettingsDialog(QDialog):
         btn_row = QHBoxLayout()
         btn_row.addStretch()
         cancel_btn = QPushButton("Cancel")
-        cancel_btn.setStyleSheet(
-            "QPushButton { background: #7f1d1d; color: #fca5a5; border: none;"
-            " border-radius: 6px; padding: 5px 14px; font-size: 12px; font-weight: 500;"
-            " min-height: 30px; }"
-            "QPushButton:hover { background: #991b1b; color: #ffffff; }"
-            "QPushButton:pressed { background: #b91c1c; }"
-        )
         cancel_btn.clicked.connect(self.reject)
         save_btn = QPushButton("Save")
-        save_btn.setStyleSheet(
-            "QPushButton { background: #3b82f6; color: #ffffff; border: none;"
-            " border-radius: 6px; padding: 5px 14px; font-size: 12px; font-weight: 600;"
-            " min-height: 30px; }"
-            "QPushButton:hover { background: #2563eb; }"
-            "QPushButton:pressed { background: #1d4ed8; }"
-        )
         save_btn.setDefault(True)
         save_btn.clicked.connect(self.accept)
         btn_row.addWidget(cancel_btn)
         btn_row.addWidget(save_btn)
         root.addLayout(btn_row)
+
+        self._cancel_btn = cancel_btn
+        self._save_btn = save_btn
+
+        self.apply_theme(theme)
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -181,14 +143,18 @@ class SettingsDialog(QDialog):
 
     def _select_theme(self, theme: str) -> None:
         self._selected_theme = theme
-        self._btn_dark.setStyleSheet(_SEG_L_ON if theme == "dark" else _SEG_L_OFF)
-        self._btn_light.setStyleSheet(_SEG_R_ON if theme == "light" else _SEG_R_OFF)
+        seg = build_seg_styles(theme)
+        self._btn_dark.setStyleSheet(seg["L_ON"] if theme == "dark" else seg["L_OFF"])
+        self._btn_light.setStyleSheet(seg["R_ON"] if theme == "light" else seg["R_OFF"])
+        if self._window is not None:
+            self._window.set_theme(theme)  # live preview
 
     def _select_format(self, fmt: str) -> None:
         self._settings.output_format = fmt
-        self._btn_html_pdf.setStyleSheet(_SEG_L_ON  if fmt == "html_pdf"  else _SEG_L_OFF)
-        self._btn_html_only.setStyleSheet(_SEG_M_ON if fmt == "html_only" else _SEG_M_OFF)
-        self._btn_pdf_only.setStyleSheet(_SEG_R_ON  if fmt == "pdf_only"  else _SEG_R_OFF)
+        seg = build_seg_styles(self._selected_theme)
+        self._btn_html_pdf.setStyleSheet(seg["L_ON"]  if fmt == "html_pdf"  else seg["L_OFF"])
+        self._btn_html_only.setStyleSheet(seg["M_ON"] if fmt == "html_only" else seg["M_OFF"])
+        self._btn_pdf_only.setStyleSheet(seg["R_ON"]  if fmt == "pdf_only"  else seg["R_OFF"])
 
     def _browse(self) -> None:
         path = QFileDialog.getExistingDirectory(
@@ -196,6 +162,42 @@ class SettingsDialog(QDialog):
         )
         if path:
             self._path_edit.setText(path)
+
+    def reject(self) -> None:
+        """Revert live preview theme before dismissing (Cancel or X button)."""
+        if self._window is not None and self._selected_theme != self._original_theme:
+            self._window.set_theme(self._original_theme)
+        super().reject()
+
+    def apply_theme(self, theme: str) -> None:
+        """Re-apply button styles. Called at init and can be called on theme change."""
+        c = get_colors(theme)
+        seg = build_seg_styles(theme)
+        # Appearance (Dark/Light) buttons — preserve current selection
+        self._btn_dark.setStyleSheet(
+            seg["L_ON"] if self._selected_theme == "dark" else seg["L_OFF"]
+        )
+        self._btn_light.setStyleSheet(
+            seg["R_ON"] if self._selected_theme == "light" else seg["R_OFF"]
+        )
+        # Output Format buttons — preserve current selection
+        fmt = self._settings.output_format
+        self._btn_html_pdf.setStyleSheet(seg["L_ON"]  if fmt == "html_pdf"  else seg["L_OFF"])
+        self._btn_html_only.setStyleSheet(seg["M_ON"] if fmt == "html_only" else seg["M_OFF"])
+        self._btn_pdf_only.setStyleSheet(seg["R_ON"]  if fmt == "pdf_only"  else seg["R_OFF"])
+        # Save / Cancel buttons
+        self._cancel_btn.setStyleSheet(
+            f"QPushButton {{ background: {c['danger_bg']}; color: {c['danger_text']}; border: none;"
+            f" border-radius: 6px; padding: 5px 14px; font-size: 12px; font-weight: 500;"
+            f" min-height: 30px; }}"
+            f"QPushButton:hover {{ background: {c['accent_hover']}; color: #ffffff; }}"
+        )
+        self._save_btn.setStyleSheet(
+            f"QPushButton {{ background: {c['accent']}; color: #ffffff; border: none;"
+            f" border-radius: 6px; padding: 5px 14px; font-size: 12px; font-weight: 600;"
+            f" min-height: 30px; }}"
+            f"QPushButton:hover {{ background: {c['accent_hover']}; }}"
+        )
 
     # ── Public API ────────────────────────────────────────────────────────────
 
