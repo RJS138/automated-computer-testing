@@ -1,4 +1,4 @@
-"""DashboardCard widget — QFrame showing one test's status with a run button."""
+"""DashboardCard widget — flat row with expandable detail panel."""
 
 from __future__ import annotations
 
@@ -8,213 +8,223 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
-    QProgressBar,
     QPushButton,
     QSizePolicy,
     QVBoxLayout,
+    QWidget,
 )
 
-from ..stylesheet import refresh_style
+from ..stylesheet import get_colors, refresh_style
 
-# ── Status → badge colour ─────────────────────────────────────────────────────
 _STATUS_COLORS: dict[str, str] = {
-    "waiting": "#7d8590",
-    "running": "#f59e0b",
-    "pass": "#22c55e",
-    "warn": "#f59e0b",
-    "fail": "#ef4444",
-    "error": "#ef4444",
-    "skip": "#7d8590",
+    "waiting": "#52525b",
+    "running": "#60a5fa",
+    "pass":    "#22c55e",
+    "warn":    "#f59e0b",
+    "fail":    "#ef4444",
+    "error":   "#ef4444",
+    "skip":    "#52525b",
 }
-
-_PROGRESS_BAR_QSS = """
-QProgressBar {
-    border: none;
-    border-radius: 4px;
-    background-color: #21262d;
-    max-height: 7px;
-    min-height: 7px;
-}
-QProgressBar::chunk {
-    background-color: #3b82f6;
-    border-radius: 4px;
-}
-"""
 
 
 class DashboardCard(QFrame):
-    """One card per test in the redesigned dashboard.
+    """One row per test — flat row with optional expandable detail panel.
+
+    Clicking the row (outside the Run button) toggles the detail panel.
 
     Signals
     -------
     run_requested(str)
-        Emitted when the Run / Re-run button is clicked; carries the test name.
+        Emitted when Run / Re-run is clicked; carries the test name.
     """
 
     run_requested = Signal(str)
 
-    def __init__(self, name: str, display_name: str, parent=None) -> None:
+    def __init__(self, name: str, display_name: str, theme: str = "dark", parent=None) -> None:
         super().__init__(parent)
         self._name = name
         self._display_name = display_name
+        self._sub_detail_text = ""
+        self._expanded = False
 
-        # Wire QSS test-card rules
-        self.setProperty("class", "test-card")
-        self.setProperty("status", "waiting")
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
-        # Fixed height — all cards uniform; text wraps within this budget
-        self.setFixedHeight(190)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-
-        # Elapsed-time ticker (1 Hz, only active while running)
         self._elapsed_s: int = 0
         self._ticker = QTimer(self)
         self._ticker.setInterval(1000)
         self._ticker.timeout.connect(self._tick)
 
         self._build_ui()
-
-    # ── UI construction ───────────────────────────────────────────────────────
+        self.apply_theme(theme)
 
     def _build_ui(self) -> None:
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(14, 12, 14, 10)
-        outer.setSpacing(4)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
 
-        # ── Top row: name label + checkbox ────────────────────────────────────
-        header = QHBoxLayout()
-        header.setSpacing(6)
+        # ── Main row (always visible, fixed height) ───────────────────────────
+        self._main_row = QWidget()
+        self._main_row.setFixedHeight(52)
+        self._main_row.setStyleSheet("background: transparent;")
+        self._main_row.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._main_row.mousePressEvent = self._on_row_clicked
 
-        self._name_lbl = QLabel(self._display_name)
-        self._name_lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        self._name_lbl.setStyleSheet("font-weight: 700; font-size: 17px;")
-        header.addWidget(self._name_lbl)
+        row = QHBoxLayout(self._main_row)
+        row.setContentsMargins(10, 0, 10, 0)
+        row.setSpacing(12)
 
-        header.addStretch()
+        vc = Qt.AlignmentFlag.AlignVCenter
 
+        # Checkbox (advanced mode, hidden by default)
         self._checkbox = QCheckBox()
         self._checkbox.setChecked(True)
         self._checkbox.hide()
-        header.addWidget(self._checkbox)
+        row.addWidget(self._checkbox, 0, vc)
 
-        outer.addLayout(header)
+        # Test name
+        self._name_lbl = QLabel(self._display_name)
+        self._name_lbl.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+        row.addWidget(self._name_lbl, 0, vc)
 
-        # ── Status badge ──────────────────────────────────────────────────────
-        self._badge_lbl = QLabel("WAITING")
-        self._badge_lbl.setStyleSheet(
-            f"color: {_STATUS_COLORS['waiting']}; font-size: 13px; font-weight: 600;"
-        )
-        outer.addWidget(self._badge_lbl)
-
-        # ── Running state: progress bar + elapsed timer ───────────────────────
-        self._progress_bar = QProgressBar()
-        self._progress_bar.setRange(0, 0)  # indeterminate
-        self._progress_bar.setTextVisible(False)
-        self._progress_bar.setStyleSheet(_PROGRESS_BAR_QSS)
-        self._progress_bar.hide()
-        outer.addWidget(self._progress_bar)
-
-        self._timer_lbl = QLabel("0s")
-        self._timer_lbl.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        self._timer_lbl.setStyleSheet("color: #60a5fa; font-size: 22px; font-weight: 700;")
-        self._timer_lbl.hide()
-        outer.addWidget(self._timer_lbl)
-
-        # ── Done state: detail lines ───────────────────────────────────────────
+        # Inline summary — expands to fill available space
         self._detail_lbl = QLabel("")
-        self._detail_lbl.setStyleSheet("color: #e6edf3; font-size: 15px; font-weight: 500;")
-        self._detail_lbl.setWordWrap(True)
-        outer.addWidget(self._detail_lbl)
+        self._detail_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | vc)
+        self._detail_lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        row.addWidget(self._detail_lbl, 1, vc)
 
-        self._sub_detail_lbl = QLabel("")
-        self._sub_detail_lbl.setStyleSheet("color: #7d8590; font-size: 13px;")
-        self._sub_detail_lbl.setWordWrap(True)
-        outer.addWidget(self._sub_detail_lbl)
+        # Expand arrow — shown only when sub-detail exists
+        self._expand_arrow = QLabel("▾")
+        self._expand_arrow.setFixedWidth(18)
+        self._expand_arrow.hide()
+        row.addWidget(self._expand_arrow, 0, vc)
 
-        # Push button to bottom
-        outer.addStretch(1)
+        # Status text
+        self._status_lbl = QLabel("WAITING")
+        self._status_lbl.setStyleSheet(
+            f"color: {_STATUS_COLORS['waiting']}; font-size: 12px; font-weight: 600;"
+            " background: transparent;"
+        )
+        self._status_lbl.setFixedWidth(64)
+        self._status_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | vc)
+        row.addWidget(self._status_lbl, 0, vc)
 
-        # ── Run button (right-aligned) ────────────────────────────────────────
-        btn_row = QHBoxLayout()
-        btn_row.addStretch()
-
-        self._run_btn = QPushButton("▶ Run")
+        # Run button
+        self._run_btn = QPushButton("Run")
+        self._run_btn.setFixedWidth(72)
+        self._run_btn.setFixedHeight(28)
         self._run_btn.clicked.connect(self._on_run_clicked)
-        btn_row.addWidget(self._run_btn)
+        row.addWidget(self._run_btn, 0, vc)
 
-        outer.addLayout(btn_row)
+        outer.addWidget(self._main_row)
+
+        # ── Expandable detail panel ───────────────────────────────────────────
+        self._detail_panel = QLabel("")
+        self._detail_panel.setWordWrap(True)
+        self._detail_panel.hide()
+        outer.addWidget(self._detail_panel)
 
     # ── Public API ────────────────────────────────────────────────────────────
 
     def set_status(self, status: str, detail: str = "", sub_detail: str = "") -> None:
-        """Update badge, border colour, running/done widgets, and button label."""
+        """Update inline summary, status colour, expandable panel, and button label."""
         status = status.lower()
-        color = _STATUS_COLORS.get(status, "#7d8590")
+        color = _STATUS_COLORS.get(status, "#52525b")
 
-        self._badge_lbl.setText(status.upper())
-        self._badge_lbl.setStyleSheet(f"color: {color}; font-size: 13px; font-weight: 600;")
+        self._status_lbl.setText(status.upper())
+        self._status_lbl.setStyleSheet(
+            f"color: {color}; font-size: 12px; font-weight: 600; background: transparent;"
+        )
 
-        is_running = status == "running"
-
-        if is_running:
-            # Reset and start elapsed timer
+        if status == "running":
             self._elapsed_s = 0
-            self._timer_lbl.setText("0s")
+            self._detail_lbl.setText("running…")
+            self._detail_lbl.setStyleSheet(
+                "color: #60a5fa; font-size: 13px; background: transparent;"
+            )
             if not self._ticker.isActive():
                 self._ticker.start()
-            # Show running widgets, hide detail lines
-            self._progress_bar.show()
-            self._timer_lbl.show()
-            self._detail_lbl.hide()
-            self._sub_detail_lbl.hide()
+            self._set_sub_detail("")
         else:
-            # Stop timer, hide running widgets, show detail lines
             self._ticker.stop()
-            self._progress_bar.hide()
-            self._timer_lbl.hide()
             self._detail_lbl.setText(detail)
-            self._sub_detail_lbl.setText(sub_detail)
-            self._detail_lbl.show()
-            self._sub_detail_lbl.show()
+            self._detail_lbl.setStyleSheet(
+                "color: #71717a; font-size: 13px; background: transparent;"
+            )
+            self._set_sub_detail(sub_detail)
 
-        self._run_btn.setText("▶ Run" if status == "waiting" else "↺ Re-run")
-
-        self.setProperty("status", status)
-        refresh_style(self)
+        self._run_btn.setText("Run" if status == "waiting" else "Re-run")
 
     def set_advanced(self, enabled: bool) -> None:
-        """Show or hide the checkbox (Advanced mode toggle)."""
-        if enabled:
-            self._checkbox.show()
-        else:
-            self._checkbox.hide()
+        self._checkbox.setVisible(enabled)
 
     def is_checked(self) -> bool:
-        """Return True if this test should be included in a run.
-
-        When advanced mode is off the checkbox is hidden and the card is always
-        considered included (returns True).  When advanced mode is on, the
-        checkbox's checked state is returned directly.
-        """
         if not self._checkbox.isVisible():
             return True
         return self._checkbox.isChecked()
 
     def set_running_all(self, active: bool) -> None:
-        """Disable the run button while a Run All operation is in progress."""
         self._run_btn.setEnabled(not active)
 
-    # ── Private slots ─────────────────────────────────────────────────────────
+    def apply_theme(self, theme: str) -> None:
+        """Re-apply all inline styles using the given theme's color tokens."""
+        c = get_colors(theme)
+        self.setStyleSheet(
+            f"QFrame {{ border: none; background: {c['bg_surface']}; border-radius: 8px; }}"
+        )
+        self._name_lbl.setStyleSheet(
+            f"color: {c['text_primary']}; font-size: 14px; font-weight: 500; background: transparent;"
+        )
+        self._detail_lbl.setStyleSheet(
+            f"color: {c['text_muted']}; font-size: 13px; background: transparent;"
+        )
+        self._expand_arrow.setStyleSheet(
+            f"color: {c['text_secondary']}; font-size: 16px; background: transparent;"
+        )
+        self._run_btn.setStyleSheet(
+            f"QPushButton {{ background: {c['bg_elevated']}; color: {c['text_secondary']};"
+            f" border: none; border-radius: 6px; font-size: 12px; font-weight: 500; }}"
+            f"QPushButton:hover {{ background: {c['bg_hover']}; color: {c['text_primary']}; }}"
+            f"QPushButton:pressed {{ background: {c['text_muted']}; }}"
+            f"QPushButton:disabled {{ opacity: 0.4; }}"
+        )
+        self._detail_panel.setStyleSheet(
+            f"color: {c['text_secondary']}; font-size: 12px; background: transparent;"
+            f" padding: 2px 10px 10px 10px;"
+        )
+
+    # ── Private ───────────────────────────────────────────────────────────────
+
+    def _set_sub_detail(self, text: str) -> None:
+        self._sub_detail_text = text.strip()
+        has = bool(self._sub_detail_text)
+        self._expand_arrow.setVisible(has)
+        self._detail_panel.setText(self._sub_detail_text)
+        if not has and self._expanded:
+            self._expanded = False
+            self._detail_panel.hide()
+
+    def _on_row_clicked(self, event) -> None:
+        if not self._sub_detail_text:
+            return
+        self._expanded = not self._expanded
+        self._expand_arrow.setText("▴" if self._expanded else "▾")
+        if self._expanded:
+            self._detail_panel.show()
+        else:
+            self._detail_panel.hide()
+        # Let parent layout recalculate height
+        self.adjustSize()
+        if self.parent():
+            self.parent().adjustSize()  # type: ignore[union-attr]
 
     def _tick(self) -> None:
-        """Increment the elapsed timer display by one second."""
         self._elapsed_s += 1
         if self._elapsed_s < 60:
-            self._timer_lbl.setText(f"{self._elapsed_s}s")
+            self._detail_lbl.setText(f"{self._elapsed_s}s")
         else:
             m = self._elapsed_s // 60
             s = self._elapsed_s % 60
-            self._timer_lbl.setText(f"{m}:{s:02d}")
+            self._detail_lbl.setText(f"{m}:{s:02d}")
 
     def _on_run_clicked(self) -> None:
         self.run_requested.emit(self._name)
