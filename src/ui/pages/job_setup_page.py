@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.models.job import JobInfo, ReportType
-from src.ui.stylesheet import refresh_style
+from src.ui.stylesheet import build_seg_styles, get_colors
 from src.utils.file_manager import scan_existing_jobs
 
 
@@ -34,11 +34,14 @@ class JobSetupPage(QWidget):
 
     start_testing = Signal(object)  # JobInfo
 
-    def __init__(self, parent=None) -> None:
+    def __init__(self, theme: str = "dark", parent=None) -> None:
         super().__init__(parent)
+        self._theme = theme
         self._report_type = ReportType.BEFORE
         self._recent_expanded = False
         self._build_ui()
+        self._build_recent_panel(self._inner_layout)
+        self.apply_theme(theme)
 
     def _build_ui(self) -> None:
         page_layout = QVBoxLayout(self)
@@ -60,21 +63,17 @@ class JobSetupPage(QWidget):
         inner_layout = QVBoxLayout(inner)
         inner_layout.setContentsMargins(16, 32, 16, 32)
         inner_layout.setSpacing(12)
+        self._inner_layout = inner_layout
 
-        title_lbl = QLabel("New Job")
-        title_lbl.setStyleSheet("font-size: 20px; font-weight: 600; color: #fafafa;")
-        inner_layout.addWidget(title_lbl)
+        self._title_lbl = QLabel("New Job")
+        inner_layout.addWidget(self._title_lbl)
 
-        sub_lbl = QLabel("Fill in the details below, then start testing.")
-        sub_lbl.setStyleSheet("font-size: 13px; color: #71717a; margin-bottom: 4px;")
-        inner_layout.addWidget(sub_lbl)
+        self._sub_lbl = QLabel("Fill in the details below, then start testing.")
+        inner_layout.addWidget(self._sub_lbl)
 
         # Form card
-        form_card = QFrame()
-        form_card.setStyleSheet(
-            "QFrame { background: #18181b; border: 1px solid #3f3f46; border-radius: 8px; }"
-        )
-        form_layout = QVBoxLayout(form_card)
+        self._form_card = QFrame()
+        form_layout = QVBoxLayout(self._form_card)
         form_layout.setContentsMargins(20, 20, 20, 20)
         form_layout.setSpacing(12)
 
@@ -84,11 +83,8 @@ class JobSetupPage(QWidget):
 
         cust_col = QVBoxLayout()
         cust_col.setSpacing(5)
-        cust_lbl = QLabel("CUSTOMER NAME")
-        cust_lbl.setStyleSheet(
-            "font-size: 10px; font-weight: 700; color: #71717a; letter-spacing: 0.05em;"
-        )
-        cust_col.addWidget(cust_lbl)
+        self._cust_lbl = QLabel("CUSTOMER NAME")
+        cust_col.addWidget(self._cust_lbl)
         self._customer_field = QLineEdit()
         self._customer_field.setPlaceholderText("e.g. Smith Repair")
         self._customer_field.textChanged.connect(self._update_start_btn)
@@ -97,11 +93,8 @@ class JobSetupPage(QWidget):
 
         job_col = QVBoxLayout()
         job_col.setSpacing(5)
-        job_lbl = QLabel("JOB #")
-        job_lbl.setStyleSheet(
-            "font-size: 10px; font-weight: 700; color: #71717a; letter-spacing: 0.05em;"
-        )
-        job_col.addWidget(job_lbl)
+        self._job_lbl = QLabel("JOB #")
+        job_col.addWidget(self._job_lbl)
         self._job_field = QLineEdit()
         self._job_field.setPlaceholderText("WO#")
         self._job_field.setFixedWidth(120)
@@ -113,42 +106,31 @@ class JobSetupPage(QWidget):
         # Row 2: Device Description
         dev_col = QVBoxLayout()
         dev_col.setSpacing(5)
-        dev_lbl = QLabel("DEVICE DESCRIPTION")
-        dev_lbl.setStyleSheet(
-            "font-size: 10px; font-weight: 700; color: #71717a; letter-spacing: 0.05em;"
-        )
-        dev_col.addWidget(dev_lbl)
+        self._dev_lbl = QLabel("DEVICE DESCRIPTION")
+        dev_col.addWidget(self._dev_lbl)
         self._device_field = QLineEdit()
         self._device_field.setPlaceholderText('e.g. MacBook Pro 14" M3')
         dev_col.addWidget(self._device_field)
         form_layout.addLayout(dev_col)
 
         # Separator + Report Type
-        sep = QFrame()
-        sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet("background: #27272a; border: none; max-height: 1px;")
-        form_layout.addWidget(sep)
+        self._form_sep = QFrame()
+        self._form_sep.setFrameShape(QFrame.Shape.HLine)
+        form_layout.addWidget(self._form_sep)
 
         type_col = QVBoxLayout()
         type_col.setSpacing(6)
-        type_lbl = QLabel("REPORT TYPE")
-        type_lbl.setStyleSheet(
-            "font-size: 10px; font-weight: 700; color: #71717a; letter-spacing: 0.05em;"
-        )
-        type_col.addWidget(type_lbl)
+        self._type_lbl = QLabel("REPORT TYPE")
+        type_col.addWidget(self._type_lbl)
 
         seg_row = QHBoxLayout()
         seg_row.setSpacing(0)
         self._before_btn = QPushButton("Before")
-        self._before_btn.setProperty("class", "seg-left")
-        self._before_btn.setProperty("checked", "true")
         self._before_btn.setFixedHeight(30)
         self._before_btn.clicked.connect(lambda: self._set_report_type(ReportType.BEFORE))
         seg_row.addWidget(self._before_btn)
 
         self._after_btn = QPushButton("After")
-        self._after_btn.setProperty("class", "seg-right")
-        self._after_btn.setProperty("checked", "false")
         self._after_btn.setFixedHeight(30)
         self._after_btn.clicked.connect(lambda: self._set_report_type(ReportType.AFTER))
         seg_row.addWidget(self._after_btn)
@@ -156,20 +138,14 @@ class JobSetupPage(QWidget):
         type_col.addLayout(seg_row)
         form_layout.addLayout(type_col)
 
-        inner_layout.addWidget(form_card)
+        inner_layout.addWidget(self._form_card)
 
         # Start Testing button
         self._start_btn = QPushButton("▶ Start Testing")
-        self._start_btn.setProperty("class", "primary")
         self._start_btn.setFixedHeight(40)
         self._start_btn.setEnabled(False)
         self._start_btn.clicked.connect(self._on_start_clicked)
         inner_layout.addWidget(self._start_btn)
-
-        # Recent Jobs panel
-        self._build_recent_panel(inner_layout)
-
-        inner_layout.addStretch()
 
         content_layout.addStretch()
         content_layout.addWidget(inner)
@@ -178,16 +154,9 @@ class JobSetupPage(QWidget):
         scroll.setWidget(content)
         page_layout.addWidget(scroll)
 
-        # Apply initial seg button styles
-        refresh_style(self._before_btn)
-        refresh_style(self._after_btn)
-
     def _build_recent_panel(self, parent_layout: QVBoxLayout) -> None:
-        panel = QFrame()
-        panel.setStyleSheet(
-            "QFrame { background: #18181b; border: 1px solid #27272a; border-radius: 8px; }"
-        )
-        panel_layout = QVBoxLayout(panel)
+        self._recent_panel = QFrame()
+        panel_layout = QVBoxLayout(self._recent_panel)
         panel_layout.setContentsMargins(0, 0, 0, 0)
         panel_layout.setSpacing(0)
 
@@ -197,17 +166,11 @@ class JobSetupPage(QWidget):
         h_layout = QHBoxLayout(header)
         h_layout.setContentsMargins(16, 10, 16, 10)
 
-        title_lbl = QLabel("Recent Jobs")
-        title_lbl.setStyleSheet(
-            "font-size: 11px; font-weight: 600; color: #a1a1aa; background: transparent;"
-        )
-        h_layout.addWidget(title_lbl)
+        self._recent_title_lbl = QLabel("Recent Jobs")
+        h_layout.addWidget(self._recent_title_lbl)
         h_layout.addStretch()
 
         self._recent_toggle_lbl = QLabel("▾ show")
-        self._recent_toggle_lbl.setStyleSheet(
-            "font-size: 10px; color: #3b82f6; background: transparent;"
-        )
         h_layout.addWidget(self._recent_toggle_lbl)
         panel_layout.addWidget(header)
 
@@ -220,7 +183,8 @@ class JobSetupPage(QWidget):
         panel_layout.addWidget(self._recent_content)
 
         header.mousePressEvent = lambda _e: self._toggle_recent()
-        parent_layout.addWidget(panel)
+        parent_layout.addWidget(self._recent_panel)
+        parent_layout.addStretch()
 
     def _toggle_recent(self) -> None:
         self._recent_expanded = not self._recent_expanded
@@ -249,8 +213,9 @@ class JobSetupPage(QWidget):
 
         if not jobs:
             empty = QLabel("No recent jobs.")
+            c = get_colors(self._theme)
             empty.setStyleSheet(
-                "color: #71717a; font-size: 12px; padding: 12px; background: transparent;"
+                f"color: {c['text_muted']}; font-size: 12px; padding: 12px; background: transparent;"
             )
             empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self._recent_content_layout.addWidget(empty)
@@ -262,16 +227,18 @@ class JobSetupPage(QWidget):
             if i < len(jobs) - 1:
                 div = QFrame()
                 div.setFrameShape(QFrame.Shape.HLine)
+                c = get_colors(self._theme)
                 div.setStyleSheet(
-                    "background: #27272a; border: none; max-height: 1px; min-height: 1px;"
+                    f"background: {c['border_subtle']}; border: none; max-height: 1px; min-height: 1px;"
                 )
                 self._recent_content_layout.addWidget(div)
 
     def _make_recent_row(self, job: dict) -> QWidget:
+        c = get_colors(self._theme)
         row = QWidget()
         row.setCursor(Qt.CursorShape.PointingHandCursor)
         row.setStyleSheet(
-            "QWidget { background: transparent; } QWidget:hover { background: #27272a; }"
+            f"QWidget {{ background: transparent; }} QWidget:hover {{ background: {c['bg_elevated']}; }}"
         )
         layout = QGridLayout(row)
         layout.setContentsMargins(12, 8, 12, 8)
@@ -282,7 +249,7 @@ class JobSetupPage(QWidget):
         name_text = f"{job['customer_name']} — {desc}" if desc else job["customer_name"]
         name_lbl = QLabel(name_text)
         name_lbl.setStyleSheet(
-            "font-size: 12px; color: #fafafa; font-weight: 500; background: transparent;"
+            f"font-size: 12px; color: {c['text_primary']}; font-weight: 500; background: transparent;"
         )
         layout.addWidget(name_lbl, 0, 0)
 
@@ -290,21 +257,18 @@ class JobSetupPage(QWidget):
         dt = datetime.fromtimestamp(mtime)
         date_str = f"{dt.strftime('%b')} {dt.day}"
         meta_lbl = QLabel(f"{job['job_number']}  ·  {date_str}")
-        meta_lbl.setStyleSheet("font-size: 11px; color: #71717a; background: transparent;")
+        meta_lbl.setStyleSheet(f"font-size: 11px; color: {c['text_muted']}; background: transparent;")
         layout.addWidget(meta_lbl, 1, 0)
 
         for col, (has_it, label) in enumerate(
             [(job["has_before"], "Before"), (job["has_after"], "After")], start=1
         ):
-            bg = "#1a2e20" if has_it else "#27272a"
-            color = "#22c55e" if has_it else "#71717a"
+            color = "#22c55e" if has_it else "#52525b"
             mark = "✓" if has_it else "—"
             badge = QLabel(f"{label} {mark}")
             badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
             badge.setStyleSheet(
-                f"background: {bg}; color: {color}; "
-                f"font-size: 10px; font-weight: 700; "
-                f"padding: 2px 6px; border-radius: 4px; border: none;"
+                f"color: {color}; font-size: 11px; font-weight: 600; background: transparent;"
             )
             layout.addWidget(badge, 0, col, 2, 1, Qt.AlignmentFlag.AlignVCenter)
 
@@ -322,10 +286,9 @@ class JobSetupPage(QWidget):
 
     def _set_report_type(self, rt: ReportType) -> None:
         self._report_type = rt
-        self._before_btn.setProperty("checked", "true" if rt == ReportType.BEFORE else "false")
-        self._after_btn.setProperty("checked", "true" if rt == ReportType.AFTER else "false")
-        refresh_style(self._before_btn)
-        refresh_style(self._after_btn)
+        seg = build_seg_styles(self._theme)
+        self._before_btn.setStyleSheet(seg["L_ON"] if rt == ReportType.BEFORE else seg["L_OFF"])
+        self._after_btn.setStyleSheet(seg["R_ON"] if rt == ReportType.AFTER else seg["R_OFF"])
 
     def _update_start_btn(self) -> None:
         enabled = bool(
@@ -341,3 +304,50 @@ class JobSetupPage(QWidget):
             report_type=self._report_type,
         )
         self.start_testing.emit(job_info)
+
+    def apply_theme(self, theme: str) -> None:
+        """Re-apply all inline styles for the given theme and regenerate dynamic rows."""
+        self._theme = theme
+        c = get_colors(theme)
+        field_lbl_style = (
+            f"font-size: 10px; font-weight: 700; color: {c['text_muted']};"
+            f" letter-spacing: 0.05em;"
+        )
+        self._title_lbl.setStyleSheet(
+            f"font-size: 20px; font-weight: 600; color: {c['text_primary']};"
+        )
+        self._sub_lbl.setStyleSheet(
+            f"font-size: 13px; color: {c['text_muted']}; margin-bottom: 4px;"
+        )
+        self._form_card.setStyleSheet(
+            f"QFrame {{ background: {c['bg_surface']}; border: none; border-radius: 8px; }}"
+        )
+        self._cust_lbl.setStyleSheet(field_lbl_style)
+        self._job_lbl.setStyleSheet(field_lbl_style)
+        self._dev_lbl.setStyleSheet(field_lbl_style)
+        self._type_lbl.setStyleSheet(field_lbl_style)
+        self._form_sep.setStyleSheet(
+            f"background: {c['border_subtle']}; border: none; max-height: 1px;"
+        )
+        # Report type buttons (preserve current selection)
+        self._set_report_type(self._report_type)
+        # Start Testing button
+        self._start_btn.setStyleSheet(
+            f"QPushButton {{ background: {c['accent']}; color: #ffffff; border: none;"
+            f" border-radius: 6px; padding: 5px 14px; font-size: 13px; font-weight: 600; }}"
+            f"QPushButton:hover {{ background: {c['accent_hover']}; }}"
+            f"QPushButton:pressed {{ background: {c['accent_hover']}; }}"
+            f"QPushButton:disabled {{ background: {c['accent']}; color: #ffffff; }}"
+        )
+        # Recent Jobs panel
+        self._recent_panel.setStyleSheet(
+            f"QFrame {{ background: {c['bg_surface']}; border: none; border-radius: 8px; }}"
+        )
+        self._recent_title_lbl.setStyleSheet(
+            f"font-size: 11px; font-weight: 600; color: {c['text_secondary']}; background: transparent;"
+        )
+        self._recent_toggle_lbl.setStyleSheet(
+            f"font-size: 10px; color: {c['accent']}; background: transparent;"
+        )
+        # Regenerate recent rows with updated theme colors
+        self.reload_recent_jobs()

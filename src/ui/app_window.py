@@ -41,7 +41,7 @@ class TouchstoneWindow(QMainWindow):
 
         # Stack: index 0 = JobSetupPage, index 1 = TestDashboardPage
         self._stack = QStackedWidget()
-        self._setup_page = JobSetupPage(self)
+        self._setup_page = JobSetupPage(parent=self)
         self._dashboard = TestDashboardPage(self, self)
         self._stack.addWidget(self._setup_page)
         self._stack.addWidget(self._dashboard)
