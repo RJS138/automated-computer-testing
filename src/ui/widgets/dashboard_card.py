@@ -129,6 +129,7 @@ class DashboardCard(QFrame):
         """Update inline summary, status colour, expandable panel, and button label."""
         status = status.lower()
         color = _STATUS_COLORS.get(status, "#52525b")
+        c = get_colors(self._theme)
 
         self._status_lbl.setText(status.upper())
         self._status_lbl.setStyleSheet(
@@ -139,7 +140,7 @@ class DashboardCard(QFrame):
             self._elapsed_s = 0
             self._detail_lbl.setText("running…")
             self._detail_lbl.setStyleSheet(
-                "color: #60a5fa; font-size: 13px; background: transparent;"
+                f"color: {c['badge_accent_text']}; font-size: 13px; background: transparent;"
             )
             if not self._ticker.isActive():
                 self._ticker.start()
@@ -148,7 +149,7 @@ class DashboardCard(QFrame):
             self._ticker.stop()
             self._detail_lbl.setText(detail)
             self._detail_lbl.setStyleSheet(
-                "color: #71717a; font-size: 13px; background: transparent;"
+                f"color: {c['text_muted']}; font-size: 13px; background: transparent;"
             )
             self._set_sub_detail(sub_detail)
 
@@ -167,6 +168,7 @@ class DashboardCard(QFrame):
 
     def apply_theme(self, theme: str) -> None:
         """Re-apply all inline styles using the given theme's color tokens."""
+        self._theme = theme
         c = get_colors(theme)
         self.setStyleSheet(
             f"QFrame {{ border: none; background: {c['bg_surface']}; border-radius: 8px; }}"
