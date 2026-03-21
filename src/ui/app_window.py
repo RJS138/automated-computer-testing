@@ -41,8 +41,8 @@ class TouchstoneWindow(QMainWindow):
 
         # Stack: index 0 = JobSetupPage, index 1 = TestDashboardPage
         self._stack = QStackedWidget()
-        self._setup_page = JobSetupPage(parent=self)
-        self._dashboard = TestDashboardPage(self, self)
+        self._setup_page = JobSetupPage(theme=self._theme, parent=self)
+        self._dashboard = TestDashboardPage(self, theme=self._theme, parent=self)
         self._stack.addWidget(self._setup_page)
         self._stack.addWidget(self._dashboard)
         self.setCentralWidget(self._stack)
@@ -110,6 +110,8 @@ class TouchstoneWindow(QMainWindow):
         self._theme = theme
         self._apply_theme(theme)
         refresh_style(self)
+        self._setup_page.apply_theme(theme)
+        self._dashboard.apply_theme(theme)
 
     @property
     def theme(self) -> str:
