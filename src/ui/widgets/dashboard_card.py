@@ -185,7 +185,7 @@ class DashboardCard(QFrame):
             f" border: none; border-radius: 6px; font-size: 12px; font-weight: 500; }}"
             f"QPushButton:hover {{ background: {c['bg_hover']}; color: {c['text_primary']}; }}"
             f"QPushButton:pressed {{ background: {c['text_muted']}; }}"
-            f"QPushButton:disabled {{ opacity: 0.4; }}"
+            f"QPushButton:disabled {{ background: {c['bg_elevated']}; color: {c['text_muted']}; }}"
         )
         self._detail_panel.setStyleSheet(
             f"color: {c['text_secondary']}; font-size: 12px; background: transparent;"
