@@ -16,7 +16,7 @@ from src.models.test_result import TestResult
 from src.ui.stylesheet import get_colors
 
 _OVERALL_STYLES: dict[str, tuple[str, str]] = {
-    # status: (bg, text)
+    # status: (bg, text)  — dark mode
     "pass":    ("#1a2e20", "#22c55e"),
     "warn":    ("#2d2006", "#f59e0b"),
     "fail":    ("#2e1414", "#ef4444"),
@@ -24,6 +24,17 @@ _OVERALL_STYLES: dict[str, tuple[str, str]] = {
     "running": ("#1e3a5f", "#60a5fa"),
     "waiting": ("#27272a", "#71717a"),
     "skip":    ("#27272a", "#71717a"),
+}
+
+_OVERALL_STYLES_LIGHT: dict[str, tuple[str, str]] = {
+    # status: (bg, text)  — light mode
+    "pass":    ("#d6f0dc", "#16a34a"),
+    "warn":    ("#fef3c7", "#d97706"),
+    "fail":    ("#fee2e2", "#dc2626"),
+    "error":   ("#fee2e2", "#dc2626"),
+    "running": ("#dbeafe", "#2563eb"),
+    "waiting": ("#e7e5e4", "#78716c"),
+    "skip":    ("#e7e5e4", "#78716c"),
 }
 
 _STATUS_PRIORITY = ["fail", "error", "warn", "skip", "pass", "running", "waiting"]
@@ -151,6 +162,7 @@ class DeviceBanner(QFrame):
 
     def apply_theme(self, theme: str) -> None:
         """Re-apply all inline styles for the given theme."""
+        self._theme = theme
         c = get_colors(theme)
         self.setStyleSheet(
             f"QFrame {{ background-color: {c['bg_surface']}; border: none; }}"
@@ -219,7 +231,8 @@ class DeviceBanner(QFrame):
         self._apply_overall_style(status)
 
     def _apply_overall_style(self, status: str) -> None:
-        bg, text_color = _OVERALL_STYLES.get(status, _OVERALL_STYLES["waiting"])
+        styles = _OVERALL_STYLES_LIGHT if getattr(self, "_theme", "dark") == "light" else _OVERALL_STYLES
+        bg, text_color = styles.get(status, styles["waiting"])
         self._overall.setStyleSheet(
             f"QFrame {{ background: {bg}; border: none; border-radius: 6px; }}"
         )
