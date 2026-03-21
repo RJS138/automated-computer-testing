@@ -143,11 +143,9 @@ class SettingsDialog(QDialog):
 
     def _select_theme(self, theme: str) -> None:
         self._selected_theme = theme
-        seg = build_seg_styles(theme)
-        self._btn_dark.setStyleSheet(seg["L_ON"] if theme == "dark" else seg["L_OFF"])
-        self._btn_light.setStyleSheet(seg["R_ON"] if theme == "light" else seg["R_OFF"])
         if self._window is not None:
             self._window.set_theme(theme)  # live preview
+        self.apply_theme(theme)  # re-theme dialog bg + buttons for new theme
 
     def _select_format(self, fmt: str) -> None:
         self._settings.output_format = fmt
@@ -173,6 +171,7 @@ class SettingsDialog(QDialog):
         """Re-apply button styles. Called at init and can be called on theme change."""
         c = get_colors(theme)
         seg = build_seg_styles(theme)
+        self.setStyleSheet(f"QDialog {{ background-color: {c['bg_base']}; }}")
         # Appearance (Dark/Light) buttons — preserve current selection
         self._btn_dark.setStyleSheet(
             seg["L_ON"] if self._selected_theme == "dark" else seg["L_OFF"]
