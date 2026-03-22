@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
-from PySide6.QtWidgets import QSizePolicy, QWidget
+from PySide6.QtWidgets import QSizePolicy, QToolTip, QWidget
 
 from ..stylesheet import get_colors
 
@@ -29,6 +29,7 @@ class TempChartWidget(QWidget):
         else:
             self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             self.setFixedHeight(100)
+            self.setMouseTracking(True)
 
     def push_sample(self, time_s: float, temp_c: float) -> None:
         """Append one sample and repaint."""
@@ -155,3 +156,24 @@ class TempChartWidget(QWidget):
             painter.drawEllipse(int(xp) - 4, int(yp) - 4, 8, 8)
 
         painter.end()
+
+    def mouseMoveEvent(self, event) -> None:  # noqa: N802
+        if self._compact or len(self._samples) < 2:
+            return
+        pad_l, pad_r = 32, 8
+        cw = self.width() - pad_l - pad_r
+        mx = event.position().x()
+        if not (pad_l <= mx <= self.width() - pad_r):
+            QToolTip.hideText()
+            return
+        times = [s[0] for s in self._samples]
+        x_min = times[0]
+        x_max = max(times[-1], 1.0)
+        x_range = max(x_max - x_min, 1.0)
+        t = (mx - pad_l) / cw * x_range + x_min
+        nearest = min(self._samples, key=lambda s: abs(s[0] - t))
+        QToolTip.showText(
+            event.globalPosition().toPoint(),
+            f"{nearest[1]:.1f}°C  ·  {nearest[0]:.0f}s",
+            self,
+        )

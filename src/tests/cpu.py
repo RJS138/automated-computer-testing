@@ -260,7 +260,7 @@ class CpuTest(BaseTest):
                     temp_samples.append({"t": elapsed, "c": round(current, 1)})
                     if self.on_progress:
                         self.on_progress({"temp_c": round(current, 1), "time_s": elapsed})
-                await asyncio.sleep(2)
+                await asyncio.sleep(1)
 
         stop_event = asyncio.Event()
         monitor_task = asyncio.create_task(monitor_temps(stop_event))
