@@ -165,6 +165,8 @@ class DashboardCard(QFrame):
             self._sparkline.reset()
             self._chart_panel.reset()
             self._has_chart_data = False
+            self._chart_panel.hide()
+            self._expanded = False
             self._expand_arrow.hide()
             self._elapsed_s = 0
             self._detail_lbl.setText("running…")
