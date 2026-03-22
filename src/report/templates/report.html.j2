@@ -209,6 +209,12 @@
         {% if result.data %}
           {# CPU #}
           {% if result.name == 'cpu' %}
+            {% if temp_svgs.get('cpu') %}
+            <div style="margin-bottom:12px;">
+              <div style="font-size:10px;font-weight:600;color:#888;letter-spacing:0.07em;text-transform:uppercase;margin-bottom:6px;">Temperature Over Stress Duration</div>
+              {{ temp_svgs['cpu'] | safe }}
+            </div>
+            {% endif %}
             <table class="data-table">
               <tr><th>Field</th><th>Value</th></tr>
               <tr><td class="data-key">CPU</td><td class="data-value">{{ result.data.get('brand','—') }}</td></tr>
