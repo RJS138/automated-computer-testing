@@ -6,6 +6,7 @@ ReportWorker — generates HTML/PDF report in a background thread.
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
@@ -36,23 +37,40 @@ class TestWorker(QThread):
         self._cls_name = cls_name
         self._result = result
         self._mode = mode
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._task: asyncio.Task | None = None
+
+    @property
+    def name(self) -> str:
+        """Public read-only access to the test name."""
+        return self._name
 
     def run(self) -> None:
-        import asyncio
         import importlib
 
         mod = importlib.import_module(f"src.tests.{self._module}")
         TestClass = getattr(mod, self._cls_name)
         test = TestClass(result=self._result, mode=self._mode)
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        self._loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._loop)
+
+        async def _run() -> None:
+            # Capture the running Task so cancel() can reach it.
+            self._task = asyncio.current_task()
+            await test.safe_run()
+
         try:
-            loop.run_until_complete(test.safe_run())
+            self._loop.run_until_complete(_run())
         except Exception as exc:
             self._result.mark_error(str(exc))
         finally:
-            loop.close()
+            self._loop.close()
         self.finished.emit(self._name)
+
+    def cancel(self) -> None:
+        """Cancel the running async task. Thread-safe; safe to call multiple times."""
+        if self._loop and self._task and not self._task.done():
+            self._loop.call_soon_threadsafe(self._task.cancel)
 
 
 # ── Report Worker ─────────────────────────────────────────────────────────────
