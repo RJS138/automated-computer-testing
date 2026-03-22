@@ -69,6 +69,8 @@ DARK: dict[str, str] = {
     "badge_accent_text": "#60a5fa",
     "danger_bg":      "#7f1d1d",
     "danger_text":    "#fca5a5",
+    "cancel_text":    "#fb923c",
+    "cancel_bg":      "#1c1107",
 }
 
 LIGHT: dict[str, str] = {
@@ -92,6 +94,8 @@ LIGHT: dict[str, str] = {
     "badge_accent_text": "#2563eb",
     "danger_bg":      "#fee2e2",
     "danger_text":    "#dc2626",
+    "cancel_text":    "#ea580c",
+    "cancel_bg":      "#ffedd5",
 }
 
 
