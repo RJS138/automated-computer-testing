@@ -24,6 +24,14 @@ from reportlab.platypus import (
     Table,
     TableStyle,
 )
+from reportlab.graphics.shapes import (
+    Circle,
+    Drawing,
+    Line,
+    PolyLine,
+    Polygon,
+    String,
+)
 
 # ---------------------------------------------------------------------------
 # Palette
@@ -373,6 +381,110 @@ def _rows_generic(d: dict) -> list[tuple[str, str]]:
     return rows[:20]
 
 
+def _cpu_temp_drawing(
+    samples: list[dict],
+    temp_warn: float | None,
+    temp_fail: float | None,
+    width: float = 460,
+    height: float = 80,
+) -> Drawing:
+    """Build a ReportLab Drawing of the CPU temperature area chart."""
+    d = Drawing(width, height)
+
+    temps = [s["c"] for s in samples]
+    times = [s["t"] for s in samples]
+
+    pad_l, pad_r, pad_t, pad_b = 30.0, 8.0, 8.0, 14.0
+    cw = width - pad_l - pad_r
+    ch = height - pad_t - pad_b
+
+    y_max = (temp_fail + 5) if temp_fail is not None else (max(temps) + 8)
+    y_min = min(temps) - 5
+    y_range = max(float(y_max - y_min), 1.0)
+
+    x_min, x_max = float(times[0]), max(float(times[-1]), 1.0)
+    x_range = max(x_max - x_min, 1.0)
+
+    # ReportLab Y-axis is bottom-up; pad_b is the baseline
+    def tx(t: float) -> float:
+        return pad_l + (t - x_min) / x_range * cw
+
+    def ty(temp: float) -> float:
+        return pad_b + (temp - y_min) / y_range * ch
+
+    pts = [(tx(s["t"]), ty(s["c"])) for s in samples]
+
+    # Threshold lines
+    if temp_warn is not None and y_min <= temp_warn <= y_max:
+        wy = ty(temp_warn)
+        line = Line(pad_l, wy, width - pad_r, wy)
+        line.strokeColor = HexColor("#f59e0b")
+        line.strokeDashArray = [3, 3]
+        line.strokeWidth = 0.5
+        d.add(line)
+
+    if temp_fail is not None and y_min <= temp_fail <= y_max:
+        fy = ty(temp_fail)
+        line = Line(pad_l, fy, width - pad_r, fy)
+        line.strokeColor = HexColor("#ef4444")
+        line.strokeDashArray = [3, 3]
+        line.strokeWidth = 0.5
+        d.add(line)
+
+    # Area polygon (filled, semi-transparent approximated by light blue)
+    poly_pts: list[float] = [pad_l, pad_b]
+    for x, y in pts:
+        poly_pts += [x, y]
+    poly_pts += [pts[-1][0], pad_b]
+    poly = Polygon(poly_pts)
+    poly.fillColor = HexColor("#dbeafe")  # light blue stand-in for 15% opacity #3b82f6
+    poly.strokeColor = None
+    d.add(poly)
+
+    # Line
+    line_pts: list[float] = []
+    for x, y in pts:
+        line_pts += [x, y]
+    pl = PolyLine(line_pts)
+    pl.strokeColor = HexColor("#3b82f6")
+    pl.strokeWidth = 1.5
+    d.add(pl)
+
+    # Idle dot
+    x0, y0 = pts[0]
+    c0 = Circle(x0, y0, 2.5)
+    c0.fillColor = HexColor("#888888")
+    c0.strokeColor = None
+    d.add(c0)
+
+    # Peak dot + label
+    peak_i = temps.index(max(temps))
+    xp, yp = pts[peak_i]
+    cp = Circle(xp, yp, 3.5)
+    cp.fillColor = HexColor("#f59e0b")
+    cp.strokeColor = None
+    d.add(cp)
+    peak_lbl = String(xp + 5, yp + 2, f"{max(temps):.0f}\u00b0C peak")
+    peak_lbl.fontSize = 7
+    peak_lbl.fillColor = HexColor("#f57f17")
+    d.add(peak_lbl)
+
+    # X axis baseline
+    ax = Line(pad_l, pad_b, width - pad_r, pad_b)
+    ax.strokeColor = HexColor("#bbbbbb")
+    ax.strokeWidth = 0.5
+    d.add(ax)
+
+    # X axis labels
+    for t_val in [x_min, (x_min + x_max) / 2, x_max]:
+        lbl = String(tx(t_val) - 6, 2, f"{t_val:.0f}s")
+        lbl.fontSize = 7
+        lbl.fillColor = HexColor("#888888")
+        d.add(lbl)
+
+    return d
+
+
 _ROW_EXTRACTORS = {
     "cpu": _rows_cpu,
     "ram": _rows_ram,
@@ -542,7 +654,18 @@ def _test_result_block(result: dict) -> list:
             )
             items.append(dt)
 
-    return [KeepTogether(items), Spacer(1, 3 * mm)]
+    # For CPU test with temp samples, add chart as standalone flowable before
+    # KeepTogether to avoid page overflow from the combined header+chart+table block.
+    result_flowables: list = []
+    if name == "cpu" and data.get("temp_samples") and len(data["temp_samples"]) >= 2:
+        result_flowables.append(_cpu_temp_drawing(
+            data["temp_samples"],
+            data.get("temp_thresh_load_warn"),
+            data.get("temp_thresh_fail"),
+        ))
+        result_flowables.append(Spacer(1, 2 * mm))
+    result_flowables += [KeepTogether(items), Spacer(1, 3 * mm)]
+    return result_flowables
 
 
 # ---------------------------------------------------------------------------
