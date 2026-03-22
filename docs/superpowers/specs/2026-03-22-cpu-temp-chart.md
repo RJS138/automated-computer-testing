@@ -35,7 +35,7 @@ If temperature collection is unavailable on a platform (returns `None`), `temp_s
 
 1. Declare `temp_samples: list[dict] = []` alongside the existing `peak_temp: list[float] = []`.
 2. On each 2-second tick, after appending to `peak_temp`, also append `{"t": round(elapsed_s, 1), "c": round(max(temps), 1)}` to `temp_samples`.
-3. Track `elapsed_s` from the moment the stress loop starts (use `time.monotonic()` — already likely imported via `asyncio` or add directly).
+3. Track `elapsed_s` inside `monitor_temps` using `time.monotonic()`. `time` is a stdlib module already imported at the top of `cpu.py`. Compute `start = time.monotonic()` just before the while loop, then `elapsed_s = round(time.monotonic() - start, 1)` on each tick.
 4. After the stress phase completes, set `data["temp_samples"] = temp_samples` (only if `temp_samples` is non-empty).
 5. Also call the `on_progress` callback on each tick (see Layer 2): `if self.on_progress: self.on_progress({"temp_c": current_temp, "time_s": elapsed_s})`.
 
@@ -66,7 +66,7 @@ In `run()`, after creating `test = TestClass(...)` and before calling `self._loo
 test.on_progress = lambda data: self.progress.emit(self._name, data)
 ```
 
-Qt's cross-thread signal delivery handles thread safety — no `call_soon_threadsafe` needed for the signal emit itself. The lambda captures `self._name` at setup time.
+Qt's cross-thread signal delivery handles thread safety — no `call_soon_threadsafe` needed for the signal emit itself. The lambda captures `self._name` at setup time. **Important:** the `data` dict passed to `on_progress` must always be a freshly-created dict literal (e.g., `{"temp_c": val, "time_s": elapsed_s}`), never a reference to a shared mutable object, so Qt's queued delivery copies a stable snapshot across the thread boundary.
 
 ---
 
@@ -102,7 +102,7 @@ TempChartWidget(compact: bool = False, theme: str = "dark", parent=None)
 - Compute `y_min = min(samples.c) - 5`, `y_max = max(samples.c) + 5` (or fixed to include thresholds if provided)
 - Map `(time_s, temp_c)` → pixel coordinates
 - Draw area polygon first (filled with accent blue at low opacity), then polyline on top, then markers
-- Use `get_colors(theme)` for colour tokens: `accent` for line, `text_muted` for axes, `warn_text` for warn line, `fail_text`/`danger_text` for fail line
+- Use `get_colors(theme)` for colour tokens: `accent` for line, `text_muted` for axes, `warn_text` for warn threshold line, `danger_text` for fail threshold line (`fail_text` does not exist in the token dict)
 
 ### Changes to `src/ui/widgets/dashboard_card.py`
 
@@ -124,6 +124,8 @@ def push_temp_sample(self, time_s: float, temp_c: float) -> None:
     self._sparkline.push_sample(time_s, temp_c)
     if not self._sparkline.isVisible():
         self._sparkline.show()
+        # Stop the plain elapsed ticker — sparkline text takes over
+        self._ticker.stop()
     # Update detail label to show current temp instead of plain elapsed
     self._detail_lbl.setText(f"{int(time_s)}s · {int(temp_c)}°C")
 
@@ -143,11 +145,15 @@ def set_chart_data(
 ```
 
 **`set_status()` changes:**
-- When status transitions away from `"running"`: hide `_sparkline`, restore `_detail_lbl` to normal (idle→peak text or detail string as set by caller).
+- When status transitions away from `"running"` (the `else` branch): hide `_sparkline`. The existing `self._ticker.stop()` call is already in this branch; no duplicate stop needed.
 - No other changes to the existing stop/run button logic.
 
 **`_on_row_clicked()` changes:**
-- Expand/collapse `_chart_panel` alongside `_detail_panel`. Show the expand arrow if `self._has_chart_data` (even if `_sub_detail_text` is empty).
+- Change the early-return guard from `if not self._sub_detail_text: return` to `if not self._sub_detail_text and not self._has_chart_data: return`.
+- Expand/collapse `_chart_panel` alongside `_detail_panel` in the same toggle.
+
+**`_set_sub_detail()` changes:**
+- The existing method sets `self._expanded = False` and hides `_detail_panel` when text is empty. Add a guard: do **not** reset `_expanded` or hide anything if `self._has_chart_data` is True (the chart keeps the panel open independently of whether sub_detail text is present).
 
 **`apply_theme()` changes:**
 - Call `self._sparkline.apply_theme(theme)` and `self._chart_panel.apply_theme(theme)`.
@@ -171,12 +177,12 @@ def _on_test_progress(self, name: str, data: dict) -> None:
     time_s = data.get("time_s")
     if temp_c is None or time_s is None:
         return
-    card = self._find_card(name)
+    card = self._get_card(name)
     if card:
         card.push_temp_sample(time_s, temp_c)
 ```
 
-`_find_card(name)` iterates `self._category_sections` to find the card (same pattern as existing card lookups).
+`_get_card(name)` iterates `self._category_sections` to find the card (same pattern as existing card lookups).
 
 ### Call set_chart_data after test completes
 
@@ -186,7 +192,7 @@ result = self._results.get(name)
 if result and result.name == "cpu":
     samples = (result.data or {}).get("temp_samples")
     if samples:
-        card = self._find_card(name)
+        card = self._get_card(name)
         if card:
             card.set_chart_data(
                 samples,
@@ -229,7 +235,7 @@ for r in report.results:
         )
 ```
 
-Pass `temp_svgs=temp_svgs` to `template.render(...)`.
+Pass `temp_svgs=temp_svgs` to `template.render(...)`. Always pass this argument (even as an empty dict `{}`) so the template never receives an undefined variable — Jinja2 would raise `UndefinedError` if the template references `temp_svgs` and the variable is absent. The template guard `{% if temp_svgs.get('cpu') %}` is safe as long as `temp_svgs` is always a dict.
 
 ### `src/report/templates/report.html.j2`
 
@@ -264,7 +270,7 @@ This function mirrors the SVG logic but uses ReportLab's `Drawing`, `PolyLine`, 
 
 In `_test_result_block()` (or equivalent function that builds the flowable list for each test), after detecting `name == "cpu"` and finding `data.get("temp_samples")`, insert the drawing as a flowable using `shapes.Drawing` → wrap in a `Flowable` via `reportlab.graphics.renderPDF` (standard ReportLab pattern for inline drawings).
 
-The drawing is inserted **before** the data table.
+The drawing is inserted **before** the data table. **Note:** the existing `_test_result_block()` wraps content in `KeepTogether`. Adding a ~90pt drawing plus the table may push the entire block to a new page on documents with many test results. Test with the extended CPU mode (~180s, more data rows) to confirm layout. If overflow is a problem, remove the drawing from `KeepTogether` and place it as a standalone flowable before the `KeepTogether` block instead.
 
 ---
 
