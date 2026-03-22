@@ -22,6 +22,7 @@ class BaseTest(abc.ABC):
     def __init__(self, result: TestResult, mode: TestMode) -> None:
         self.result = result
         self.mode = mode
+        self.on_progress = None  # Callable[[dict], None] | None
 
     @abc.abstractmethod
     async def run(self) -> TestResult:

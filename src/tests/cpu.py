@@ -247,12 +247,19 @@ class CpuTest(BaseTest):
         num_workers = data["logical_cores"] or 2
 
         peak_temp: list[float] = []
+        temp_samples: list[dict] = []
+        _stress_start = time.monotonic()
 
         async def monitor_temps(stop_event: asyncio.Event) -> None:
             while not stop_event.is_set():
                 temps = await loop.run_in_executor(None, _get_cpu_temps)
                 if temps:
-                    peak_temp.append(max(temps))
+                    current = max(temps)
+                    peak_temp.append(current)
+                    elapsed = round(time.monotonic() - _stress_start, 1)
+                    temp_samples.append({"t": elapsed, "c": round(current, 1)})
+                    if self.on_progress:
+                        self.on_progress({"temp_c": round(current, 1), "time_s": elapsed})
                 await asyncio.sleep(2)
 
         stop_event = asyncio.Event()
@@ -273,6 +280,8 @@ class CpuTest(BaseTest):
         # --- Post-stress metrics ---
         data["stress_duration_s"] = duration
         data["temp_peak"] = round(max(peak_temp), 1) if peak_temp else None
+        if temp_samples:
+            data["temp_samples"] = temp_samples
 
         # Grab extended mactop metrics (GPU temp, power) if available
         mactop_sample = await loop.run_in_executor(None, _read_mactop_sample)
