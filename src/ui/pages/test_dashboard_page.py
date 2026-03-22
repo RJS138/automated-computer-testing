@@ -163,6 +163,7 @@ class TestDashboardPage(QWidget):
 
         self._header = HeaderBar(theme=self._theme, parent=self)
         self._header.run_all_clicked.connect(self._on_run_all)
+        self._header.stop_all_clicked.connect(self._on_stop_all)
         self._header.new_job_clicked.connect(self._on_new_job)
         self._header.settings_clicked.connect(self._on_settings_clicked)
         self._header.mode_changed.connect(self._on_mode_changed)
@@ -211,7 +212,7 @@ class TestDashboardPage(QWidget):
         self._status_timer.timeout.connect(self._status_bar.hide)
 
     def _wire_section_run_buttons(self, section: CategorySection) -> None:
-        """Connect run_requested for all currently-instantiated cards in a section."""
+        """Connect run_requested and stop_requested for all currently-instantiated cards in a section."""
         for name, _, _ in section._tests:
             card = section.card(name)
             if card is not None:
@@ -220,6 +221,11 @@ class TestDashboardPage(QWidget):
                 except RuntimeError:
                     pass
                 card.run_requested.connect(self._on_run_requested)
+                try:
+                    card.stop_requested.disconnect(self._on_stop_card)
+                except RuntimeError:
+                    pass
+                card.stop_requested.connect(self._on_stop_card)
 
     # ── Page entry ────────────────────────────────────────────────────────────
 
@@ -283,6 +289,7 @@ class TestDashboardPage(QWidget):
 
     def _on_run_all(self) -> None:
         self._running_all = True
+        self._header.set_running_all(True)
         for section in self._category_sections:
             for card in section._cards.values():
                 card.set_running_all(True)
@@ -311,6 +318,49 @@ class TestDashboardPage(QWidget):
                 self._launch_test(entry)
         else:
             self._next_sequential()
+
+    def _on_stop_all(self) -> None:
+        """Cancel all running tests and mark queued tests CANCEL. Does not run manual queue."""
+        # Clear running_all FIRST so _recalculate_overall() inside _apply_result()
+        # doesn't find `all_done and _running_all` and bypass the header reset below.
+        self._running_all = False
+
+        # Mark actively-running tests CANCEL now so cards exit stop-mode before
+        # set_running_all(False) re-enables buttons. Then cancel + clear the list.
+        for w in list(self._active_workers):
+            result = self._results.get(w.name)
+            if result and result.status == TestStatus.RUNNING:
+                result.mark_cancel()
+                self._apply_result(w.name)
+            w.cancel()
+        self._active_workers.clear()
+
+        # Mark all queued (WAITING) results CANCEL immediately.
+        for entry in self._sequential_queue:
+            result = self._results.get(entry["name"])
+            if result and result.status == TestStatus.WAITING:
+                result.mark_cancel()
+                self._apply_result(entry["name"])
+        self._sequential_queue.clear()
+
+        # Reset parallel counters so any stale callbacks don't start more tests.
+        self._parallel_done_count = 0
+        self._parallel_total = 0
+
+        # Reset UI — header button back to ▶ Run All, re-enable cards.
+        self._header.set_running_all(False)
+        for section in self._category_sections:
+            for card in section._cards.values():
+                card.set_running_all(False)
+
+        # Do NOT call _on_automated_done() / _run_manual_queue().
+
+    def _on_stop_card(self, name: str) -> None:
+        """Cancel a single running test. The suite continues for other tests."""
+        for w in self._active_workers:
+            if w.name == name:
+                w.cancel()
+                break
 
     def _on_run_requested(self, name: str) -> None:
         if self._running_all:
@@ -380,12 +430,16 @@ class TestDashboardPage(QWidget):
     # ── Result callbacks ──────────────────────────────────────────────────────
 
     def _on_parallel_test_done(self, name: str) -> None:
+        if not self._running_all:
+            return
         self._apply_result(name)
         self._parallel_done_count += 1
         if self._parallel_done_count >= self._parallel_total:
             self._next_sequential()
 
     def _on_sequential_test_done(self, name: str) -> None:
+        if not self._running_all:
+            return
         self._apply_result(name)
         self._next_sequential()
 
@@ -430,6 +484,7 @@ class TestDashboardPage(QWidget):
         )
         if all_done and self._running_all:
             self._running_all = False
+            self._header.set_running_all(False)
             for section in self._category_sections:
                 for card in section._cards.values():
                     card.set_running_all(False)
