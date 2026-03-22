@@ -60,6 +60,7 @@ class DashboardCard(QFrame):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
         self._elapsed_s: int = 0
+        self._current_temp_c: float | None = None
         self._ticker = QTimer(self)
         self._ticker.setInterval(1000)
         self._ticker.timeout.connect(self._tick)
@@ -169,6 +170,7 @@ class DashboardCard(QFrame):
             self._expanded = False
             self._expand_arrow.hide()
             self._elapsed_s = 0
+            self._current_temp_c = None
             self._detail_lbl.setText("running…")
             self._detail_lbl.setStyleSheet(
                 f"color: {c['badge_accent_text']}; font-size: 13px; background: transparent;"
@@ -203,12 +205,10 @@ class DashboardCard(QFrame):
         # _stop_mode is True only while the test is running.
         if not self._stop_mode:
             return
+        self._current_temp_c = temp_c
         self._sparkline.push_sample(time_s, temp_c)
         if not self._sparkline.isVisible():
             self._sparkline.show()
-            # Stop the plain elapsed ticker — sparkline label takes over
-            self._ticker.stop()
-        self._detail_lbl.setText(f"{int(time_s)}s · {int(temp_c)}°C")
 
     def set_chart_data(
         self,
@@ -308,12 +308,15 @@ class DashboardCard(QFrame):
 
     def _tick(self) -> None:
         self._elapsed_s += 1
-        if self._elapsed_s < 60:
-            self._detail_lbl.setText(f"{self._elapsed_s}s")
+        elapsed = (
+            f"{self._elapsed_s}s"
+            if self._elapsed_s < 60
+            else f"{self._elapsed_s // 60}:{self._elapsed_s % 60:02d}"
+        )
+        if self._current_temp_c is not None:
+            self._detail_lbl.setText(f"{elapsed} · {int(self._current_temp_c)}°C")
         else:
-            m = self._elapsed_s // 60
-            s = self._elapsed_s % 60
-            self._detail_lbl.setText(f"{m}:{s:02d}")
+            self._detail_lbl.setText(elapsed)
 
     def _on_run_clicked(self) -> None:
         if self._stop_mode:

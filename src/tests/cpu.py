@@ -249,18 +249,23 @@ class CpuTest(BaseTest):
         peak_temp: list[float] = []
         temp_samples: list[dict] = []
         _stress_start = time.monotonic()
+        _last_recorded = [-1.0]  # mutable so monitor_temps closure can update it
 
         async def monitor_temps(stop_event: asyncio.Event) -> None:
             while not stop_event.is_set():
                 temps = await loop.run_in_executor(None, _get_cpu_temps)
                 if temps:
                     current = max(temps)
-                    peak_temp.append(current)
                     elapsed = round(time.monotonic() - _stress_start, 1)
-                    temp_samples.append({"t": elapsed, "c": round(current, 1)})
+                    peak_temp.append(current)
+                    # Record to temp_samples at most once per second (for report data)
+                    if elapsed - _last_recorded[0] >= 1.0:
+                        temp_samples.append({"t": elapsed, "c": round(current, 1)})
+                        _last_recorded[0] = elapsed
+                    # Fire progress at full 5 Hz so the sparkline updates smoothly
                     if self.on_progress:
                         self.on_progress({"temp_c": round(current, 1), "time_s": elapsed})
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.2)
 
         stop_event = asyncio.Event()
         monitor_task = asyncio.create_task(monitor_temps(stop_event))
