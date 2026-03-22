@@ -267,7 +267,8 @@ class CpuTest(BaseTest):
                 await asyncio.gather(*futures)
         finally:
             stop_event.set()
-            await monitor_task
+            monitor_task.cancel()
+            await asyncio.gather(monitor_task, return_exceptions=True)
 
         # --- Post-stress metrics ---
         data["stress_duration_s"] = duration
