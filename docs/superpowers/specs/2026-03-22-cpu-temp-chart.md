@@ -186,9 +186,8 @@ def _on_test_progress(self, name: str, data: dict) -> None:
 
 ### Call set_chart_data after test completes
 
-In `_apply_result(name)`, after updating the card status (the existing `section.update_card(result)` call), add:
+In `_apply_result(name)`, after the existing `section.update_card(result)` call, add the following block. Do **not** re-declare `result` — it is already in scope from earlier in the method:
 ```python
-result = self._results.get(name)
 if result and result.name == "cpu":
     samples = (result.data or {}).get("temp_samples")
     if samples:
