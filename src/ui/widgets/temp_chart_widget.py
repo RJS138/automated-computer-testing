@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QRectF
 from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
@@ -164,17 +164,27 @@ class TempChartWidget(QWidget):
                 painter.setPen(QPen(QColor("#ffffff"), 1.5))
                 painter.setBrush(QColor(c["accent"]))
                 painter.drawEllipse(int(hx) - 5, int(hy) - 5, 10, 10)
-                # Label: "73.3°C · 28s" — flip to left side when near the right edge
+                # Label above the dot — dark pill background so it reads on any backdrop
                 label = f"{ht:.1f}°C · {hs:.0f}s"
-                label_x = hx + 10
-                fm = painter.fontMetrics()
-                if label_x + fm.horizontalAdvance(label) > w - pad_r:
-                    label_x = hx - fm.horizontalAdvance(label) - 8
                 font = painter.font()
                 font.setBold(True)
                 painter.setFont(font)
-                painter.setPen(QColor(c["accent"]))
-                painter.drawText(int(label_x), int(hy) + 4, label)
+                fm = painter.fontMetrics()
+                lw = fm.horizontalAdvance(label)
+                lh = fm.height()
+                pad = 5
+                label_x = hx + 10
+                if label_x + lw + pad * 2 > w - pad_r:
+                    label_x = hx - lw - pad * 2 - 8
+                label_y = hy - lh - 4  # above the dot
+                # clamp so pill never goes above the chart area
+                label_y = max(label_y, float(pad_t))
+                pill = QRectF(label_x - pad, label_y - pad, lw + pad * 2, lh + pad * 2)
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(QColor("#09090b"))
+                painter.drawRoundedRect(pill, 4, 4)
+                painter.setPen(QColor("#fafafa"))
+                painter.drawText(int(label_x), int(label_y + lh - fm.descent()), label)
 
         painter.end()
 
