@@ -1,6 +1,7 @@
 """Abstract base class for all hardware tests."""
 
 import abc
+import asyncio
 from typing import TYPE_CHECKING
 
 from ..models.job import TestMode
@@ -31,6 +32,9 @@ class BaseTest(abc.ABC):
         """Wrapper that catches unexpected exceptions and marks the result as ERROR."""
         try:
             return await self.run()
+        except asyncio.CancelledError:
+            self.result.mark_cancel()
+            return self.result
         except Exception as exc:
             self.result.mark_error(f"Unexpected error: {exc}")
             return self.result
