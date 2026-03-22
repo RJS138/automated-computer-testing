@@ -21,6 +21,7 @@ class TestWorker(QThread):
     """Runs a single BaseTest in a background thread."""
 
     finished = Signal(str)  # emits test name on completion
+    progress = Signal(str, object)  # (test_name, data_dict) — live progress updates
 
     def __init__(
         self,
@@ -51,6 +52,7 @@ class TestWorker(QThread):
         mod = importlib.import_module(f"src.tests.{self._module}")
         TestClass = getattr(mod, self._cls_name)
         test = TestClass(result=self._result, mode=self._mode)
+        test.on_progress = lambda data: self.progress.emit(self._name, data)
         self._loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self._loop)
 
