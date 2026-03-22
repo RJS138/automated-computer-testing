@@ -28,6 +28,7 @@ class HeaderBar(QFrame):
     """
 
     run_all_clicked = Signal()
+    stop_all_clicked = Signal()
     new_job_clicked = Signal()
     settings_clicked = Signal()
     mode_changed = Signal(str)
@@ -36,6 +37,7 @@ class HeaderBar(QFrame):
         super().__init__(parent)
         self._mode = "simple"
         self._theme = theme
+        self._running_all: bool = False
         self._build_ui()
         self.apply_theme(theme)
 
@@ -132,6 +134,26 @@ class HeaderBar(QFrame):
     def set_run_all_enabled(self, enabled: bool) -> None:
         self._run_all_btn.setEnabled(enabled)
 
+    def set_running_all(self, active: bool) -> None:
+        """Toggle Run All button between ▶ Run All and ◼ Stop."""
+        self._running_all = active
+        c = get_colors(self._theme)
+        if active:
+            self._run_all_btn.setText("◼ Stop")
+            self._run_all_btn.clicked.disconnect()
+            self._run_all_btn.clicked.connect(self.stop_all_clicked)
+            self._run_all_btn.setStyleSheet(
+                f"QPushButton {{ background: {c['danger_bg']}; color: {c['danger_text']};"
+                f" border: none; border-radius: 6px; padding: 5px 14px; font-size: 12px;"
+                f" font-weight: 600; min-height: 30px; }}"
+                f"QPushButton:hover {{ background: {c['danger_text']}; color: #ffffff; }}"
+            )
+        else:
+            self._run_all_btn.setText("▶ Run All")
+            self._run_all_btn.clicked.disconnect()
+            self._run_all_btn.clicked.connect(self.run_all_clicked)
+            self._apply_run_all_normal_style()
+
     def apply_theme(self, theme: str) -> None:
         """Re-apply all inline styles for the given theme."""
         self._theme = theme
@@ -153,15 +175,17 @@ class HeaderBar(QFrame):
         else:
             self._simple_btn.setStyleSheet(seg["L_ON"])
             self._advanced_btn.setStyleSheet(seg["R_OFF"])
-        # Run All button
-        self._run_all_btn.setStyleSheet(
-            f"QPushButton {{ background: {c['accent']}; color: #ffffff; border: none;"
-            f" border-radius: 6px; padding: 5px 14px; font-size: 12px;"
-            f" font-weight: 600; min-height: 30px; }}"
-            f"QPushButton:hover {{ background: {c['accent_hover']}; }}"
-            f"QPushButton:pressed {{ background: {c['accent_hover']}; }}"
-            f"QPushButton:disabled {{ background: {c['accent']}; color: #ffffff; }}"
-        )
+        # Run All / Stop button — preserve current running state
+        if self._running_all:
+            self._run_all_btn.setText("◼ Stop")
+            self._run_all_btn.setStyleSheet(
+                f"QPushButton {{ background: {c['danger_bg']}; color: {c['danger_text']};"
+                f" border: none; border-radius: 6px; padding: 5px 14px; font-size: 12px;"
+                f" font-weight: 600; min-height: 30px; }}"
+                f"QPushButton:hover {{ background: {c['danger_text']}; color: #ffffff; }}"
+            )
+        else:
+            self._apply_run_all_normal_style()
         # New Job button
         self._new_job_btn.setStyleSheet(
             f"QPushButton {{ background: {c['bg_elevated']}; color: {c['text_secondary']};"
@@ -181,6 +205,17 @@ class HeaderBar(QFrame):
         # Elevation warning row
         self._warn_row.setStyleSheet(f"background: {c['warn_row_bg']};")
         self._warn_lbl.setStyleSheet(f"color: {c['warn_text']}; font-size: 11px;")
+
+    def _apply_run_all_normal_style(self) -> None:
+        c = get_colors(self._theme)
+        self._run_all_btn.setStyleSheet(
+            f"QPushButton {{ background: {c['accent']}; color: #ffffff; border: none;"
+            f" border-radius: 6px; padding: 5px 14px; font-size: 12px;"
+            f" font-weight: 600; min-height: 30px; }}"
+            f"QPushButton:hover {{ background: {c['accent_hover']}; }}"
+            f"QPushButton:pressed {{ background: {c['accent_hover']}; }}"
+            f"QPushButton:disabled {{ background: {c['accent']}; color: #ffffff; }}"
+        )
 
     # ── Private ───────────────────────────────────────────────────────────────
 
