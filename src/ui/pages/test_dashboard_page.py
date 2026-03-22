@@ -418,6 +418,7 @@ class TestDashboardPage(QWidget):
             parent=self,
         )
         worker.finished.connect(on_done)
+        worker.progress.connect(self._on_test_progress)
         return worker
 
     def _get_card(self, name: str):
@@ -426,6 +427,16 @@ class TestDashboardPage(QWidget):
             if card is not None:
                 return card
         return None
+
+    def _on_test_progress(self, name: str, data: dict) -> None:
+        """Route live progress data from a running test to its dashboard card."""
+        temp_c = data.get("temp_c")
+        time_s = data.get("time_s")
+        if temp_c is None or time_s is None:
+            return
+        card = self._get_card(name)
+        if card:
+            card.push_temp_sample(time_s, temp_c)
 
     # ── Result callbacks ──────────────────────────────────────────────────────
 
@@ -465,6 +476,17 @@ class TestDashboardPage(QWidget):
             if section.card(name) is not None:
                 section.update_card(result)
                 break
+        # Load temperature chart data into the card (CPU test only)
+        if result and result.name == "cpu":
+            samples = (result.data or {}).get("temp_samples")
+            if samples:
+                card = self._get_card(name)
+                if card:
+                    card.set_chart_data(
+                        samples,
+                        warn=(result.data or {}).get("temp_thresh_load_warn"),
+                        fail=(result.data or {}).get("temp_thresh_fail"),
+                    )
         if result not in self._window.test_results:
             self._window.test_results.append(result)
         self._active_workers = [w for w in self._active_workers if w.isRunning()]
