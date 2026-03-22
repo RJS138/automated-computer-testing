@@ -136,25 +136,37 @@ def _cpu_temp_svg(
     x0, y0 = pts[0]
     parts.append(f'<circle cx="{x0:.1f}" cy="{y0:.1f}" r="3" fill="#71717a"/>')
     parts.append(
-        f'<text x="{x0 + 5:.1f}" y="{y0 - 3:.1f}" fill="#71717a" font-size="8">'
-        f'idle {temps[0]:.0f}°C</text>'
+        f'<text x="{x0 + 5:.1f}" y="{y0 - 3:.1f}" fill="#71717a" font-size="8"'
+        f' text-anchor="start">idle {temps[0]:.0f}°C</text>'
     )
 
-    # Peak marker
+    # Peak marker — flip label to left side when peak is on the right half of the chart
     peak_i = temps.index(max(temps))
     xp, yp = pts[peak_i]
     parts.append(
         f'<circle cx="{xp:.1f}" cy="{yp:.1f}" r="4" fill="#f59e0b"'
         f' stroke="#f5f5f5" stroke-width="1.5"/>'
     )
-    parts.append(
-        f'<text x="{xp + 6:.1f}" y="{yp - 3:.1f}" fill="#f59e0b"'
-        f' font-size="9" font-weight="600">{max(temps):.0f}°C peak</text>'
-    )
-    parts.append(
-        f'<text x="{xp + 6:.1f}" y="{yp + 9:.1f}" fill="#888"'
-        f' font-size="8">at {times[peak_i]:.0f}s</text>'
-    )
+    if xp > width / 2:
+        # Right half — place labels to the left of the dot
+        parts.append(
+            f'<text x="{xp - 6:.1f}" y="{yp - 3:.1f}" fill="#f59e0b"'
+            f' font-size="9" font-weight="600" text-anchor="end">{max(temps):.0f}°C peak</text>'
+        )
+        parts.append(
+            f'<text x="{xp - 6:.1f}" y="{yp + 9:.1f}" fill="#888"'
+            f' font-size="8" text-anchor="end">at {times[peak_i]:.0f}s</text>'
+        )
+    else:
+        # Left half — place labels to the right of the dot
+        parts.append(
+            f'<text x="{xp + 6:.1f}" y="{yp - 3:.1f}" fill="#f59e0b"'
+            f' font-size="9" font-weight="600" text-anchor="start">{max(temps):.0f}°C peak</text>'
+        )
+        parts.append(
+            f'<text x="{xp + 6:.1f}" y="{yp + 9:.1f}" fill="#888"'
+            f' font-size="8" text-anchor="start">at {times[peak_i]:.0f}s</text>'
+        )
 
     # X axis
     parts.append(

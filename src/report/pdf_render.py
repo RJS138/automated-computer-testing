@@ -450,24 +450,31 @@ def _cpu_temp_drawing(
     pl.strokeWidth = 1.5
     d.add(pl)
 
-    # Idle dot
+    # Idle dot + label (always to the right — it's at the leftmost position)
     x0, y0 = pts[0]
     c0 = Circle(x0, y0, 2.5)
     c0.fillColor = HexColor("#888888")
     c0.strokeColor = None
     d.add(c0)
+    idle_lbl = String(x0 + 5, y0 + 2, f"idle {temps[0]:.0f}\u00b0C")
+    idle_lbl.fontSize = 7
+    idle_lbl.fillColor = HexColor("#888888")
+    idle_lbl.textAnchor = "start"
+    d.add(idle_lbl)
 
-    # Peak dot + label
+    # Peak dot + label — flip to left when peak is on the right half of the chart
     peak_i = temps.index(max(temps))
     xp, yp = pts[peak_i]
     cp = Circle(xp, yp, 3.5)
     cp.fillColor = HexColor("#f59e0b")
     cp.strokeColor = None
     d.add(cp)
-    # Clamp peak label x-position to prevent clipping at right edge
-    # Label is ~50 points wide at fontSize 7; Drawing width is 460, pad_r is 8
-    peak_lbl_x = min(xp + 5, width - pad_r - 50)
-    peak_lbl = String(peak_lbl_x, yp + 2, f"{max(temps):.0f}\u00b0C peak")
+    if xp > width / 2:
+        peak_lbl = String(xp - 6, yp + 2, f"{max(temps):.0f}\u00b0C peak")
+        peak_lbl.textAnchor = "end"
+    else:
+        peak_lbl = String(xp + 6, yp + 2, f"{max(temps):.0f}\u00b0C peak")
+        peak_lbl.textAnchor = "start"
     peak_lbl.fontSize = 7
     peak_lbl.fillColor = HexColor("#f57f17")
     d.add(peak_lbl)
