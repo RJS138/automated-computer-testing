@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
-from PySide6.QtWidgets import QSizePolicy, QToolTip, QWidget
+from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from ..stylesheet import get_colors
 
@@ -23,6 +23,7 @@ class TempChartWidget(QWidget):
         self._samples: list[tuple[float, float]] = []  # (time_s, temp_c)
         self._warn: float | None = None
         self._fail: float | None = None
+        self._hover_idx: int | None = None
         self.setStyleSheet("background: transparent;")
         if compact:
             self.setFixedSize(80, 22)
@@ -155,6 +156,26 @@ class TempChartWidget(QWidget):
             painter.setBrush(QColor(c["warn_text"]))
             painter.drawEllipse(int(xp) - 4, int(yp) - 4, 8, 8)
 
+            # Hover indicator — blue dot pinned to line + temperature label
+            if self._hover_idx is not None and 0 <= self._hover_idx < len(pts):
+                hx, hy = pts[self._hover_idx]
+                ht, hs = self._samples[self._hover_idx][1], self._samples[self._hover_idx][0]
+                # Dot with white ring so it pops off the line
+                painter.setPen(QPen(QColor("#ffffff"), 1.5))
+                painter.setBrush(QColor(c["accent"]))
+                painter.drawEllipse(int(hx) - 5, int(hy) - 5, 10, 10)
+                # Label: "73.3°C · 28s" — flip to left side when near the right edge
+                label = f"{ht:.1f}°C · {hs:.0f}s"
+                label_x = hx + 10
+                fm = painter.fontMetrics()
+                if label_x + fm.horizontalAdvance(label) > w - pad_r:
+                    label_x = hx - fm.horizontalAdvance(label) - 8
+                font = painter.font()
+                font.setBold(True)
+                painter.setFont(font)
+                painter.setPen(QColor(c["accent"]))
+                painter.drawText(int(label_x), int(hy) + 4, label)
+
         painter.end()
 
     def mouseMoveEvent(self, event) -> None:  # noqa: N802
@@ -164,16 +185,20 @@ class TempChartWidget(QWidget):
         cw = self.width() - pad_l - pad_r
         mx = event.position().x()
         if not (pad_l <= mx <= self.width() - pad_r):
-            QToolTip.hideText()
+            if self._hover_idx is not None:
+                self._hover_idx = None
+                self.update()
             return
         times = [s[0] for s in self._samples]
-        x_min = times[0]
-        x_max = max(times[-1], 1.0)
+        x_min, x_max = times[0], max(times[-1], 1.0)
         x_range = max(x_max - x_min, 1.0)
         t = (mx - pad_l) / cw * x_range + x_min
-        nearest = min(self._samples, key=lambda s: abs(s[0] - t))
-        QToolTip.showText(
-            event.globalPosition().toPoint(),
-            f"{nearest[1]:.1f}°C  ·  {nearest[0]:.0f}s",
-            self,
-        )
+        idx = min(range(len(self._samples)), key=lambda i: abs(self._samples[i][0] - t))
+        if idx != self._hover_idx:
+            self._hover_idx = idx
+            self.update()
+
+    def leaveEvent(self, event) -> None:  # noqa: N802
+        if self._hover_idx is not None:
+            self._hover_idx = None
+            self.update()
