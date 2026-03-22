@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
@@ -77,6 +78,26 @@ class CategorySection(QFrame):
         h_layout.addWidget(self._title_lbl)
         h_layout.addStretch()
 
+        # "all · none" mini controls — visible only in advanced mode
+        self._sel_all_btn = QPushButton("all")
+        self._sel_all_btn.setFlat(True)
+        self._sel_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._sel_all_btn.hide()
+        self._sel_all_btn.clicked.connect(self.select_all)
+        h_layout.addWidget(self._sel_all_btn)
+
+        self._sel_sep_lbl = QLabel("·")
+        self._sel_sep_lbl.setStyleSheet("color: #52525b; font-size: 11px; background: transparent;")
+        self._sel_sep_lbl.hide()
+        h_layout.addWidget(self._sel_sep_lbl)
+
+        self._sel_none_btn = QPushButton("none")
+        self._sel_none_btn.setFlat(True)
+        self._sel_none_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._sel_none_btn.hide()
+        self._sel_none_btn.clicked.connect(self.deselect_all)
+        h_layout.addWidget(self._sel_none_btn)
+
         self._arrow_lbl = QLabel("▾")
         self._arrow_lbl.setStyleSheet("color: #52525b; font-size: 11px; background: transparent;")
         h_layout.addWidget(self._arrow_lbl)
@@ -136,8 +157,29 @@ class CategorySection(QFrame):
         self._rebuild_rows()
         for card in self._cards.values():
             card.set_advanced(enabled)
+        self._sel_all_btn.setVisible(enabled)
+        self._sel_sep_lbl.setVisible(enabled)
+        self._sel_none_btn.setVisible(enabled)
         if self._expanded:
             self._collapsible.setMaximumHeight(16777215)
+
+    def select_all(self) -> None:
+        """Check all visible cards in this section."""
+        for name, _, adv_only in self._tests:
+            if adv_only and not self._advanced:
+                continue
+            card = self._cards.get(name)
+            if card:
+                card.set_checked(True)
+
+    def deselect_all(self) -> None:
+        """Uncheck all visible cards in this section."""
+        for name, _, adv_only in self._tests:
+            if adv_only and not self._advanced:
+                continue
+            card = self._cards.get(name)
+            if card:
+                card.set_checked(False)
 
     def update_card(self, result: TestResult) -> None:
         """Update the row for the given test result."""
@@ -165,6 +207,16 @@ class CategorySection(QFrame):
             f"background: {c['border_subtle']}; border: none; max-height: 1px; min-height: 1px;"
         )
         self._arrow_lbl.setStyleSheet(
+            f"color: {c['text_muted']}; font-size: 11px; background: transparent;"
+        )
+        _mini_btn_style = (
+            f"QPushButton {{ color: {c['text_muted']}; font-size: 11px; background: transparent;"
+            f" padding: 0 2px; }}"
+            f"QPushButton:hover {{ color: {c['accent']}; }}"
+        )
+        self._sel_all_btn.setStyleSheet(_mini_btn_style)
+        self._sel_none_btn.setStyleSheet(_mini_btn_style)
+        self._sel_sep_lbl.setStyleSheet(
             f"color: {c['text_muted']}; font-size: 11px; background: transparent;"
         )
         for card in self._cards.values():

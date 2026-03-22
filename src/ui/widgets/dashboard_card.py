@@ -232,6 +232,9 @@ class DashboardCard(QFrame):
             return True
         return self._checkbox.isChecked()
 
+    def set_checked(self, checked: bool) -> None:
+        self._checkbox.setChecked(checked)
+
     def set_running_all(self, active: bool) -> None:
         self._run_btn.setEnabled(not active)
 

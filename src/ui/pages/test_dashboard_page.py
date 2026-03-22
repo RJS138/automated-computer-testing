@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMessageBox,
+    QPushButton,
     QScrollArea,
     QVBoxLayout,
     QWidget,
@@ -184,6 +185,26 @@ class TestDashboardPage(QWidget):
         scroll_layout.setContentsMargins(16, 12, 16, 12)
         scroll_layout.setSpacing(8)
 
+        # Global select-all bar — visible only in advanced mode
+        self._adv_sel_bar = QWidget()
+        self._adv_sel_bar.setStyleSheet("background: transparent;")
+        _sel_row = QHBoxLayout(self._adv_sel_bar)
+        _sel_row.setContentsMargins(4, 0, 4, 4)
+        _sel_row.setSpacing(6)
+        _sel_row.addStretch()
+        self._global_sel_all_btn = QPushButton("Select all")
+        self._global_sel_all_btn.setFlat(True)
+        self._global_sel_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._global_sel_all_btn.clicked.connect(self._select_all_tests)
+        _sel_row.addWidget(self._global_sel_all_btn)
+        self._global_sel_none_btn = QPushButton("Deselect all")
+        self._global_sel_none_btn.setFlat(True)
+        self._global_sel_none_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._global_sel_none_btn.clicked.connect(self._deselect_all_tests)
+        _sel_row.addWidget(self._global_sel_none_btn)
+        self._adv_sel_bar.hide()
+        scroll_layout.addWidget(self._adv_sel_bar)
+
         for title, tests, col_count, short_names in self._CATEGORIES:
             section = CategorySection(
                 title=title,
@@ -252,14 +273,30 @@ class TestDashboardPage(QWidget):
         self._banner.apply_theme(theme)
         for section in self._category_sections:
             section.apply_theme(theme)
+        _sel_btn_style = (
+            f"QPushButton {{ color: {c['text_muted']}; font-size: 11px;"
+            f" background: transparent; padding: 0 4px; }}"
+            f"QPushButton:hover {{ color: {c['accent']}; }}"
+        )
+        self._global_sel_all_btn.setStyleSheet(_sel_btn_style)
+        self._global_sel_none_btn.setStyleSheet(_sel_btn_style)
 
     # ── Mode switch ───────────────────────────────────────────────────────────
 
     def _on_mode_changed(self, mode: str) -> None:
         is_adv = mode == "advanced"
+        self._adv_sel_bar.setVisible(is_adv)
         for section in self._category_sections:
             section.set_advanced(is_adv)
             self._wire_section_run_buttons(section)
+
+    def _select_all_tests(self) -> None:
+        for section in self._category_sections:
+            section.select_all()
+
+    def _deselect_all_tests(self) -> None:
+        for section in self._category_sections:
+            section.deselect_all()
 
     # ── System info ───────────────────────────────────────────────────────────
 
