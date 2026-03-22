@@ -48,6 +48,7 @@ def _cpu_temp_svg(
     temp_fail: float | None,
     width: int = 560,
     height: int = 110,
+    grad_id: str = "tcg",
 ) -> str:
     """Generate an inline SVG area chart for CPU temperature over time."""
     if not samples or len(samples) < 2:
@@ -79,7 +80,7 @@ def _cpu_temp_svg(
     parts: list[str] = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}"'
         f' viewBox="0 0 {width} {height}" style="display:block;width:100%;max-width:{width}px">',
-        '<defs><linearGradient id="tcg" x1="0" y1="0" x2="0" y2="1">'
+        f'<defs><linearGradient id="{grad_id}" x1="0" y1="0" x2="0" y2="1">'
         '<stop offset="0%" stop-color="#3b82f6" stop-opacity="0.25"/>'
         '<stop offset="100%" stop-color="#3b82f6" stop-opacity="0.02"/>'
         '</linearGradient></defs>',
@@ -122,7 +123,7 @@ def _cpu_temp_svg(
     for x, y in pts:
         area_pts += f" {x:.1f},{y:.1f}"
     area_pts += f" {pts[-1][0]:.1f},{bottom_y:.1f}"
-    parts.append(f'<polygon points="{area_pts}" fill="url(#tcg)"/>')
+    parts.append(f'<polygon points="{area_pts}" fill="url(#{grad_id})"/>')
 
     # Line
     line_pts = " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
@@ -185,6 +186,7 @@ def render_html(report: FullReport) -> str:
                 r.data["temp_samples"],
                 r.data.get("temp_thresh_load_warn"),
                 r.data.get("temp_thresh_fail"),
+                grad_id="tcg_cpu",
             )
 
     return template.render(
