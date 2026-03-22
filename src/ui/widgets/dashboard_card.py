@@ -24,6 +24,12 @@ _STATUS_COLORS: dict[str, str] = {
     "fail":    "#ef4444",
     "error":   "#ef4444",
     "skip":    "#52525b",
+    "cancel":  "#fb923c",
+}
+
+# Light-mode overrides for statuses whose dark hex doesn't work on light bg.
+_STATUS_COLORS_LIGHT: dict[str, str] = {
+    "cancel": "#ea580c",
 }
 
 
@@ -39,6 +45,7 @@ class DashboardCard(QFrame):
     """
 
     run_requested = Signal(str)
+    stop_requested = Signal(str)
 
     def __init__(self, name: str, display_name: str, theme: str = "dark", parent=None) -> None:
         super().__init__(parent)
@@ -46,6 +53,7 @@ class DashboardCard(QFrame):
         self._display_name = display_name
         self._sub_detail_text = ""
         self._expanded = False
+        self._stop_mode: bool = False
 
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
@@ -128,8 +136,11 @@ class DashboardCard(QFrame):
     def set_status(self, status: str, detail: str = "", sub_detail: str = "") -> None:
         """Update inline summary, status colour, expandable panel, and button label."""
         status = status.lower()
-        color = _STATUS_COLORS.get(status, "#52525b")
         c = get_colors(self._theme)
+
+        # Theme-aware status label colour
+        light_overrides = _STATUS_COLORS_LIGHT if self._theme == "light" else {}
+        color = light_overrides.get(status) or _STATUS_COLORS.get(status, "#52525b")
 
         self._status_lbl.setText(status.upper())
         self._status_lbl.setStyleSheet(
@@ -137,6 +148,7 @@ class DashboardCard(QFrame):
         )
 
         if status == "running":
+            self._stop_mode = True
             self._elapsed_s = 0
             self._detail_lbl.setText("running…")
             self._detail_lbl.setStyleSheet(
@@ -145,15 +157,25 @@ class DashboardCard(QFrame):
             if not self._ticker.isActive():
                 self._ticker.start()
             self._set_sub_detail("")
+            # Morph Run button into ◼ Stop
+            self._run_btn.setText("◼ Stop")
+            self._run_btn.setStyleSheet(
+                f"QPushButton {{ background: {c['danger_bg']}; color: {c['danger_text']};"
+                f" border: none; border-radius: 6px; font-size: 12px; font-weight: 600; }}"
+                f"QPushButton:hover {{ background: {c['danger_text']}; color: #ffffff; }}"
+            )
         else:
+            self._stop_mode = False
             self._ticker.stop()
-            self._detail_lbl.setText(detail)
+            detail_text = "cancelled" if status == "cancel" else detail
+            self._detail_lbl.setText(detail_text)
             self._detail_lbl.setStyleSheet(
                 f"color: {c['text_muted']}; font-size: 13px; background: transparent;"
             )
             self._set_sub_detail(sub_detail)
-
-        self._run_btn.setText("Run" if status == "waiting" else "Re-run")
+            # Restore normal Run/Re-run button
+            self._run_btn.setText("Run" if status == "waiting" else "Re-run")
+            self._apply_run_btn_normal_style()
 
     def set_advanced(self, enabled: bool) -> None:
         self._checkbox.setVisible(enabled)
@@ -182,6 +204,24 @@ class DashboardCard(QFrame):
         self._expand_arrow.setStyleSheet(
             f"color: {c['text_secondary']}; font-size: 16px; background: transparent;"
         )
+        if self._stop_mode:
+            self._run_btn.setText("◼ Stop")
+            self._run_btn.setStyleSheet(
+                f"QPushButton {{ background: {c['danger_bg']}; color: {c['danger_text']};"
+                f" border: none; border-radius: 6px; font-size: 12px; font-weight: 600; }}"
+                f"QPushButton:hover {{ background: {c['danger_text']}; color: #ffffff; }}"
+            )
+        else:
+            self._apply_run_btn_normal_style()
+        self._detail_panel.setStyleSheet(
+            f"color: {c['text_secondary']}; font-size: 12px; background: transparent;"
+            f" padding: 2px 10px 10px 10px;"
+        )
+
+    # ── Private ───────────────────────────────────────────────────────────────
+
+    def _apply_run_btn_normal_style(self) -> None:
+        c = get_colors(self._theme)
         self._run_btn.setStyleSheet(
             f"QPushButton {{ background: {c['bg_elevated']}; color: {c['text_secondary']};"
             f" border: none; border-radius: 6px; font-size: 12px; font-weight: 500; }}"
@@ -189,12 +229,6 @@ class DashboardCard(QFrame):
             f"QPushButton:pressed {{ background: {c['text_muted']}; }}"
             f"QPushButton:disabled {{ background: {c['bg_elevated']}; color: {c['text_muted']}; }}"
         )
-        self._detail_panel.setStyleSheet(
-            f"color: {c['text_secondary']}; font-size: 12px; background: transparent;"
-            f" padding: 2px 10px 10px 10px;"
-        )
-
-    # ── Private ───────────────────────────────────────────────────────────────
 
     def _set_sub_detail(self, text: str) -> None:
         self._sub_detail_text = text.strip()
@@ -229,4 +263,7 @@ class DashboardCard(QFrame):
             self._detail_lbl.setText(f"{m}:{s:02d}")
 
     def _on_run_clicked(self) -> None:
-        self.run_requested.emit(self._name)
+        if self._stop_mode:
+            self.stop_requested.emit(self._name)
+        else:
+            self.run_requested.emit(self._name)
