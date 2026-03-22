@@ -464,7 +464,10 @@ def _cpu_temp_drawing(
     cp.fillColor = HexColor("#f59e0b")
     cp.strokeColor = None
     d.add(cp)
-    peak_lbl = String(xp + 5, yp + 2, f"{max(temps):.0f}\u00b0C peak")
+    # Clamp peak label x-position to prevent clipping at right edge
+    # Label is ~50 points wide at fontSize 7; Drawing width is 460, pad_r is 8
+    peak_lbl_x = min(xp + 5, width - pad_r - 50)
+    peak_lbl = String(peak_lbl_x, yp + 2, f"{max(temps):.0f}\u00b0C peak")
     peak_lbl.fontSize = 7
     peak_lbl.fillColor = HexColor("#f57f17")
     d.add(peak_lbl)
