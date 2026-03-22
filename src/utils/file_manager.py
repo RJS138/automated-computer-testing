@@ -76,6 +76,27 @@ def _find_usb_darwin() -> Path | None:
     return None
 
 
+def resolve_save_base(save_path: str = "") -> Path:
+    """
+    Return the base directory for saving reports.
+
+    Priority:
+      1. User-configured path (save_path non-empty and exists).
+      2. Detected USB drive containing the USB marker file.
+      3. Executable / project directory (dev fallback).
+    """
+    if save_path:
+        p = Path(save_path)
+        if p.exists():
+            return p
+
+    usb = find_usb_drive()
+    if usb:
+        return usb
+
+    return get_exe_dir()
+
+
 def get_job_dir(job: JobInfo) -> Path:
     """
     Return the top-level job folder: .../reports/{CustomerName_WO#}/

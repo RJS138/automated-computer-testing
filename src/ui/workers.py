@@ -100,6 +100,7 @@ class ReportWorker(QThread):
             from src.report.generator import assemble_report
             from src.report.html_render import render_html
             from src.report.pdf_render import render_pdf
+            from src.utils.file_manager import resolve_save_base
 
             job = self._job
             results = self._results
@@ -109,8 +110,8 @@ class ReportWorker(QThread):
             # Build report object
             report = assemble_report(job, results)
 
-            # Derive save directory from settings.save_path
-            base = Path(self._settings.save_path)
+            # Derive save directory: user path → USB drive → exe dir
+            base = resolve_save_base(self._settings.save_path)
             report_dir = base / REPORTS_DIR_NAME / job.folder_name() / report_type
             job_dir = base / REPORTS_DIR_NAME / job.folder_name()
             report_dir.mkdir(parents=True, exist_ok=True)

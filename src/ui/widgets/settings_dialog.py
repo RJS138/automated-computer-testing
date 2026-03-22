@@ -99,6 +99,7 @@ class SettingsDialog(QDialog):
         path_row = QHBoxLayout()
         path_row.setSpacing(6)
         self._path_edit = QLineEdit(settings.save_path)
+        self._path_edit.setPlaceholderText("Auto — USB drive, then local reports folder")
         path_row.addWidget(self._path_edit, stretch=1)
 
         browse_btn = QPushButton("Browse\u2026")
