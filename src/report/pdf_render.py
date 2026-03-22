@@ -398,7 +398,7 @@ def _cpu_temp_drawing(
     cw = width - pad_l - pad_r
     ch = height - pad_t - pad_b
 
-    y_max = (temp_fail + 5) if temp_fail is not None else (max(temps) + 8)
+    y_max = max(temps) + 8
     y_min = min(temps) - 5
     y_range = max(float(y_max - y_min), 1.0)
 

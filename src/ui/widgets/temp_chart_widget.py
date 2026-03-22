@@ -66,8 +66,10 @@ class TempChartWidget(QWidget):
         temps = [s[1] for s in self._samples]
         times = [s[0] for s in self._samples]
 
-        # Y range
-        y_max = (self._fail + 5) if self._fail is not None else (max(temps) + 8)
+        # Y range — scale to data; threshold lines are drawn only if they fall
+        # within the visible range (bounds-checked below), so no need to force
+        # y_max up to the fail threshold (which would crush the data into a flat line).
+        y_max = max(temps) + 8
         y_min = min(temps) - 5
         y_range = max(y_max - y_min, 1.0)
 
