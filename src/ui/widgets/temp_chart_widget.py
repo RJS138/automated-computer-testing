@@ -67,7 +67,7 @@ class TempChartWidget(QWidget):
         times = [s[0] for s in self._samples]
 
         # Y range
-        y_max = (self._fail + 5) if self._fail else (max(temps) + 8)
+        y_max = (self._fail + 5) if self._fail is not None else (max(temps) + 8)
         y_min = min(temps) - 5
         y_range = max(y_max - y_min, 1.0)
 
