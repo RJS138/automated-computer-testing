@@ -14,6 +14,7 @@ class TestStatus(StrEnum):
     FAIL = "fail"
     SKIP = "skip"
     ERROR = "error"
+    CANCEL = "cancel"
 
 
 @dataclass
@@ -66,6 +67,11 @@ class TestResult:
     def mark_skip(self, reason: str = "") -> None:
         self.status = TestStatus.SKIP
         self.summary = reason
+        self.completed_at = datetime.now()
+
+    def mark_cancel(self) -> None:
+        self.status = TestStatus.CANCEL
+        self.summary = "Cancelled"
         self.completed_at = datetime.now()
 
     def is_done(self) -> bool:
