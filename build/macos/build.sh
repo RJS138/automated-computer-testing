@@ -4,8 +4,8 @@
 # Prerequisites:
 #   1. Install UV:  curl -LsSf https://astral.sh/uv/install.sh | sh
 #
-# UV handles Python and all Python dependencies automatically.
-# Produces a .app bundle wrapped in a .dmg for the current architecture.
+# Produces a .dmg containing a proper .app bundle backed by a --onefile
+# PyInstaller binary (the combination proven to work on macOS).
 
 set -euo pipefail
 
@@ -30,9 +30,9 @@ echo "[1/4] Syncing dependencies (uv sync --group build)..."
 uv sync --group build
 
 echo ""
-echo "[2/4] Running PyInstaller..."
+echo "[2/4] Running PyInstaller (--onefile)..."
 uv run pyinstaller \
-  --windowed \
+  --onefile \
   --name "Touchstone" \
   --icon "$REPO_ROOT/assets/icon.icns" \
   --distpath "$DIST_DIR" \
@@ -52,17 +52,49 @@ uv run pyinstaller \
   main.py
 
 echo ""
-echo "[3/4] Creating DMG..."
+echo "[3/4] Wrapping binary in .app bundle..."
+APP_DIR="$DIST_DIR/Touchstone.app"
+rm -rf "$APP_DIR"
+mkdir -p "$APP_DIR/Contents/MacOS"
+
+cp "$DIST_DIR/Touchstone" "$APP_DIR/Contents/MacOS/Touchstone"
+chmod +x "$APP_DIR/Contents/MacOS/Touchstone"
+
+# Copy icon into the bundle
+mkdir -p "$APP_DIR/Contents/Resources"
+cp "$REPO_ROOT/assets/icon.icns" "$APP_DIR/Contents/Resources/icon.icns"
+
+cat > "$APP_DIR/Contents/Info.plist" << 'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key>      <string>Touchstone</string>
+    <key>CFBundleIdentifier</key>      <string>com.touchstone.app</string>
+    <key>CFBundleName</key>            <string>Touchstone</string>
+    <key>CFBundleDisplayName</key>     <string>Touchstone</string>
+    <key>CFBundleVersion</key>         <string>1.0</string>
+    <key>CFBundleShortVersionString</key> <string>1.0</string>
+    <key>CFBundlePackageType</key>     <string>APPL</string>
+    <key>CFBundleIconFile</key>        <string>icon</string>
+    <key>NSHighResolutionCapable</key> <true/>
+    <key>LSUIElement</key>             <false/>
+</dict>
+</plist>
+PLIST
+
+echo ""
+echo "[4/4] Creating DMG..."
 hdiutil create \
   -volname "Touchstone" \
-  -srcfolder "$DIST_DIR/Touchstone.app" \
+  -srcfolder "$APP_DIR" \
   -ov \
   -format UDZO \
   "$DIST_DIR/$DMG_NAME.dmg"
 
 echo ""
-echo "[4/4] Done."
 echo "Output : $DIST_DIR/$DMG_NAME.dmg"
 echo ""
-echo "NOTE: The app is not codesigned. To run after downloading:"
-echo "  Right-click Touchstone.app → Open  (bypasses Gatekeeper on first launch)"
+echo "NOTE: App is not codesigned. On first launch:"
+echo "  Right-click Touchstone.app → Open"
