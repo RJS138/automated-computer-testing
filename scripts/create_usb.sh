@@ -228,13 +228,16 @@ _dl() {
     fi
 }
 
-_dl "touchstone_linux_x86_64"      "$MOUNT_POINT/linux/touchstone_linux_x86_64"
-_dl "touchstone_macos_arm64"       "$MOUNT_POINT/macos/touchstone_macos_arm64"
-_dl "touchstone_windows_x64.exe"   "$MOUNT_POINT/windows/touchstone_windows_x64.exe"
+_dl "touchstone_linux_x86_64"       "$MOUNT_POINT/linux/touchstone_linux_x86_64"
+_dl "touchstone_linux_arm64"        "$MOUNT_POINT/linux/touchstone_linux_arm64"
+_dl "touchstone_macos_arm64"        "$MOUNT_POINT/macos/touchstone_macos_arm64"
+_dl "touchstone_windows_x64.exe"    "$MOUNT_POINT/windows/touchstone_windows_x64.exe"
+_dl "touchstone_windows_arm64.exe"  "$MOUNT_POINT/windows/touchstone_windows_arm64.exe"
 
 # Make Unix binaries executable
 chmod +x \
     "$MOUNT_POINT/linux/touchstone_linux_x86_64" \
+    "$MOUNT_POINT/linux/touchstone_linux_arm64" \
     "$MOUNT_POINT/macos/touchstone_macos_arm64" \
     2>/dev/null || true
 
@@ -249,20 +252,28 @@ cat > "$MOUNT_POINT/README.txt" << 'EOF'
 Touchstone USB Drive
 ===================
 
-WINDOWS
+WINDOWS (x64)
   Run: windows\touchstone_windows_x64.exe
+  Right-click → "Run as Administrator"
+
+WINDOWS (ARM)
+  Run: windows\touchstone_windows_arm64.exe
   Right-click → "Run as Administrator"
 
 MACOS (Apple Silicon / M-series)
   Run: macos/touchstone_macos_arm64
   First run only — remove quarantine flag:
     xattr -d com.apple.quarantine macos/touchstone_macos_arm64
+    ./macos/touchstone_macos_arm64
 
 MACOS (Intel)
   Use macos/touchstone_macos_arm64 — runs via Rosetta 2 automatically.
 
-LINUX
+LINUX (x86)
   Run: linux/touchstone_linux_x86_64  (requires sudo)
+
+LINUX (ARM)
+  Run: linux/touchstone_linux_arm64  (requires sudo)
 
 Reports are saved automatically to the reports/ folder on this drive.
 To update the executables, re-run: sudo scripts/create_usb.sh --update

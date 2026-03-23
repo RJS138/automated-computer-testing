@@ -205,12 +205,12 @@ jobs:
       - name: Stage release assets
         run: |
           mkdir release
-          cp "artifacts/touchstone-linux-x86/Touchstone (Linux x86)"           "release/Touchstone (Linux x86)"
-          cp "artifacts/touchstone-linux-arm/Touchstone (Linux ARM)"            "release/Touchstone (Linux ARM)"
-          cp "artifacts/touchstone-macos-apple-silicon/Touchstone (Apple Silicon)" "release/Touchstone (Apple Silicon)"
-          cp "artifacts/touchstone-windows-x64/Touchstone (Windows x64).exe"   "release/Touchstone (Windows x64).exe"
-          cp "artifacts/touchstone-windows-arm/Touchstone (Windows ARM).exe"   "release/Touchstone (Windows ARM).exe"
-          chmod +x "release/Touchstone (Linux x86)" "release/Touchstone (Linux ARM)" "release/Touchstone (Apple Silicon)"
+          cp "artifacts/touchstone-linux-x86/Touchstone (Linux x86)"              release/touchstone_linux_x86_64
+          cp "artifacts/touchstone-linux-arm/Touchstone (Linux ARM)"               release/touchstone_linux_arm64
+          cp "artifacts/touchstone-macos-apple-silicon/Touchstone (Apple Silicon)" release/touchstone_macos_arm64
+          cp "artifacts/touchstone-windows-x64/Touchstone (Windows x64).exe"      release/touchstone_windows_x64.exe
+          cp "artifacts/touchstone-windows-arm/Touchstone (Windows ARM).exe"      release/touchstone_windows_arm64.exe
+          chmod +x release/touchstone_linux_x86_64 release/touchstone_linux_arm64 release/touchstone_macos_arm64
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -224,34 +224,34 @@ jobs:
 
             | Platform | File |
             |----------|------|
-            | macOS (Apple Silicon / M-series) | `Touchstone (Apple Silicon)` |
-            | macOS (Intel — runs via Rosetta 2) | `Touchstone (Apple Silicon)` |
-            | Linux x86 | `Touchstone (Linux x86)` |
-            | Linux ARM | `Touchstone (Linux ARM)` |
-            | Windows x64 | `Touchstone (Windows x64).exe` |
-            | Windows ARM | `Touchstone (Windows ARM).exe` |
+            | macOS (Apple Silicon / M-series) | `touchstone_macos_arm64` |
+            | macOS (Intel — runs via Rosetta 2) | `touchstone_macos_arm64` |
+            | Linux x86 | `touchstone_linux_x86_64` |
+            | Linux ARM | `touchstone_linux_arm64` |
+            | Windows x64 | `touchstone_windows_x64.exe` |
+            | Windows ARM | `touchstone_windows_arm64.exe` |
 
             ### macOS — first run
             ```
-            chmod +x "Touchstone (Apple Silicon)"
-            xattr -d com.apple.quarantine "Touchstone (Apple Silicon)"
-            ./"Touchstone (Apple Silicon)"
+            chmod +x touchstone_macos_arm64
+            xattr -d com.apple.quarantine touchstone_macos_arm64
+            ./touchstone_macos_arm64
             ```
             > Intel Mac users: the Apple Silicon binary runs transparently via Rosetta 2.
 
             ### Linux — first run
             ```
-            chmod +x "Touchstone (Linux x86)"   # or Touchstone (Linux ARM)
-            sudo ./"Touchstone (Linux x86)"
+            chmod +x touchstone_linux_x86_64   # or touchstone_linux_arm64
+            sudo ./touchstone_linux_x86_64
             ```
 
             ### Windows — first run
-            Run `Touchstone (Windows x64).exe` (or ARM variant) as Administrator.
+            Run `touchstone_windows_x64.exe` (or `touchstone_windows_arm64.exe`) as Administrator.
           files: |
-            release/Touchstone (Apple Silicon)
-            release/Touchstone (Linux x86)
-            release/Touchstone (Linux ARM)
-            release/Touchstone (Windows x64).exe
-            release/Touchstone (Windows ARM).exe
+            release/touchstone_linux_x86_64
+            release/touchstone_linux_arm64
+            release/touchstone_macos_arm64
+            release/touchstone_windows_x64.exe
+            release/touchstone_windows_arm64.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
