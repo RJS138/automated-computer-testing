@@ -29,8 +29,8 @@ def _run_powershell(script: str, timeout: int = 20) -> str:
     return r.stdout.strip() if r.returncode == 0 else ""
 
 
-def _get_battery_details_windows() -> dict:
-    """Use PowerShell Get-CimInstance for detailed battery info on Windows."""
+def _get_battery_details_windows_ps() -> dict:
+    """Primary: PowerShell Get-CimInstance for detailed battery info."""
     import json
 
     details: dict = {}
@@ -78,6 +78,93 @@ $cc = Get-CimInstance -Namespace root/wmi -ClassName BatteryCycleCount | Select-
         pass
 
     return details
+
+
+def _get_battery_details_windows_wmic() -> dict:
+    """Fallback: wmic CLI for basic battery info."""
+    details: dict = {}
+
+    def _wmic_val(*args: str) -> str:
+        try:
+            r = subprocess.run(
+                ["wmic"] + list(args) + ["/format:list"],
+                capture_output=True, text=True, timeout=15,
+            )
+            for line in r.stdout.splitlines():
+                line = line.strip()
+                if "=" in line:
+                    _, _, v = line.partition("=")
+                    if v.strip():
+                        return v.strip()
+        except Exception:
+            pass
+        return ""
+
+    try:
+        # Basic capacity from Win32_Battery
+        r = subprocess.run(
+            ["wmic", "path", "Win32_Battery", "get",
+             "DesignCapacity,FullChargeCapacity,Chemistry", "/format:list"],
+            capture_output=True, text=True, timeout=15,
+        )
+        row: dict[str, str] = {}
+        for line in r.stdout.splitlines():
+            line = line.strip()
+            if "=" in line:
+                k, _, v = line.partition("=")
+                if v.strip():
+                    row[k.strip()] = v.strip()
+
+        design = int(row.get("DesignCapacity") or "0")
+        full = int(row.get("FullChargeCapacity") or "0")
+        if design > 0:
+            details["design_capacity_mwh"] = design
+        if full > 0:
+            details["full_charge_capacity_mwh"] = full
+        chem = row.get("Chemistry")
+        if chem:
+            details["chemistry"] = int(chem)
+
+        # Better full-charge capacity from root\wmi
+        try:
+            fc_str = _wmic_val(
+                "/namespace:\\\\root\\wmi", "path", "BatteryFullChargedCapacity",
+                "get", "FullChargedCapacity",
+            )
+            fc = int(fc_str) if fc_str.isdigit() else 0
+            if fc > 0:
+                details["full_charge_capacity_mwh"] = fc
+                full = fc
+        except Exception:
+            pass
+
+        # Cycle count from root\wmi
+        try:
+            cc_str = _wmic_val(
+                "/namespace:\\\\root\\wmi", "path", "BatteryCycleCount",
+                "get", "CycleCount",
+            )
+            cc = int(cc_str) if cc_str.isdigit() else 0
+            if cc > 0:
+                details["cycle_count"] = cc
+        except Exception:
+            pass
+
+        if design > 0 and full > 0:
+            details["health_pct"] = round((full / design) * 100, 1)
+
+    except Exception:
+        pass
+
+    return details
+
+
+def _get_battery_details_windows() -> dict:
+    """Try PowerShell first, fall back to wmic CLI."""
+    details = _get_battery_details_windows_ps()
+    if details.get("design_capacity_mwh") or details.get("full_charge_capacity_mwh"):
+        return details
+    return _get_battery_details_windows_wmic()
 
 
 def _get_battery_details_linux() -> dict:

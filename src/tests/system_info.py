@@ -22,7 +22,7 @@ def _run_powershell(script: str, timeout: int = 30) -> str:
     return r.stdout.strip() if r.returncode == 0 else ""
 
 
-def _get_info_windows() -> dict:
+def _get_info_windows_ps() -> dict:
     """Query system info on Windows using PowerShell Get-CimInstance."""
     import json
 
@@ -121,6 +121,143 @@ $disks = @(Get-CimInstance Win32_DiskDrive | ForEach-Object {
     except Exception as exc:
         info["error"] = str(exc)
 
+    return info
+
+
+def _get_info_windows_wmic() -> dict:
+    """Fallback: collect system info via wmic CLI (deprecated but available on Win10/11)."""
+    info: dict = {}
+
+    def _wmic(*args: str) -> list[dict[str, str]]:
+        """Run wmic and parse /format:list output into a list of dicts (one per instance)."""
+        try:
+            r = subprocess.run(
+                ["wmic"] + list(args) + ["/format:list"],
+                capture_output=True, text=True, timeout=15,
+            )
+            rows: list[dict[str, str]] = []
+            current: dict[str, str] = {}
+            for line in r.stdout.splitlines():
+                line = line.strip()
+                if "=" in line:
+                    k, _, v = line.partition("=")
+                    if v.strip():
+                        current[k.strip()] = v.strip()
+                elif not line and current:
+                    rows.append(current)
+                    current = {}
+            if current:
+                rows.append(current)
+            return rows
+        except Exception:
+            return []
+
+    bios = (_wmic("bios", "get", "Manufacturer,SMBIOSBIOSVersion,SerialNumber,ReleaseDate") or [{}])[0]
+    if bios.get("Manufacturer"):
+        info["bios_vendor"] = bios["Manufacturer"]
+    if bios.get("SMBIOSBIOSVersion"):
+        info["bios_version"] = bios["SMBIOSBIOSVersion"]
+    if bios.get("ReleaseDate"):
+        info["bios_date"] = bios["ReleaseDate"]
+    if bios.get("SerialNumber"):
+        info["board_serial"] = bios["SerialNumber"]
+
+    board = (_wmic("baseboard", "get", "Manufacturer,Product,SerialNumber") or [{}])[0]
+    if board.get("Manufacturer"):
+        info["board_manufacturer"] = board["Manufacturer"]
+    if board.get("Product"):
+        info["board_model"] = board["Product"]
+    if board.get("SerialNumber") and not info.get("board_serial"):
+        info["board_serial"] = board["SerialNumber"]
+
+    cs = (_wmic("computersystem", "get", "Manufacturer,Model") or [{}])[0]
+    if cs.get("Manufacturer"):
+        info["chassis_manufacturer"] = cs["Manufacturer"]
+    if cs.get("Model"):
+        info["chassis_model"] = cs["Model"]
+
+    os_row = (_wmic("os", "get", "Caption,Version,BuildNumber") or [{}])[0]
+    if os_row.get("Caption"):
+        info["os_name"] = os_row["Caption"]
+    if os_row.get("Version"):
+        info["os_version"] = os_row["Version"]
+    if os_row.get("BuildNumber"):
+        info["os_build"] = os_row["BuildNumber"]
+
+    cpu_rows = _wmic("cpu", "get", "Name,NumberOfCores,NumberOfLogicalProcessors")
+    if cpu_rows:
+        cpu = cpu_rows[0]
+        if cpu.get("Name"):
+            info["processor_marketing"] = cpu["Name"].strip()
+        cores = cpu.get("NumberOfCores")
+        threads = cpu.get("NumberOfLogicalProcessors")
+        if cores and threads:
+            info["cpu_cores"] = f"{cores} cores / {threads} threads"
+        elif cores:
+            info["cpu_cores"] = f"{cores} cores"
+
+    try:
+        r = subprocess.run(
+            ["wmic", "memorychip", "get", "Capacity", "/format:list"],
+            capture_output=True, text=True, timeout=15,
+        )
+        total = sum(
+            int(line.partition("=")[2].strip())
+            for line in r.stdout.splitlines()
+            if line.strip().startswith("Capacity=") and line.partition("=")[2].strip().isdigit()
+        )
+        if total > 0:
+            info["ram_total"] = f"{total / (1024 ** 3):.0f} GB"
+    except Exception:
+        pass
+
+    gpu_rows = _wmic("path", "win32_videocontroller", "get", "Name,AdapterRAM")
+    gpu_list = []
+    for row in gpu_rows:
+        name = row.get("Name", "").strip()
+        if not name:
+            continue
+        try:
+            vram_bytes = int(row.get("AdapterRAM", "0") or "0")
+            entry = name + (f" ({vram_bytes // (1024 ** 3)} GB VRAM)" if vram_bytes > 0 else "")
+        except (ValueError, TypeError):
+            entry = name
+        gpu_list.append(entry)
+    if gpu_list:
+        info["gpu_list"] = gpu_list
+
+    disk_rows = _wmic("diskdrive", "get", "Model,Size")
+    disk_list = []
+    for row in disk_rows:
+        model = row.get("Model", "").strip()
+        if not model:
+            continue
+        try:
+            size_gb = int(row.get("Size", "0") or "0") / (1024 ** 3)
+            entry = model + (f" · {size_gb:.0f} GB" if size_gb > 0 else "")
+        except (ValueError, TypeError):
+            entry = model
+        disk_list.append(entry)
+    if disk_list:
+        info["storage_list"] = disk_list
+
+    return info
+
+
+def _get_info_windows() -> dict:
+    """Try PowerShell first, fall back to wmic CLI."""
+    info = _get_info_windows_ps()
+    # Consider PS successful if it returned any meaningful hardware field
+    if info and not info.get("error") and any(
+        info.get(k) for k in ("chassis_model", "board_model", "bios_version", "os_name")
+    ):
+        return info
+    # Fallback: wmic
+    wmic_info = _get_info_windows_wmic()
+    if wmic_info:
+        # Merge: keep any good PS values, fill gaps with wmic
+        merged = {**wmic_info, **{k: v for k, v in info.items() if v and k != "error"}}
+        return merged
     return info
 
 
@@ -352,9 +489,11 @@ def _get_info_linux() -> dict:
     info["os_version"] = platform.release()
     info["os_build"] = platform.version()
 
-    # CPU details
+    # CPU details — lscpu primary, /proc/cpuinfo fallback
     try:
         result = subprocess.run(["lscpu"], capture_output=True, text=True, timeout=5)
+        if result.returncode != 0:
+            raise FileNotFoundError
         for line in result.stdout.splitlines():
             if line.startswith("Model name:"):
                 info["processor_marketing"] = line.split(":", 1)[1].strip()
@@ -365,34 +504,64 @@ def _get_info_linux() -> dict:
                 info["_linux_cores_per_socket"] = line.split(":", 1)[1].strip()
             elif line.startswith("Socket(s):"):
                 info["_linux_sockets"] = line.split(":", 1)[1].strip()
-        # Build a better core string if available
         cps = info.pop("_linux_cores_per_socket", None)
         sockets = info.pop("_linux_sockets", None)
         if cps and sockets:
             physical = int(cps) * int(sockets)
             info["cpu_cores"] = f"{physical} cores"
     except Exception:
-        pass
+        # Fallback: parse /proc/cpuinfo directly
+        try:
+            with open("/proc/cpuinfo") as f:
+                cpuinfo = f.read()
+            for line in cpuinfo.splitlines():
+                if "model name" in line and "processor_marketing" not in info:
+                    info["processor_marketing"] = line.split(":", 1)[1].strip()
+                    break
+            physical_ids = set()
+            core_ids: dict[str, set[str]] = {}
+            current_physical = None
+            for line in cpuinfo.splitlines():
+                if line.startswith("physical id"):
+                    current_physical = line.split(":", 1)[1].strip()
+                    physical_ids.add(current_physical)
+                elif line.startswith("core id") and current_physical is not None:
+                    core_ids.setdefault(current_physical, set()).add(
+                        line.split(":", 1)[1].strip()
+                    )
+            if physical_ids and core_ids:
+                total_physical = sum(len(v) for v in core_ids.values())
+                info["cpu_cores"] = f"{total_physical} cores"
+        except Exception:
+            pass
 
-    # RAM total
+    # RAM total — psutil primary, /proc/meminfo fallback
     try:
         import psutil
 
         total_bytes = psutil.virtual_memory().total
         info["ram_total"] = f"{total_bytes / (1024**3):.0f} GB"
     except Exception:
-        pass
+        try:
+            with open("/proc/meminfo") as f:
+                for line in f:
+                    if line.startswith("MemTotal:"):
+                        kb = int(line.split()[1])
+                        info["ram_total"] = f"{kb / (1024 ** 2):.0f} GB"
+                        break
+        except Exception:
+            pass
 
-    # GPU(s) via lspci
+    # GPU(s) — lspci primary, /sys/bus/pci/devices fallback
     try:
         result = subprocess.run(["lspci", "-mm"], capture_output=True, text=True, timeout=5)
+        if result.returncode != 0:
+            raise FileNotFoundError
         gpu_list = []
         for line in result.stdout.splitlines():
             lower = line.lower()
             if "vga" in lower or "display" in lower or "3d" in lower:
-                # lspci -mm format: slot "class" "vendor" "device" ...
                 parts = line.split('"')
-                # parts[3] = vendor, parts[5] = device
                 vendor = parts[3] if len(parts) > 3 else ""
                 device = parts[5] if len(parts) > 5 else ""
                 name = f"{vendor} {device}".strip()
@@ -401,9 +570,28 @@ def _get_info_linux() -> dict:
         if gpu_list:
             info["gpu_list"] = gpu_list
     except Exception:
-        pass
+        # Fallback: read class/vendor/device from sysfs PCI tree
+        try:
+            from pathlib import Path
 
-    # Storage via lsblk
+            gpu_list = []
+            for dev in Path("/sys/bus/pci/devices").iterdir():
+                try:
+                    cls = (dev / "class").read_text().strip()
+                    # PCI class 0x03xxxx = Display controller
+                    if not cls.startswith("0x03"):
+                        continue
+                    vendor_id = (dev / "vendor").read_text().strip()
+                    device_id = (dev / "device").read_text().strip()
+                    gpu_list.append(f"PCI {vendor_id}:{device_id}")
+                except Exception:
+                    continue
+            if gpu_list:
+                info["gpu_list"] = gpu_list
+        except Exception:
+            pass
+
+    # Storage — lsblk primary, /sys/block fallback
     try:
         result = subprocess.run(
             ["lsblk", "-d", "-o", "NAME,SIZE,MODEL,TYPE", "--noheadings"],
@@ -411,6 +599,8 @@ def _get_info_linux() -> dict:
             text=True,
             timeout=5,
         )
+        if result.returncode != 0:
+            raise FileNotFoundError
         storage_list = []
         for line in result.stdout.splitlines():
             parts = line.split()
@@ -424,7 +614,29 @@ def _get_info_linux() -> dict:
         if storage_list:
             info["storage_list"] = storage_list
     except Exception:
-        pass
+        # Fallback: read model names from /sys/block
+        try:
+            from pathlib import Path
+
+            storage_list = []
+            for dev in sorted(Path("/sys/block").iterdir()):
+                name = dev.name
+                if name.startswith(("loop", "ram", "dm-")):
+                    continue
+                model_path = dev / "device" / "model"
+                model = model_path.read_text().strip() if model_path.exists() else name
+                size_path = dev / "size"
+                try:
+                    blocks = int(size_path.read_text().strip())
+                    size_gb = (blocks * 512) / (1024 ** 3)
+                    entry = f"{model} · {size_gb:.0f} GB"
+                except Exception:
+                    entry = model
+                storage_list.append(entry)
+            if storage_list:
+                info["storage_list"] = storage_list
+        except Exception:
+            pass
 
     return info
 
