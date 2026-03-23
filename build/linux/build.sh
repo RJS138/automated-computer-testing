@@ -60,5 +60,23 @@ uv run pyinstaller \
   main.py
 
 echo ""
-echo "[3/3] Done."
+echo "[3/3] Clearing executable stack flag (execstack fix)..."
+# Modern Linux kernels reject shared libraries/binaries that request an
+# executable stack (GNU_STACK ELF note). PyInstaller's bootloader and some
+# bundled Qt/PySide6 .so files can have this flag set. Clearing it prevents
+# the "cannot enable executable stack" error at runtime.
+if command -v patchelf &>/dev/null; then
+    patchelf --clear-execstack "$DIST_DIR/$BIN_NAME"
+    echo "  patchelf: execstack cleared from binary."
+    # Also clear from any loose .so files in the PyInstaller work dir that
+    # will be embedded — belt-and-suspenders for the inner archive.
+    find "build/_pyinstaller_work" -name "*.so*" -type f 2>/dev/null \
+        | xargs -r patchelf --clear-execstack 2>/dev/null || true
+else
+    echo "  WARNING: patchelf not found — skipping execstack patch."
+    echo "  Install with: sudo apt-get install patchelf"
+fi
+
+echo ""
+echo "Done."
 echo "Output : $DIST_DIR/$BIN_NAME"

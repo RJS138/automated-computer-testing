@@ -18,10 +18,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install UV
+      - name: Install UV and patchelf
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          sudo apt-get install -y patchelf
 
       - name: Build
         run: |
@@ -44,10 +45,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install UV
+      - name: Install UV and patchelf
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          sudo apt-get install -y patchelf
 
       - name: Build
         run: |
