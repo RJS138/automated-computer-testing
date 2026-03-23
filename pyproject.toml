@@ -14,8 +14,9 @@ dependencies = [
     "reportlab>=4.0.0",
     # Windows-only — UV installs this automatically on Windows, skips it elsewhere
     "wmi>=1.5.1; sys_platform == 'win32'",
-    # Webcam helper — live camera preview via OpenCV
-    "opencv-python>=4.8.0",
+    # Webcam helper — live camera preview via OpenCV.
+    # No win_arm64 wheel exists; webcam_dialog.py handles ImportError gracefully.
+    "opencv-python>=4.8.0; sys_platform != 'win32' or platform_machine != 'ARM64'",
 ]
 
 [project.scripts]
