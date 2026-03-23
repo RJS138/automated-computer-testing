@@ -15,52 +15,68 @@ from ..thresholds import (
 from .base import BaseTest
 
 
+def _run_powershell(script: str, timeout: int = 20) -> str:
+    """Run a PowerShell script via -EncodedCommand and return stdout."""
+    import base64
+
+    encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
+    r = subprocess.run(
+        ["powershell", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+    return r.stdout.strip() if r.returncode == 0 else ""
+
+
 def _get_battery_details_windows() -> dict:
-    """Use WMI for detailed battery info on Windows."""
+    """Use PowerShell Get-CimInstance for detailed battery info on Windows."""
+    import json
+
     details: dict = {}
+
+    script = r"""
+$ErrorActionPreference = 'SilentlyContinue'
+$b  = Get-CimInstance Win32_Battery | Select-Object -First 1
+$fc = Get-CimInstance -Namespace root/wmi -ClassName BatteryFullChargedCapacity | Select-Object -First 1
+$cc = Get-CimInstance -Namespace root/wmi -ClassName BatteryCycleCount | Select-Object -First 1
+[PSCustomObject]@{
+    design_mwh  = if ($b.DesignCapacity)          { [int]$b.DesignCapacity }          else { 0 }
+    full_mwh    = if ($fc.FullChargedCapacity)     { [int]$fc.FullChargedCapacity }    `
+                  elseif ($b.FullChargeCapacity)   { [int]$b.FullChargeCapacity }      else { 0 }
+    cycle_count = if ($cc.CycleCount -ne $null)    { [int]$cc.CycleCount }             else { $null }
+    chemistry   = if ($b.Chemistry -ne $null)      { [int]$b.Chemistry }               else { $null }
+} | ConvertTo-Json
+"""
+
     try:
-        import pythoncom  # type: ignore
-        import wmi  # type: ignore
+        out = _run_powershell(script)
+        if not out:
+            return details
 
-        pythoncom.CoInitialize()
-        try:
-            c = wmi.WMI()
+        d = json.loads(out)
+        design = d.get("design_mwh") or 0
+        full = d.get("full_mwh") or 0
 
-            # Basic info from root\cimv2
-            for batt in c.Win32_Battery():
-                if batt.DesignCapacity:
-                    details["design_capacity_mwh"] = int(batt.DesignCapacity)
-                if batt.FullChargeCapacity:
-                    details["full_charge_capacity_mwh"] = int(batt.FullChargeCapacity)
-                details["chemistry"] = batt.Chemistry
+        if design > 0:
+            details["design_capacity_mwh"] = design
+        if full > 0:
+            details["full_charge_capacity_mwh"] = full
 
-            # BatteryFullChargedCapacity and BatteryCycleCount live in root\wmi
-            c_wmi = wmi.WMI(namespace="root\\wmi")
+        cycle = d.get("cycle_count")
+        if cycle is not None and int(cycle) > 0:
+            details["cycle_count"] = int(cycle)
 
-            try:
-                for b in c_wmi.BatteryFullChargedCapacity():
-                    if b.FullChargedCapacity:
-                        details["full_charge_capacity_mwh"] = int(b.FullChargedCapacity)
-            except Exception:
-                pass
+        chem = d.get("chemistry")
+        if chem is not None:
+            details["chemistry"] = int(chem)
 
-            try:
-                for b in c_wmi.BatteryCycleCount():
-                    if b.CycleCount is not None:
-                        details["cycle_count"] = int(b.CycleCount)
-            except Exception:
-                pass
+        if design > 0 and full > 0:
+            details["health_pct"] = round((full / design) * 100, 1)
 
-            # Compute health_pct if we have both capacities
-            design = details.get("design_capacity_mwh")
-            full = details.get("full_charge_capacity_mwh")
-            if design and full and design > 0:
-                details["health_pct"] = round((full / design) * 100, 1)
-
-        finally:
-            pythoncom.CoUninitialize()
     except Exception:
         pass
+
     return details
 
 

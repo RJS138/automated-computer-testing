@@ -8,103 +8,119 @@ from ..models.test_result import TestResult
 from .base import BaseTest
 
 
+def _run_powershell(script: str, timeout: int = 30) -> str:
+    """Run a PowerShell script via -EncodedCommand and return stdout."""
+    import base64
+
+    encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
+    r = subprocess.run(
+        ["powershell", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+    return r.stdout.strip() if r.returncode == 0 else ""
+
+
 def _get_info_windows() -> dict:
+    """Query system info on Windows using PowerShell Get-CimInstance."""
+    import json
+
     info: dict = {}
+
+    script = r"""
+$ErrorActionPreference = 'SilentlyContinue'
+$bios  = Get-CimInstance Win32_BIOS
+$board = Get-CimInstance Win32_BaseBoard
+$cs    = Get-CimInstance Win32_ComputerSystem
+$os    = Get-CimInstance Win32_OperatingSystem
+$cpu   = Get-CimInstance Win32_Processor | Select-Object -First 1
+$ram   = (Get-CimInstance Win32_PhysicalMemory | Measure-Object -Property Capacity -Sum).Sum
+$gpus  = @(Get-CimInstance Win32_VideoController | Where-Object { $_.Name } | ForEach-Object {
+    $name = $_.Name.Trim()
+    $vram = $_.AdapterRAM
+    if ($vram -and [long]$vram -gt 0) { "$name ($([math]::Round([long]$vram/1GB,0)) GB VRAM)" } else { $name }
+})
+$disks = @(Get-CimInstance Win32_DiskDrive | ForEach-Object {
+    $model = if ($_.Model) { $_.Model.Trim() } else { $_.Caption }
+    $sz    = if ($_.Size) { " · $([math]::Round([long]$_.Size/1GB,0)) GB" } else { "" }
+    "$model$sz"
+})
+[PSCustomObject]@{
+    bios_vendor          = $bios.Manufacturer
+    bios_version         = $bios.SMBIOSBIOSVersion
+    bios_date            = if ($bios.ReleaseDate) { $bios.ReleaseDate.ToString("yyyy-MM-dd") } else { $null }
+    board_serial         = $bios.SerialNumber
+    board_manufacturer   = $board.Manufacturer
+    board_model          = $board.Product
+    board_serial2        = $board.SerialNumber
+    chassis_manufacturer = $cs.Manufacturer
+    chassis_model        = $cs.Model
+    os_name              = $os.Caption
+    os_version           = $os.Version
+    os_build             = $os.BuildNumber
+    cpu_name             = if ($cpu.Name) { $cpu.Name.Trim() } else { $null }
+    cpu_cores            = $cpu.NumberOfCores
+    cpu_threads          = $cpu.NumberOfLogicalProcessors
+    ram_bytes            = $ram
+    gpu_list             = $gpus
+    disk_list            = $disks
+} | ConvertTo-Json -Depth 3
+"""
+
     try:
-        import pythoncom  # type: ignore
-        import wmi  # type: ignore
+        out = _run_powershell(script)
+        if not out:
+            info["error"] = "PowerShell returned no output"
+            return info
 
-        pythoncom.CoInitialize()
-        try:
-            c = wmi.WMI()
+        d = json.loads(out)
 
-            for bios in c.Win32_BIOS():
-                info["bios_vendor"] = bios.Manufacturer
-                info["bios_version"] = bios.SMBIOSBIOSVersion
-                info["bios_date"] = bios.ReleaseDate
-                info["board_serial"] = bios.SerialNumber
+        for key in (
+            "bios_vendor", "bios_version", "bios_date",
+            "board_manufacturer", "board_model",
+            "chassis_manufacturer", "chassis_model",
+            "os_name", "os_version", "os_build",
+        ):
+            val = d.get(key)
+            if val:
+                info[key] = str(val)
 
-            for board in c.Win32_BaseBoard():
-                info["board_manufacturer"] = board.Manufacturer
-                info["board_model"] = board.Product
-                info["board_serial"] = info.get("board_serial") or board.SerialNumber
+        # Serial: prefer BIOS serial, fall back to baseboard
+        serial = d.get("board_serial") or d.get("board_serial2")
+        if serial:
+            info["board_serial"] = str(serial)
 
-            for cs in c.Win32_ComputerSystem():
-                info["chassis_manufacturer"] = cs.Manufacturer
-                info["chassis_model"] = cs.Model
+        cpu_name = d.get("cpu_name")
+        if cpu_name:
+            info["processor_marketing"] = cpu_name
 
-            for sys in c.Win32_OperatingSystem():
-                info["os_name"] = sys.Caption
-                info["os_version"] = sys.Version
-                info["os_build"] = sys.BuildNumber
-                info["install_date"] = sys.InstallDate
+        cores = d.get("cpu_cores")
+        threads = d.get("cpu_threads")
+        if cores and threads:
+            info["cpu_cores"] = f"{int(cores)} cores / {int(threads)} threads"
+        elif cores:
+            info["cpu_cores"] = f"{int(cores)} cores"
 
-            # CPU details
-            try:
-                procs = c.Win32_Processor()
-                if procs:
-                    cpu = procs[0]
-                    info["processor_marketing"] = cpu.Name.strip() if cpu.Name else None
-                    physical = getattr(cpu, "NumberOfCores", None)
-                    logical = getattr(cpu, "NumberOfLogicalProcessors", None)
-                    if physical and logical:
-                        info["cpu_cores"] = f"{physical} cores / {logical} threads"
-                    elif physical:
-                        info["cpu_cores"] = f"{physical} cores"
-            except Exception:
-                pass
+        ram_bytes = d.get("ram_bytes")
+        if ram_bytes:
+            info["ram_total"] = f"{int(ram_bytes) / (1024 ** 3):.0f} GB"
 
-            # RAM total
-            try:
-                total_bytes = sum(int(m.Capacity) for m in c.Win32_PhysicalMemory() if m.Capacity)
-                if total_bytes:
-                    info["ram_total"] = f"{total_bytes / (1024**3):.0f} GB"
-            except Exception:
-                pass
+        gpu_list = d.get("gpu_list")
+        if isinstance(gpu_list, list):
+            info["gpu_list"] = [g for g in gpu_list if g]
+        elif isinstance(gpu_list, str) and gpu_list:
+            info["gpu_list"] = [gpu_list]
 
-            # GPU(s)
-            try:
-                gpu_list = []
-                for gpu in c.Win32_VideoController():
-                    name = (gpu.Name or "").strip()
-                    if not name:
-                        continue
-                    vram_bytes = getattr(gpu, "AdapterRAM", None)
-                    vram_str = (
-                        f"{int(vram_bytes) / (1024**3):.0f} GB VRAM"
-                        if vram_bytes and int(vram_bytes) > 0
-                        else ""
-                    )
-                    entry = name
-                    if vram_str:
-                        entry += f" ({vram_str})"
-                    gpu_list.append(entry)
-                if gpu_list:
-                    info["gpu_list"] = gpu_list
-            except Exception:
-                pass
+        disk_list = d.get("disk_list")
+        if isinstance(disk_list, list):
+            info["storage_list"] = [item for item in disk_list if item]
+        elif isinstance(disk_list, str) and disk_list:
+            info["storage_list"] = [disk_list]
 
-            # Storage
-            try:
-                storage_list = []
-                for disk in c.Win32_DiskDrive():
-                    name = (disk.Model or disk.Caption or "").strip()
-                    size_bytes = int(disk.Size) if disk.Size else 0
-                    size_gb = size_bytes / (1024**3)
-                    entry = name
-                    if size_gb:
-                        entry += f" · {size_gb:.0f} GB"
-                    if entry:
-                        storage_list.append(entry)
-                if storage_list:
-                    info["storage_list"] = storage_list
-            except Exception:
-                pass
-
-        finally:
-            pythoncom.CoUninitialize()
     except Exception as exc:
         info["error"] = str(exc)
+
     return info
 
 
