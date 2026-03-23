@@ -120,11 +120,16 @@ jobs:
           chmod +x build/macos/build.sh
           bash build/macos/build.sh
 
+      - name: Stage and upload to GitHub Release
+        run: |
+          cp "dist/macos/Touchstone (Intel)" touchstone_macos_x86_64
+          chmod +x touchstone_macos_x86_64
+
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          files: "dist/macos/Touchstone (Intel)"
+          files: touchstone_macos_x86_64
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
