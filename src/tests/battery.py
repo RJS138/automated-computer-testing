@@ -19,31 +19,46 @@ def _get_battery_details_windows() -> dict:
     """Use WMI for detailed battery info on Windows."""
     details: dict = {}
     try:
+        import pythoncom  # type: ignore
         import wmi  # type: ignore
 
-        c = wmi.WMI()
-
-        # Design capacity
-        for batt in c.Win32_Battery():
-            details["design_capacity_mwh"] = batt.DesignCapacity
-            details["full_charge_capacity_mwh"] = batt.FullChargeCapacity
-            details["cycle_count"] = None  # Not available via Win32_Battery
-            details["chemistry"] = batt.Chemistry
-
-        # Better cycle count from BatteryFullChargedCapacity
+        pythoncom.CoInitialize()
         try:
-            for b in c.BatteryFullChargedCapacity():
-                details["full_charge_capacity_mwh"] = b.FullChargedCapacity
-        except Exception:
-            pass
+            c = wmi.WMI()
 
-        # Cycle count from BatteryCycleCount
-        try:
-            for b in c.BatteryCycleCount():
-                details["cycle_count"] = b.CycleCount
-        except Exception:
-            pass
+            # Basic info from root\cimv2
+            for batt in c.Win32_Battery():
+                if batt.DesignCapacity:
+                    details["design_capacity_mwh"] = int(batt.DesignCapacity)
+                if batt.FullChargeCapacity:
+                    details["full_charge_capacity_mwh"] = int(batt.FullChargeCapacity)
+                details["chemistry"] = batt.Chemistry
 
+            # BatteryFullChargedCapacity and BatteryCycleCount live in root\wmi
+            c_wmi = wmi.WMI(namespace="root\\wmi")
+
+            try:
+                for b in c_wmi.BatteryFullChargedCapacity():
+                    if b.FullChargedCapacity:
+                        details["full_charge_capacity_mwh"] = int(b.FullChargedCapacity)
+            except Exception:
+                pass
+
+            try:
+                for b in c_wmi.BatteryCycleCount():
+                    if b.CycleCount is not None:
+                        details["cycle_count"] = int(b.CycleCount)
+            except Exception:
+                pass
+
+            # Compute health_pct if we have both capacities
+            design = details.get("design_capacity_mwh")
+            full = details.get("full_charge_capacity_mwh")
+            if design and full and design > 0:
+                details["health_pct"] = round((full / design) * 100, 1)
+
+        finally:
+            pythoncom.CoUninitialize()
     except Exception:
         pass
     return details
