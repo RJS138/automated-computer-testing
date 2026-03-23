@@ -11,93 +11,98 @@ from .base import BaseTest
 def _get_info_windows() -> dict:
     info: dict = {}
     try:
+        import pythoncom  # type: ignore
         import wmi  # type: ignore
 
-        c = wmi.WMI()
-
-        for bios in c.Win32_BIOS():
-            info["bios_vendor"] = bios.Manufacturer
-            info["bios_version"] = bios.SMBIOSBIOSVersion
-            info["bios_date"] = bios.ReleaseDate
-            info["board_serial"] = bios.SerialNumber
-
-        for board in c.Win32_BaseBoard():
-            info["board_manufacturer"] = board.Manufacturer
-            info["board_model"] = board.Product
-            info["board_serial"] = info.get("board_serial") or board.SerialNumber
-
-        for cs in c.Win32_ComputerSystem():
-            info["chassis_manufacturer"] = cs.Manufacturer
-            info["chassis_model"] = cs.Model
-
-        for sys in c.Win32_OperatingSystem():
-            info["os_name"] = sys.Caption
-            info["os_version"] = sys.Version
-            info["os_build"] = sys.BuildNumber
-            info["install_date"] = sys.InstallDate
-
-        # CPU details
+        pythoncom.CoInitialize()
         try:
-            procs = c.Win32_Processor()
-            if procs:
-                cpu = procs[0]
-                info["processor_marketing"] = cpu.Name.strip() if cpu.Name else None
-                physical = getattr(cpu, "NumberOfCores", None)
-                logical = getattr(cpu, "NumberOfLogicalProcessors", None)
-                if physical and logical:
-                    info["cpu_cores"] = f"{physical} cores / {logical} threads"
-                elif physical:
-                    info["cpu_cores"] = f"{physical} cores"
-        except Exception:
-            pass
+            c = wmi.WMI()
 
-        # RAM total
-        try:
-            total_bytes = sum(int(m.Capacity) for m in c.Win32_PhysicalMemory() if m.Capacity)
-            if total_bytes:
-                info["ram_total"] = f"{total_bytes / (1024**3):.0f} GB"
-        except Exception:
-            pass
+            for bios in c.Win32_BIOS():
+                info["bios_vendor"] = bios.Manufacturer
+                info["bios_version"] = bios.SMBIOSBIOSVersion
+                info["bios_date"] = bios.ReleaseDate
+                info["board_serial"] = bios.SerialNumber
 
-        # GPU(s)
-        try:
-            gpu_list = []
-            for gpu in c.Win32_VideoController():
-                name = (gpu.Name or "").strip()
-                if not name:
-                    continue
-                vram_bytes = getattr(gpu, "AdapterRAM", None)
-                vram_str = (
-                    f"{int(vram_bytes) / (1024**3):.0f} GB VRAM"
-                    if vram_bytes and int(vram_bytes) > 0
-                    else ""
-                )
-                entry = name
-                if vram_str:
-                    entry += f" ({vram_str})"
-                gpu_list.append(entry)
-            if gpu_list:
-                info["gpu_list"] = gpu_list
-        except Exception:
-            pass
+            for board in c.Win32_BaseBoard():
+                info["board_manufacturer"] = board.Manufacturer
+                info["board_model"] = board.Product
+                info["board_serial"] = info.get("board_serial") or board.SerialNumber
 
-        # Storage
-        try:
-            storage_list = []
-            for disk in c.Win32_DiskDrive():
-                name = (disk.Model or disk.Caption or "").strip()
-                size_bytes = int(disk.Size) if disk.Size else 0
-                size_gb = size_bytes / (1024**3)
-                entry = name
-                if size_gb:
-                    entry += f" · {size_gb:.0f} GB"
-                if entry:
-                    storage_list.append(entry)
-            if storage_list:
-                info["storage_list"] = storage_list
-        except Exception:
-            pass
+            for cs in c.Win32_ComputerSystem():
+                info["chassis_manufacturer"] = cs.Manufacturer
+                info["chassis_model"] = cs.Model
 
+            for sys in c.Win32_OperatingSystem():
+                info["os_name"] = sys.Caption
+                info["os_version"] = sys.Version
+                info["os_build"] = sys.BuildNumber
+                info["install_date"] = sys.InstallDate
+
+            # CPU details
+            try:
+                procs = c.Win32_Processor()
+                if procs:
+                    cpu = procs[0]
+                    info["processor_marketing"] = cpu.Name.strip() if cpu.Name else None
+                    physical = getattr(cpu, "NumberOfCores", None)
+                    logical = getattr(cpu, "NumberOfLogicalProcessors", None)
+                    if physical and logical:
+                        info["cpu_cores"] = f"{physical} cores / {logical} threads"
+                    elif physical:
+                        info["cpu_cores"] = f"{physical} cores"
+            except Exception:
+                pass
+
+            # RAM total
+            try:
+                total_bytes = sum(int(m.Capacity) for m in c.Win32_PhysicalMemory() if m.Capacity)
+                if total_bytes:
+                    info["ram_total"] = f"{total_bytes / (1024**3):.0f} GB"
+            except Exception:
+                pass
+
+            # GPU(s)
+            try:
+                gpu_list = []
+                for gpu in c.Win32_VideoController():
+                    name = (gpu.Name or "").strip()
+                    if not name:
+                        continue
+                    vram_bytes = getattr(gpu, "AdapterRAM", None)
+                    vram_str = (
+                        f"{int(vram_bytes) / (1024**3):.0f} GB VRAM"
+                        if vram_bytes and int(vram_bytes) > 0
+                        else ""
+                    )
+                    entry = name
+                    if vram_str:
+                        entry += f" ({vram_str})"
+                    gpu_list.append(entry)
+                if gpu_list:
+                    info["gpu_list"] = gpu_list
+            except Exception:
+                pass
+
+            # Storage
+            try:
+                storage_list = []
+                for disk in c.Win32_DiskDrive():
+                    name = (disk.Model or disk.Caption or "").strip()
+                    size_bytes = int(disk.Size) if disk.Size else 0
+                    size_gb = size_bytes / (1024**3)
+                    entry = name
+                    if size_gb:
+                        entry += f" · {size_gb:.0f} GB"
+                    if entry:
+                        storage_list.append(entry)
+                if storage_list:
+                    info["storage_list"] = storage_list
+            except Exception:
+                pass
+
+        finally:
+            pythoncom.CoUninitialize()
     except Exception as exc:
         info["error"] = str(exc)
     return info
