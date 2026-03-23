@@ -42,7 +42,6 @@ uv run pyinstaller ^
   --specpath "build\_pyinstaller_spec" ^
   --add-data "%REPO_ROOT%\src\report\templates;src/report/templates" ^
   --add-data "%REPO_ROOT%\src\ui\keyboards;src/ui/keyboards" ^
-  --hidden-import textual ^
   --hidden-import psutil ^
   --hidden-import cpuinfo ^
   --hidden-import pySMART ^
@@ -50,12 +49,8 @@ uv run pyinstaller ^
   --hidden-import GPUtil ^
   --hidden-import wmi ^
   --hidden-import jinja2 ^
-  --hidden-import tkinter ^
-  --hidden-import PIL ^
-  --collect-all textual ^
+  --collect-all PySide6 ^
   --collect-all reportlab ^
-  --collect-all cv2 ^
-  --collect-all PIL ^
   main.py
 
 if %ERRORLEVEL% neq 0 (

@@ -35,7 +35,7 @@ echo.
 echo [2/3] Running PyInstaller...
 uv run pyinstaller ^
   --onefile ^
-  --name %APP_NAME% ^
+  --name "%APP_NAME%" ^
   --icon "%REPO_ROOT%\assets\icon.ico" ^
   --distpath "%DIST_DIR%" ^
   --workpath "build\_pyinstaller_work" ^
