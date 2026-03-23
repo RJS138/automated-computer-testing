@@ -233,20 +233,12 @@ _dl "touchstone_linux_arm64"        "$MOUNT_POINT/linux/touchstone_linux_arm64"
 _dl "touchstone_windows_x64.exe"    "$MOUNT_POINT/windows/touchstone_windows_x64.exe"
 _dl "touchstone_windows_arm64.exe"  "$MOUNT_POINT/windows/touchstone_windows_arm64.exe"
 
-# macOS binary ships as a zip to preserve execute permissions on GitHub releases
-info "Downloading touchstone_macos_arm64.zip..."
-if curl -fsSL --progress-bar -L "$BASE_URL/touchstone_macos_arm64.zip" -o "$TMP/macos.zip" 2>&1; then
-    unzip -o "$TMP/macos.zip" touchstone_macos_arm64 -d "$MOUNT_POINT/macos/" > /dev/null
-    ok "touchstone_macos_arm64"
-else
-    warn "touchstone_macos_arm64.zip not found in latest release (skipped)."
-fi
+_dl "touchstone_macos_arm64.dmg"    "$MOUNT_POINT/macos/touchstone_macos_arm64.dmg"
 
-# Make Unix binaries executable
+# Make Linux binaries executable (DMG handles macOS permissions internally)
 chmod +x \
     "$MOUNT_POINT/linux/touchstone_linux_x86_64" \
     "$MOUNT_POINT/linux/touchstone_linux_arm64" \
-    "$MOUNT_POINT/macos/touchstone_macos_arm64" \
     2>/dev/null || true
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -269,13 +261,11 @@ WINDOWS (ARM)
   Right-click → "Run as Administrator"
 
 MACOS (Apple Silicon / M-series)
-  Run: macos/touchstone_macos_arm64
-  First run only — remove quarantine flag:
-    xattr -d com.apple.quarantine macos/touchstone_macos_arm64
-    ./macos/touchstone_macos_arm64
+  Double-click: macos/touchstone_macos_arm64.dmg
+  Right-click Touchstone → Open on first launch to bypass Gatekeeper.
 
 MACOS (Intel)
-  Use macos/touchstone_macos_arm64 — runs via Rosetta 2 automatically.
+  Use macos/touchstone_macos_arm64.dmg — runs via Rosetta 2 automatically.
 
 LINUX (x86)
   Run: linux/touchstone_linux_x86_64  (requires sudo)

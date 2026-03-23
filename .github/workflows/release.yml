@@ -32,7 +32,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: touchstone-linux-x86
-          path: "dist/linux/Touchstone (Linux x86)"
+          path: dist/linux/touchstone_linux_x86_64
           if-no-files-found: error
 
   # ── Linux ARM ─────────────────────────────────────────────────────────────
@@ -58,7 +58,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: touchstone-linux-arm
-          path: "dist/linux/Touchstone (Linux ARM)"
+          path: dist/linux/touchstone_linux_arm64
           if-no-files-found: error
 
   # ── macOS Apple Silicon ───────────────────────────────────────────────────
@@ -87,7 +87,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: touchstone-macos-apple-silicon
-          path: "dist/macos/Touchstone (Apple Silicon)"
+          path: dist/macos/touchstone_macos_arm64.dmg
           if-no-files-found: error
 
   # ── macOS Intel (self-hosted) ─────────────────────────────────────────────
@@ -120,17 +120,11 @@ jobs:
           chmod +x build/macos/build.sh
           bash build/macos/build.sh
 
-      - name: Stage and upload to GitHub Release
-        run: |
-          cp "dist/macos/Touchstone (Intel)" touchstone_macos_x86_64
-          chmod +x touchstone_macos_x86_64
-          zip touchstone_macos_x86_64.zip touchstone_macos_x86_64
-
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          files: touchstone_macos_x86_64.zip
+          files: dist/macos/touchstone_macos_x86_64.dmg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -211,15 +205,12 @@ jobs:
       - name: Stage release assets
         run: |
           mkdir release
-          cp "artifacts/touchstone-linux-x86/Touchstone (Linux x86)"              release/touchstone_linux_x86_64
-          cp "artifacts/touchstone-linux-arm/Touchstone (Linux ARM)"               release/touchstone_linux_arm64
-          cp "artifacts/touchstone-macos-apple-silicon/Touchstone (Apple Silicon)" release/touchstone_macos_arm64
-          cp "artifacts/touchstone-windows-x64/Touchstone (Windows x64).exe"      release/touchstone_windows_x64.exe
-          cp "artifacts/touchstone-windows-arm/Touchstone (Windows ARM).exe"      release/touchstone_windows_arm64.exe
-          chmod +x release/touchstone_linux_x86_64 release/touchstone_linux_arm64 release/touchstone_macos_arm64
-          # Zip macOS binary — GitHub strips execute bits from raw uploads;
-          # zip preserves them so Archive Utility extracts a ready-to-run binary.
-          cd release && zip touchstone_macos_arm64.zip touchstone_macos_arm64 && cd ..
+          cp artifacts/touchstone-linux-x86/touchstone_linux_x86_64          release/touchstone_linux_x86_64
+          cp artifacts/touchstone-linux-arm/touchstone_linux_arm64            release/touchstone_linux_arm64
+          cp artifacts/touchstone-macos-apple-silicon/touchstone_macos_arm64.dmg release/touchstone_macos_arm64.dmg
+          cp "artifacts/touchstone-windows-x64/Touchstone (Windows x64).exe" release/touchstone_windows_x64.exe
+          cp "artifacts/touchstone-windows-arm/Touchstone (Windows ARM).exe" release/touchstone_windows_arm64.exe
+          chmod +x release/touchstone_linux_x86_64 release/touchstone_linux_arm64
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -233,21 +224,17 @@ jobs:
 
             | Platform | File |
             |----------|------|
-            | macOS (Apple Silicon / M-series) | `touchstone_macos_arm64.zip` |
-            | macOS (Intel — runs via Rosetta 2) | `touchstone_macos_arm64.zip` |
+            | macOS (Apple Silicon / M-series) | `touchstone_macos_arm64.dmg` |
+            | macOS (Intel — runs via Rosetta 2) | `touchstone_macos_arm64.dmg` |
             | Linux x86 | `touchstone_linux_x86_64` |
             | Linux ARM | `touchstone_linux_arm64` |
             | Windows x64 | `touchstone_windows_x64.exe` |
             | Windows ARM | `touchstone_windows_arm64.exe` |
 
             ### macOS — first run
-            1. Download and double-click `touchstone_macos_arm64.zip` to extract
-            2. Open Terminal in the same folder and run:
-            ```
-            xattr -d com.apple.quarantine touchstone_macos_arm64
-            ./touchstone_macos_arm64
-            ```
-            > Intel Mac users: the Apple Silicon binary runs transparently via Rosetta 2.
+            1. Download `touchstone_macos_arm64.dmg` and double-click to open
+            2. Right-click `Touchstone` → **Open** to bypass Gatekeeper on first launch
+            > Intel Mac users: the Apple Silicon DMG runs transparently via Rosetta 2.
 
             ### Linux — first run
             ```
@@ -258,7 +245,7 @@ jobs:
             ### Windows — first run
             Run `touchstone_windows_x64.exe` (or `touchstone_windows_arm64.exe`) as Administrator.
           files: |
-            release/touchstone_macos_arm64.zip
+            release/touchstone_macos_arm64.dmg
             release/touchstone_linux_x86_64
             release/touchstone_linux_arm64
             release/touchstone_windows_x64.exe

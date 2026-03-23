@@ -5,7 +5,7 @@
 #   1. Install UV:  curl -LsSf https://astral.sh/uv/install.sh | sh
 #
 # UV handles Python and all Python dependencies automatically.
-# Produces a native binary for the current architecture (x86_64 or arm64).
+# Produces a .app bundle wrapped in a .dmg for the current architecture.
 
 set -euo pipefail
 
@@ -13,27 +13,27 @@ REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 DIST_DIR="$REPO_ROOT/dist/macos"
 ARCH="$(uname -m)"
 if [ "$ARCH" = "arm64" ]; then
-    APP_NAME="Touchstone (Apple Silicon)"
+    DMG_NAME="touchstone_macos_arm64"
 else
-    APP_NAME="Touchstone (Intel)"
+    DMG_NAME="touchstone_macos_x86_64"
 fi
 
 echo "=== Touchstone — macOS Build ==="
 echo "Repo root : $REPO_ROOT"
 echo "Arch      : $ARCH"
-echo "Output    : $DIST_DIR/$APP_NAME"
+echo "Output    : $DIST_DIR/$DMG_NAME.dmg"
 
 cd "$REPO_ROOT"
 
 echo ""
-echo "[1/3] Syncing dependencies (uv sync --group build)..."
+echo "[1/4] Syncing dependencies (uv sync --group build)..."
 uv sync --group build
 
 echo ""
-echo "[2/3] Running PyInstaller..."
+echo "[2/4] Running PyInstaller..."
 uv run pyinstaller \
-  --onefile \
-  --name "$APP_NAME" \
+  --windowed \
+  --name "Touchstone" \
   --icon "$REPO_ROOT/assets/icon.icns" \
   --distpath "$DIST_DIR" \
   --workpath "build/_pyinstaller_work" \
@@ -52,10 +52,17 @@ uv run pyinstaller \
   main.py
 
 echo ""
-echo "[3/3] Done."
-echo "Output : $DIST_DIR/$APP_NAME"
+echo "[3/4] Creating DMG..."
+hdiutil create \
+  -volname "Touchstone" \
+  -srcfolder "$DIST_DIR/Touchstone.app" \
+  -ov \
+  -format UDZO \
+  "$DIST_DIR/$DMG_NAME.dmg"
+
 echo ""
-echo "NOTE: The macOS binary is not codesigned. To run it:"
-echo "  chmod +x \"$DIST_DIR/$APP_NAME\""
-echo "  xattr -d com.apple.quarantine \"$DIST_DIR/$APP_NAME\"  (if blocked by Gatekeeper)"
-echo "  \"$DIST_DIR/$APP_NAME\""
+echo "[4/4] Done."
+echo "Output : $DIST_DIR/$DMG_NAME.dmg"
+echo ""
+echo "NOTE: The app is not codesigned. To run after downloading:"
+echo "  Right-click Touchstone.app → Open  (bypasses Gatekeeper on first launch)"

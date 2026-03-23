@@ -18,17 +18,17 @@ REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 DIST_DIR="$REPO_ROOT/dist/linux"
 ARCH="$(uname -m)"
 if [ "$ARCH" = "x86_64" ]; then
-    APP_NAME="Touchstone (Linux x86)"
+    BIN_NAME="touchstone_linux_x86_64"
 elif [ "$ARCH" = "aarch64" ]; then
-    APP_NAME="Touchstone (Linux ARM)"
+    BIN_NAME="touchstone_linux_arm64"
 else
-    APP_NAME="Touchstone (Linux ${ARCH})"
+    BIN_NAME="touchstone_linux_${ARCH}"
 fi
 
 echo "=== Touchstone — Linux Build ==="
 echo "Repo root : $REPO_ROOT"
 echo "Arch      : $ARCH"
-echo "Output    : $DIST_DIR/$APP_NAME"
+echo "Output    : $DIST_DIR/$BIN_NAME"
 
 cd "$REPO_ROOT"
 
@@ -41,7 +41,7 @@ echo ""
 echo "[2/3] Running PyInstaller..."
 uv run pyinstaller \
   --onefile \
-  --name "$APP_NAME" \
+  --name "$BIN_NAME" \
   --icon "$REPO_ROOT/assets/icon.png" \
   --distpath "$DIST_DIR" \
   --workpath "build/_pyinstaller_work" \
@@ -61,4 +61,4 @@ uv run pyinstaller \
 
 echo ""
 echo "[3/3] Done."
-echo "Output : $DIST_DIR/$APP_NAME"
+echo "Output : $DIST_DIR/$BIN_NAME"
