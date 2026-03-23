@@ -124,12 +124,13 @@ jobs:
         run: |
           cp "dist/macos/Touchstone (Intel)" touchstone_macos_x86_64
           chmod +x touchstone_macos_x86_64
+          zip touchstone_macos_x86_64.zip touchstone_macos_x86_64
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          files: touchstone_macos_x86_64
+          files: touchstone_macos_x86_64.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -216,6 +217,9 @@ jobs:
           cp "artifacts/touchstone-windows-x64/Touchstone (Windows x64).exe"      release/touchstone_windows_x64.exe
           cp "artifacts/touchstone-windows-arm/Touchstone (Windows ARM).exe"      release/touchstone_windows_arm64.exe
           chmod +x release/touchstone_linux_x86_64 release/touchstone_linux_arm64 release/touchstone_macos_arm64
+          # Zip macOS binary — GitHub strips execute bits from raw uploads;
+          # zip preserves them so Archive Utility extracts a ready-to-run binary.
+          cd release && zip touchstone_macos_arm64.zip touchstone_macos_arm64 && cd ..
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -229,16 +233,17 @@ jobs:
 
             | Platform | File |
             |----------|------|
-            | macOS (Apple Silicon / M-series) | `touchstone_macos_arm64` |
-            | macOS (Intel — runs via Rosetta 2) | `touchstone_macos_arm64` |
+            | macOS (Apple Silicon / M-series) | `touchstone_macos_arm64.zip` |
+            | macOS (Intel — runs via Rosetta 2) | `touchstone_macos_arm64.zip` |
             | Linux x86 | `touchstone_linux_x86_64` |
             | Linux ARM | `touchstone_linux_arm64` |
             | Windows x64 | `touchstone_windows_x64.exe` |
             | Windows ARM | `touchstone_windows_arm64.exe` |
 
             ### macOS — first run
+            1. Download and double-click `touchstone_macos_arm64.zip` to extract
+            2. Open Terminal in the same folder and run:
             ```
-            chmod +x touchstone_macos_arm64
             xattr -d com.apple.quarantine touchstone_macos_arm64
             ./touchstone_macos_arm64
             ```
@@ -253,9 +258,9 @@ jobs:
             ### Windows — first run
             Run `touchstone_windows_x64.exe` (or `touchstone_windows_arm64.exe`) as Administrator.
           files: |
+            release/touchstone_macos_arm64.zip
             release/touchstone_linux_x86_64
             release/touchstone_linux_arm64
-            release/touchstone_macos_arm64
             release/touchstone_windows_x64.exe
             release/touchstone_windows_arm64.exe
         env:
