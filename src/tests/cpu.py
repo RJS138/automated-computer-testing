@@ -37,10 +37,66 @@ def _cpu_worker(duration_seconds: float) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _get_cpu_temps_windows() -> list[float]:
+    """
+    Read CPU temperature on Windows via WMI MSAcpi_ThermalZoneTemperature.
+    Values are in tenths of Kelvin; requires admin (app always runs as admin).
+    Falls back to OpenHardwareMonitor/LibreHardwareMonitor WMI if ACPI zones
+    return nothing useful.
+    """
+    try:
+        import pythoncom  # type: ignore
+        import wmi  # type: ignore
+
+        pythoncom.CoInitialize()
+        try:
+            c = wmi.WMI(namespace="root\\wmi")
+            temps: list[float] = []
+            try:
+                for zone in c.MSAcpi_ThermalZoneTemperature():
+                    raw = getattr(zone, "CurrentTemperature", None)
+                    if raw is None:
+                        continue
+                    temp_c = int(raw) / 10.0 - 273.15
+                    if 1.0 < temp_c < 150.0:  # sanity bounds
+                        temps.append(round(temp_c, 1))
+            except Exception:
+                pass
+
+            if temps:
+                return temps
+
+            # LibreHardwareMonitor / OpenHardwareMonitor fallback (if running)
+            for ns in ("root\\LibreHardwareMonitor", "root\\OpenHardwareMonitor"):
+                try:
+                    hw = wmi.WMI(namespace=ns)
+                    ohm_temps: list[float] = []
+                    for sensor in hw.Sensor():
+                        if getattr(sensor, "SensorType", "") == "Temperature":
+                            name = (getattr(sensor, "Name", "") or "").lower()
+                            if "cpu" in name or "core" in name or "package" in name:
+                                val = getattr(sensor, "Value", None)
+                                if val is not None and 1.0 < float(val) < 150.0:
+                                    ohm_temps.append(round(float(val), 1))
+                    if ohm_temps:
+                        return ohm_temps
+                except Exception:
+                    continue
+
+        finally:
+            pythoncom.CoUninitialize()
+    except Exception:
+        pass
+    return []
+
+
 def _get_cpu_temps() -> list[float]:
     """Return a flat list of CPU core temps in °C (empty if unavailable)."""
     if platform.system() == "Darwin":
         return _get_cpu_temps_macos()
+
+    if platform.system() == "Windows":
+        return _get_cpu_temps_windows()
 
     try:
         sensors = psutil.sensors_temperatures()
