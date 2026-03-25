@@ -186,6 +186,20 @@ def _build_expanded_detail(result: TestResult) -> str:
         if extra:
             parts.append("  ·  ".join(extra))
 
+    elif test_name == "fan":
+        for f in sorted(data.get("fans") or [], key=lambda x: -x.get("rpm", 0)):
+            hw = f.get("hardware", "")
+            label = f"{hw} — {f['name']}" if hw and hw.lower() not in f["name"].lower() else f["name"]
+            parts.append(f"{label}: {f['rpm']:,} RPM")
+        source = data.get("source", "")
+        if source and source not in ("none",):
+            src_label = {"lhm_bundled": "via LibreHardwareMonitor (bundled)",
+                         "lhm_wmi": "via LibreHardwareMonitor (installed)",
+                         "psutil": "via system sensors",
+                         "powermetrics": "via powermetrics",
+                         "hwmon": "via /sys/class/hwmon"}.get(source, source)
+            parts.append(f"Source: {src_label}")
+
     return "\n".join(parts)
 
 

@@ -145,6 +145,11 @@ jobs:
           irm https://astral.sh/uv/install.ps1 | iex
           "$env:USERPROFILE\.local\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
+      - name: Install .NET 6 SDK (for SensorDump)
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "6.0.x"
+
       - name: Build
         shell: cmd
         run: build\windows\build.bat
@@ -170,6 +175,11 @@ jobs:
         run: |
           irm https://astral.sh/uv/install.ps1 | iex
           "$env:USERPROFILE\.local\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install .NET 6 SDK (for SensorDump)
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "6.0.x"
 
       - name: Build
         shell: cmd

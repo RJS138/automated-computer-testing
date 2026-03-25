@@ -39,17 +39,38 @@ def _cpu_worker(duration_seconds: float) -> None:
 
 def _get_cpu_temps_windows() -> list[float]:
     """
-    Read CPU temperature on Windows via WMI MSAcpi_ThermalZoneTemperature.
-    Values are in tenths of Kelvin; requires admin (app always runs as admin).
-    Falls back to OpenHardwareMonitor/LibreHardwareMonitor WMI if ACPI zones
-    return nothing useful.
+    Read CPU temperature on Windows.
+
+    Priority:
+      1. Bundled SensorDump.exe (LibreHardwareMonitor) — works on all OEM hardware
+         including MSI/ASUS/Lenovo laptops where ACPI zones return nothing.
+      2. WMI MSAcpi_ThermalZoneTemperature — standard ACPI path (rare on modern OEMs).
+      3. LHM/OHM WMI namespace — works if the user has LHM installed separately.
     """
+    # 1. Bundled SensorDump.exe
+    try:
+        from ..utils.lhm_sensor import get_sensors_of_type, is_available
+        if is_available():
+            raw = get_sensors_of_type("Temperature")
+            temps = []
+            for s in raw:
+                name = (s.get("name") or "").lower()
+                if "cpu" in name or "core" in name or "package" in name or "die" in name:
+                    val = s.get("value")
+                    if val is not None and 1.0 < float(val) < 150.0:
+                        temps.append(round(float(val), 1))
+            if temps:
+                return temps
+    except Exception:
+        pass
+
     try:
         import pythoncom  # type: ignore
         import wmi  # type: ignore
 
         pythoncom.CoInitialize()
         try:
+            # 2. ACPI thermal zones
             c = wmi.WMI(namespace="root\\wmi")
             temps: list[float] = []
             try:
@@ -58,7 +79,7 @@ def _get_cpu_temps_windows() -> list[float]:
                     if raw is None:
                         continue
                     temp_c = int(raw) / 10.0 - 273.15
-                    if 1.0 < temp_c < 150.0:  # sanity bounds
+                    if 1.0 < temp_c < 150.0:
                         temps.append(round(temp_c, 1))
             except Exception:
                 pass
@@ -66,7 +87,7 @@ def _get_cpu_temps_windows() -> list[float]:
             if temps:
                 return temps
 
-            # LibreHardwareMonitor / OpenHardwareMonitor fallback (if running)
+            # 3. LibreHardwareMonitor / OpenHardwareMonitor WMI (if running)
             for ns in ("root\\LibreHardwareMonitor", "root\\OpenHardwareMonitor"):
                 try:
                     hw = wmi.WMI(namespace=ns)
