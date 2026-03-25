@@ -19,7 +19,10 @@ def _run_powershell(script: str, timeout: int = 30) -> str:
         text=True,
         timeout=timeout,
     )
-    return r.stdout.strip() if r.returncode == 0 else ""
+    # Return stdout regardless of exit code — PowerShell can exit non-zero
+    # due to suppressed warnings even when it produced valid JSON output.
+    out = r.stdout.strip()
+    return out if out else ""
 
 
 def _get_info_windows_ps() -> dict:
@@ -41,9 +44,9 @@ $gpus  = @(Get-CimInstance Win32_VideoController | Where-Object { $_.Name } | Fo
     $vram = $_.AdapterRAM
     if ($vram -and [long]$vram -gt 0) { "$name ($([math]::Round([long]$vram/1GB,0)) GB VRAM)" } else { $name }
 })
-$disks = @(Get-CimInstance Win32_DiskDrive | ForEach-Object {
+$disks = @(Get-CimInstance Win32_DiskDrive | Where-Object { $_.InterfaceType -ne 'USB' } | ForEach-Object {
     $model = if ($_.Model) { $_.Model.Trim() } else { $_.Caption }
-    $sz    = if ($_.Size) { " · $([math]::Round([long]$_.Size/1GB,0)) GB" } else { "" }
+    $sz    = if ($_.Size) { " - $([math]::Round([long]$_.Size/1GB,0)) GB" } else { "" }
     "$model$sz"
 })
 [PSCustomObject]@{

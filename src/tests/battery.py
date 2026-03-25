@@ -26,7 +26,10 @@ def _run_powershell(script: str, timeout: int = 20) -> str:
         text=True,
         timeout=timeout,
     )
-    return r.stdout.strip() if r.returncode == 0 else ""
+    # Return stdout regardless of exit code — PowerShell can exit non-zero
+    # due to suppressed warnings even when it produced valid JSON output.
+    out = r.stdout.strip()
+    return out if out else ""
 
 
 def _get_battery_details_windows_ps() -> dict:
@@ -40,12 +43,15 @@ $ErrorActionPreference = 'SilentlyContinue'
 $b  = Get-CimInstance Win32_Battery | Select-Object -First 1
 $fc = Get-CimInstance -Namespace root/wmi -ClassName BatteryFullChargedCapacity | Select-Object -First 1
 $cc = Get-CimInstance -Namespace root/wmi -ClassName BatteryCycleCount | Select-Object -First 1
+$sd = Get-CimInstance -Namespace root/wmi -ClassName BatteryStaticData | Select-Object -First 1
+$design = if ($sd.DesignedCapacity -and [int]$sd.DesignedCapacity -gt 0) { [int]$sd.DesignedCapacity } elseif ($b.DesignCapacity -and [int]$b.DesignCapacity -gt 0) { [int]$b.DesignCapacity } else { 0 }
+$full   = if ($fc.FullChargedCapacity -and [int]$fc.FullChargedCapacity -gt 0) { [int]$fc.FullChargedCapacity } elseif ($b.FullChargeCapacity -and [int]$b.FullChargeCapacity -gt 0) { [int]$b.FullChargeCapacity } else { 0 }
+$cycle  = if ($cc.CycleCount -and [int]$cc.CycleCount -gt 0) { [int]$cc.CycleCount } else { $null }
 [PSCustomObject]@{
-    design_mwh  = if ($b.DesignCapacity)          { [int]$b.DesignCapacity }          else { 0 }
-    full_mwh    = if ($fc.FullChargedCapacity)     { [int]$fc.FullChargedCapacity }    `
-                  elseif ($b.FullChargeCapacity)   { [int]$b.FullChargeCapacity }      else { 0 }
-    cycle_count = if ($cc.CycleCount -ne $null)    { [int]$cc.CycleCount }             else { $null }
-    chemistry   = if ($b.Chemistry -ne $null)      { [int]$b.Chemistry }               else { $null }
+    design_mwh  = $design
+    full_mwh    = $full
+    cycle_count = $cycle
+    chemistry   = if ($b.Chemistry -ne $null) { [int]$b.Chemistry } else { $null }
 } | ConvertTo-Json
 """
 
@@ -63,6 +69,7 @@ $cc = Get-CimInstance -Namespace root/wmi -ClassName BatteryCycleCount | Select-
         if full > 0:
             details["full_charge_capacity_mwh"] = full
 
+        # Cycle count 0 means the firmware doesn't report it — treat as unavailable
         cycle = d.get("cycle_count")
         if cycle is not None and int(cycle) > 0:
             details["cycle_count"] = int(cycle)
