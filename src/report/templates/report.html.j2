@@ -648,7 +648,7 @@
                       {{ result.data.health_pct }}%
                     </strong>
                     {% if result.data.get('condition') %}&nbsp;— {{ result.data.condition }}{% endif %}
-                  {% else %}Unknown{% endif %}
+                  {% else %}Cannot determine{% endif %}
                 </td>
               </tr>
               {% if result.data.get('design_capacity_mah') %}
@@ -661,10 +661,8 @@
               {% elif result.data.get('full_charge_capacity_mwh') %}
               <tr><td class="data-key">Full Charge Capacity</td><td class="data-value">{{ result.data.full_charge_capacity_mwh }} mWh</td></tr>
               {% endif %}
-              <tr><td class="data-key">Cycle Count</td><td class="data-value">{{ result.data.get('cycle_count') if result.data.get('cycle_count') is not none else 'Unknown' }}</td></tr>
-              {% if result.data.get('chemistry') %}
-              <tr><td class="data-key">Chemistry</td><td class="data-value">{{ result.data.chemistry }}</td></tr>
-              {% endif %}
+              <tr><td class="data-key">Cycle Count</td><td class="data-value">{{ result.data.get('cycle_count') if result.data.get('cycle_count') is not none else 'Cannot determine' }}</td></tr>
+              <tr><td class="data-key">Chemistry</td><td class="data-value">{{ result.data.get('chemistry') if result.data.get('chemistry') else 'Cannot determine' }}</td></tr>
               {% if result.data.get('temp_c') is not none %}
               <tr><td class="data-key">Battery Temp</td><td class="data-value">{{ result.data.temp_c }}°C</td></tr>
               {% endif %}
