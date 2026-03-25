@@ -18,6 +18,177 @@ from src.ui.stylesheet import get_colors
 from src.ui.widgets.dashboard_card import DashboardCard
 
 
+def _build_expanded_detail(result: TestResult) -> str:
+    """Build a comprehensive multi-line detail string from test result data."""
+    data = result.data or {}
+    test_name = result.name
+    parts: list[str] = []
+
+    if test_name == "cpu":
+        if data.get("brand"):
+            parts.append(data["brand"])
+        cores = data.get("physical_cores")
+        threads = data.get("logical_cores")
+        if cores and threads:
+            parts.append(f"{cores} cores  ·  {threads} threads")
+        elif threads:
+            parts.append(f"{threads} threads")
+        temp_parts = []
+        if data.get("temp_idle") is not None:
+            temp_parts.append(f"Idle: {data['temp_idle']}°C")
+        if data.get("temp_peak") is not None:
+            temp_parts.append(f"Peak: {data['temp_peak']}°C")
+        if data.get("stress_duration_s"):
+            temp_parts.append(f"{data['stress_duration_s']}s stress")
+        if temp_parts:
+            parts.append("  ·  ".join(temp_parts))
+
+    elif test_name == "ram":
+        size_parts = []
+        if data.get("total_gb"):
+            size_parts.append(f"{data['total_gb']} GB total")
+        if data.get("available_gb"):
+            size_parts.append(f"{data['available_gb']} GB free")
+        if data.get("speed_mhz"):
+            size_parts.append(f"{data['speed_mhz']} MHz")
+        if size_parts:
+            parts.append("  ·  ".join(size_parts))
+        bw = []
+        if data.get("ram_read_mb_s"):
+            bw.append(f"R {data['ram_read_mb_s']:,} MB/s")
+        if data.get("ram_write_mb_s"):
+            bw.append(f"W {data['ram_write_mb_s']:,} MB/s")
+        if bw:
+            parts.append("  ·  ".join(bw))
+        if data.get("scan_message"):
+            mb = data.get("scan_mb", "")
+            n = data.get("patterns_tested", "")
+            prefix = "  ·  ".join(filter(None, [
+                f"{mb} MB" if mb else "",
+                f"{n} pattern{'s' if n and n != 1 else ''}" if n else "",
+            ]))
+            parts.append(f"Scan: {prefix}  ·  {data['scan_message']}" if prefix else f"Scan: {data['scan_message']}")
+
+    elif test_name == "storage":
+        for d in data.get("drives") or []:
+            model = d.get("model") or "Drive"
+            header = model
+            size_gb = int(d["total_gb"]) if d.get("total_gb") else None
+            medium = d.get("medium_type") or d.get("interface") or ""
+            if size_gb:
+                header += f"  —  {size_gb} GB"
+            if medium:
+                header += f"  ({medium})"
+            parts.append(header)
+            detail = []
+            if d.get("smart_status"):
+                detail.append(f"SMART: {d['smart_status']}")
+            if d.get("temp_c") is not None:
+                detail.append(f"Temp: {d['temp_c']}°C")
+            if d.get("power_on_hours") is not None:
+                detail.append(f"{d['power_on_hours']:,}h on")
+            if d.get("percentage_used") is not None:
+                detail.append(f"{d['percentage_used']}% wear")
+            if detail:
+                parts.append("  ·  ".join(detail))
+        read = data.get("read_mb_s")
+        write = data.get("write_mb_s")
+        if read or write:
+            sp = []
+            if read:
+                sp.append(f"R {read} MB/s")
+            if write:
+                sp.append(f"W {write} MB/s")
+            parts.append("Speed: " + "  ·  ".join(sp))
+
+    elif test_name == "network":
+        wifi = data.get("wifi") or {}
+        if wifi.get("ssid"):
+            w = [f"Wi-Fi: {wifi['ssid']}"]
+            if wifi.get("signal_pct") is not None:
+                w[0] += f" ({wifi['signal_pct']}%)"
+            elif wifi.get("signal_dbm") is not None:
+                w[0] += f" ({wifi['signal_dbm']} dBm)"
+            if wifi.get("standard"):
+                w.append(wifi["standard"])
+            parts.append("  ·  ".join(w))
+        conn = []
+        if data.get("ping_rtt_ms") is not None:
+            conn.append(f"Ping: {data['ping_rtt_ms']} ms")
+        if wifi.get("download_mbps"):
+            conn.append(f"↓ {wifi['download_mbps']} Mbps")
+        if conn:
+            parts.append("  ·  ".join(conn))
+        for a in data.get("adapters") or []:
+            if not a.get("is_up"):
+                continue
+            ap = [a["name"]]
+            if a.get("speed_mbps"):
+                ap.append(f"{a['speed_mbps']} Mbps")
+            if a.get("ipv4"):
+                ap.append(a["ipv4"])
+            parts.append("  ·  ".join(ap))
+
+    elif test_name == "gpu":
+        for g in data.get("gpus") or []:
+            gpu_name = g.get("name", "GPU")
+            name_line = [gpu_name]
+            if g.get("vram_total_mb"):
+                name_line.append(f"{round(g['vram_total_mb'] / 1024)} GB VRAM")
+            elif g.get("vram_note"):
+                name_line.append(g["vram_note"])
+            parts.append("  ·  ".join(name_line))
+            gd = []
+            if g.get("temp_c") is not None:
+                gd.append(f"Temp: {g['temp_c']}°C")
+            if g.get("utilization_pct") is not None:
+                gd.append(f"Util: {g['utilization_pct']:.0f}%")
+            if g.get("power_w") is not None:
+                gd.append(f"Power: {g['power_w']}W")
+            if g.get("driver_version"):
+                gd.append(f"Driver: {g['driver_version']}")
+            if gd:
+                parts.append("  ·  ".join(gd))
+
+    elif test_name == "battery":
+        hp = data.get("health_pct")
+        cc = data.get("cycle_count")
+        pct = data.get("percent_charged")
+        chem = data.get("chemistry")
+        row1 = []
+        if hp is not None:
+            row1.append(f"Health: {hp:.0f}%")
+        if cc is not None:
+            row1.append(f"Cycles: {cc}")
+        if pct is not None:
+            row1.append(f"Charged: {pct:.0f}%")
+        if row1:
+            parts.append("  ·  ".join(row1))
+        if chem:
+            parts.append(f"Chemistry: {chem}")
+        unit = "mWh" if data.get("design_capacity_mwh") else "mAh"
+        design = data.get("design_capacity_mwh") or data.get("design_capacity_mah")
+        full = data.get("full_charge_capacity_mwh") or data.get("full_charge_capacity_mah")
+        cap = []
+        if design:
+            cap.append(f"Design: {design:,} {unit}")
+        if full:
+            cap.append(f"Full: {full:,} {unit}")
+        if cap:
+            parts.append("  ·  ".join(cap))
+        extra = []
+        if data.get("temp_c") is not None:
+            extra.append(f"Temp: {data['temp_c']}°C")
+        if data.get("voltage_mv") is not None:
+            extra.append(f"Voltage: {data['voltage_mv'] / 1000:.2f}V")
+        if data.get("charger_watts"):
+            extra.append(f"Charger: {data['charger_watts']}W")
+        if extra:
+            parts.append("  ·  ".join(extra))
+
+    return "\n".join(parts)
+
+
 class CategorySection(QFrame):
     """Collapsible section: plain category header + flat test rows.
 
@@ -186,7 +357,9 @@ class CategorySection(QFrame):
         card = self._cards.get(result.name)
         if card is None:
             return
-        sub = result.data.get("card_sub_detail", "") if result.data else ""
+        sub = _build_expanded_detail(result)
+        if not sub:
+            sub = result.data.get("card_sub_detail", "") if result.data else ""
         if not sub and result.error_message:
             sub = result.error_message
         card.set_status(result.status.value, result.summary or "", sub)
