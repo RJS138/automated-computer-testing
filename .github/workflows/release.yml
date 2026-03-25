@@ -24,10 +24,13 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           # Ubuntu 22.04 apt ships patchelf 0.14 which lacks --clear-execstack
           # (added in 0.17).  Install the upstream binary directly instead.
+          # Extract into a dedicated dir we own — tar errors if told to write
+          # metadata back onto /tmp itself (Operation not permitted).
+          mkdir -p /tmp/patchelf_install
           curl -L -o /tmp/patchelf.tar.gz \
             https://github.com/NixOS/patchelf/releases/download/0.18.0/patchelf-0.18.0-x86_64.tar.gz
-          tar xzf /tmp/patchelf.tar.gz -C /tmp
-          sudo install /tmp/bin/patchelf /usr/local/bin/patchelf
+          tar xzf /tmp/patchelf.tar.gz -C /tmp/patchelf_install
+          sudo install /tmp/patchelf_install/bin/patchelf /usr/local/bin/patchelf
           patchelf --version
 
       - name: Build
@@ -56,10 +59,11 @@ jobs:
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           # Pin to upstream patchelf 0.18 to guarantee --clear-execstack support.
+          mkdir -p /tmp/patchelf_install
           curl -L -o /tmp/patchelf.tar.gz \
             https://github.com/NixOS/patchelf/releases/download/0.18.0/patchelf-0.18.0-aarch64.tar.gz
-          tar xzf /tmp/patchelf.tar.gz -C /tmp
-          sudo install /tmp/bin/patchelf /usr/local/bin/patchelf
+          tar xzf /tmp/patchelf.tar.gz -C /tmp/patchelf_install
+          sudo install /tmp/patchelf_install/bin/patchelf /usr/local/bin/patchelf
           patchelf --version
 
       - name: Build
