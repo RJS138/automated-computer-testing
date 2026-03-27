@@ -222,6 +222,8 @@ jobs:
 
     permissions:
       contents: write
+      id-token: write   # required for OIDC-backed artifact attestation
+      attestations: write
 
     steps:
       - name: Download all build artifacts
@@ -238,6 +240,16 @@ jobs:
           cp "artifacts/touchstone-windows-x64/Touchstone (Windows x64).exe" release/touchstone_windows_x64.exe
           cp "artifacts/touchstone-windows-arm/Touchstone (Windows ARM).exe" release/touchstone_windows_arm64.exe
           chmod +x release/touchstone_linux_x86_64 release/touchstone_linux_arm64
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            release/touchstone_linux_x86_64
+            release/touchstone_linux_arm64
+            release/touchstone_macos_arm64.dmg
+            release/touchstone_windows_x64.exe
+            release/touchstone_windows_arm64.exe
 
       - name: Generate SHA256 checksums
         run: |
