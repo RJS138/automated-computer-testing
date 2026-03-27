@@ -138,6 +138,32 @@ if [[ "$SKIP_VENTOY" == false ]]; then
     info "Downloading Ventoy..."
     curl -fsSL --progress-bar "$VENTOY_URL" -o "$TMP/ventoy.tar.gz" \
         || die "Failed to download Ventoy from $VENTOY_URL"
+
+    # Verify Ventoy archive integrity against its published SHA-256
+    info "Verifying Ventoy checksum..."
+    VENTOY_SHA256_URL="https://github.com/ventoy/ventoy/releases/download/v${VENTOY_VER}/ventoy-${VENTOY_VER}-linux.tar.gz.sha256"
+    if curl -fsSL "$VENTOY_SHA256_URL" -o "$TMP/ventoy.tar.gz.sha256" 2>/dev/null; then
+        VENTOY_EXPECTED=$(awk '{print $1}' "$TMP/ventoy.tar.gz.sha256")
+        if command -v sha256sum &>/dev/null; then
+            VENTOY_ACTUAL=$(sha256sum "$TMP/ventoy.tar.gz" | awk '{print $1}')
+        elif command -v shasum &>/dev/null; then
+            VENTOY_ACTUAL=$(shasum -a 256 "$TMP/ventoy.tar.gz" | awk '{print $1}')
+        else
+            VENTOY_ACTUAL=""
+        fi
+        if [[ -n "$VENTOY_ACTUAL" && "$VENTOY_ACTUAL" != "$VENTOY_EXPECTED" ]]; then
+            die "Ventoy checksum MISMATCH — download may be corrupted or tampered with.
+  Expected: $VENTOY_EXPECTED
+  Got:      $VENTOY_ACTUAL"
+        elif [[ -n "$VENTOY_ACTUAL" ]]; then
+            ok "Ventoy checksum verified."
+        else
+            warn "No sha256sum/shasum available — Ventoy checksum skipped."
+        fi
+    else
+        warn "Ventoy checksum file not available for v${VENTOY_VER} — skipping verification."
+    fi
+
     tar -xzf "$TMP/ventoy.tar.gz" -C "$TMP"
 
     VENTOY_SH="$TMP/ventoy-${VENTOY_VER}/Ventoy2Disk.sh"
@@ -217,11 +243,45 @@ mkdir -p \
     "$MOUNT_POINT/macos" \
     "$MOUNT_POINT/$REPORTS_DIR"
 
+# Download the checksum manifest first — all binary downloads are verified against it.
+info "Downloading SHA256SUMS..."
+curl -fsSL "$BASE_URL/SHA256SUMS" -o "$TMP/SHA256SUMS" \
+    || die "Could not download SHA256SUMS from release. Cannot verify file integrity."
+ok "SHA256SUMS downloaded."
+
+_verify_file() {
+    local file="$1" name="$2"
+    [[ -f "$file" ]] || return 0  # file was skipped — nothing to verify
+    local expected
+    expected=$(grep "[[:space:]]${name}$" "$TMP/SHA256SUMS" 2>/dev/null | awk '{print $1}')
+    if [[ -z "$expected" ]]; then
+        warn "No checksum entry for $name — skipping verification."
+        return 0
+    fi
+    local actual
+    if command -v sha256sum &>/dev/null; then
+        actual=$(sha256sum "$file" | awk '{print $1}')
+    elif command -v shasum &>/dev/null; then
+        actual=$(shasum -a 256 "$file" | awk '{print $1}')
+    else
+        warn "sha256sum/shasum not available — skipping checksum for $name."
+        return 0
+    fi
+    if [[ "$actual" == "$expected" ]]; then
+        ok "Checksum OK: $name"
+    else
+        rm -f "$file"
+        die "Checksum MISMATCH for $name — file removed. Possible tampering detected.
+  Expected: $expected
+  Got:      $actual"
+    fi
+}
+
 _dl() {
     local name="$1" dest="$2"
     info "Downloading $name..."
     if curl -fsSL --progress-bar -L "$BASE_URL/$name" -o "$dest" 2>&1; then
-        ok "$name"
+        _verify_file "$dest" "$name"
     else
         warn "$name not found in latest release (skipped)."
         rm -f "$dest"

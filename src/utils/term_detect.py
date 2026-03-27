@@ -127,8 +127,7 @@ def resize_terminal(cols: int = 100, rows: int = 40) -> None:
             import subprocess
 
             subprocess.run(
-                f"mode con: cols={target_cols} lines={target_rows}",
-                shell=True,
+                ["mode", "con:", f"cols={int(target_cols)}", f"lines={int(target_rows)}"],
                 capture_output=True,
             )
         else:

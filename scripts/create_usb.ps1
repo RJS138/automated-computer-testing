@@ -61,6 +61,31 @@ function Invoke-Download {
     }
 }
 
+function Get-ExpectedHash {
+    param([string]$SumsFile, [string]$FileName)
+    if (-not (Test-Path $SumsFile)) { return $null }
+    $line = Get-Content $SumsFile | Where-Object { $_ -match "\s$([regex]::Escape($FileName))$" } | Select-Object -First 1
+    if ($line) { return ($line -split '\s+')[0] }
+    return $null
+}
+
+function Confirm-FileHash {
+    param([string]$FilePath, [string]$FileName, [string]$SumsFile)
+    if (-not (Test-Path $FilePath)) { return }  # file was skipped
+    $expected = Get-ExpectedHash -SumsFile $SumsFile -FileName $FileName
+    if (-not $expected) {
+        Write-Warn "No checksum entry for $FileName — skipping verification."
+        return
+    }
+    $actual = (Get-FileHash -Path $FilePath -Algorithm SHA256).Hash.ToLower()
+    if ($actual -eq $expected.ToLower()) {
+        Write-Ok "Checksum OK: $FileName"
+    } else {
+        Remove-Item -Path $FilePath -Force -ErrorAction SilentlyContinue
+        Fail "Checksum MISMATCH for $FileName — file removed. Possible tampering detected.`n  Expected: $expected`n  Got:      $actual"
+    }
+}
+
 # ── Banner ────────────────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "Touchstone - USB Setup" -ForegroundColor White
@@ -136,6 +161,21 @@ if (-not $Update) {
         Fail "Failed to download Ventoy from $ventoyZipUrl"
     }
 
+    # Verify Ventoy archive integrity against its published SHA-256
+    Write-Info "Verifying Ventoy checksum..."
+    $ventoyHashUrl = "https://github.com/ventoy/ventoy/releases/download/v${VentoyVer}/ventoy-${VentoyVer}-windows.zip.sha256"
+    $ventoyHashFile = Join-Path $TmpDir "ventoy.zip.sha256"
+    if (Invoke-Download $ventoyHashUrl $ventoyHashFile) {
+        $ventoyExpected = ((Get-Content $ventoyHashFile) -split '\s+')[0].ToLower()
+        $ventoyActual   = (Get-FileHash -Path $ventoyZip -Algorithm SHA256).Hash.ToLower()
+        if ($ventoyActual -ne $ventoyExpected) {
+            Fail "Ventoy checksum MISMATCH — download may be corrupted or tampered with.`n  Expected: $ventoyExpected`n  Got:      $ventoyActual"
+        }
+        Write-Ok "Ventoy checksum verified."
+    } else {
+        Write-Warn "Ventoy checksum file not available for v${VentoyVer} — skipping verification."
+    }
+
     Write-Info "Extracting Ventoy..."
     Expand-Archive -Path $ventoyZip -DestinationPath $ventoyExtDir -Force
     $ventoyExe = Get-ChildItem -Path $ventoyExtDir -Recurse -Filter "Ventoy2Disk.exe" |
@@ -194,16 +234,26 @@ $BaseUrl = "https://github.com/$GithubRepo/releases/latest/download"
 $dirs = @("$VentoyDrive\windows", "$VentoyDrive\linux", "$VentoyDrive\macos", "$VentoyDrive\$ReportsDir")
 foreach ($d in $dirs) { New-Item -ItemType Directory -Path $d -Force | Out-Null }
 
+# Download the checksum manifest first — all binary downloads are verified against it.
+Write-Info "Downloading SHA256SUMS..."
+$SumsFile = Join-Path $TmpDir "SHA256SUMS"
+if (-not (Invoke-Download "$BaseUrl/SHA256SUMS" $SumsFile)) {
+    Fail "Could not download SHA256SUMS from release. Cannot verify file integrity."
+}
+Write-Ok "SHA256SUMS downloaded."
+
 $assets = @(
     @{ Name = "touchstone_windows_x64.exe"; Dest = "$VentoyDrive\windows\touchstone_windows_x64.exe" },
+    @{ Name = "touchstone_windows_arm64.exe"; Dest = "$VentoyDrive\windows\touchstone_windows_arm64.exe" },
     @{ Name = "touchstone_linux_x86_64";    Dest = "$VentoyDrive\linux\touchstone_linux_x86_64"      },
-    @{ Name = "touchstone_macos_arm64";     Dest = "$VentoyDrive\macos\touchstone_macos_arm64"       }
+    @{ Name = "touchstone_linux_arm64";     Dest = "$VentoyDrive\linux\touchstone_linux_arm64"       },
+    @{ Name = "touchstone_macos_arm64.dmg"; Dest = "$VentoyDrive\macos\touchstone_macos_arm64.dmg"   }
 )
 
 foreach ($a in $assets) {
     Write-Info "Downloading $($a.Name)..."
     if (Invoke-Download "$BaseUrl/$($a.Name)" $a.Dest) {
-        Write-Ok $a.Name
+        Confirm-FileHash -FilePath $a.Dest -FileName $a.Name -SumsFile $SumsFile
     } else {
         Write-Warn "$($a.Name) not found in latest release (skipped)."
     }

@@ -239,6 +239,18 @@ jobs:
           cp "artifacts/touchstone-windows-arm/Touchstone (Windows ARM).exe" release/touchstone_windows_arm64.exe
           chmod +x release/touchstone_linux_x86_64 release/touchstone_linux_arm64
 
+      - name: Generate SHA256 checksums
+        run: |
+          cd release
+          sha256sum \
+            touchstone_linux_x86_64 \
+            touchstone_linux_arm64 \
+            touchstone_macos_arm64.dmg \
+            touchstone_windows_x64.exe \
+            touchstone_windows_arm64.exe \
+            > SHA256SUMS
+          cat SHA256SUMS
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -277,5 +289,6 @@ jobs:
             release/touchstone_linux_arm64
             release/touchstone_windows_x64.exe
             release/touchstone_windows_arm64.exe
+            release/SHA256SUMS
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
