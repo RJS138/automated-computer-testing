@@ -20,7 +20,7 @@ Run a full diagnostic suite on any Windows, macOS, or Linux machine — no insta
 
 ---
 
-## Set up a USB stick in one command
+## Set up a USB stick
 
 Pop in a USB drive and run one line. It installs [Ventoy](https://ventoy.net), downloads all platform binaries, and prepares the drive — ready to test any machine you plug it into.
 
@@ -38,7 +38,21 @@ irm https://raw.githubusercontent.com/RJS138/touchstone/main/scripts/create_usb.
 
 The USB drive will contain ready-to-run executables for every platform. Plug it into any PC and run the binary for that machine's OS — no Python, no dependencies, no internet required on the target machine.
 
-> **Already have a Ventoy USB?** Pass `--update` (shell) or `-Update` (PowerShell) to refresh the executables without reformatting the drive.
+### Updating an existing Ventoy USB
+
+Already have a Touchstone USB? Use `--update` / `-Update` to refresh the binaries without reformatting the drive.
+
+**macOS / Linux**
+
+```bash
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/RJS138/touchstone/main/scripts/create_usb.sh)" -- --update
+```
+
+**Windows** — open PowerShell as Administrator:
+
+```powershell
+irm https://raw.githubusercontent.com/RJS138/touchstone/main/scripts/create_usb.ps1 | iex -Update
+```
 
 ---
 
@@ -56,7 +70,18 @@ The USB drive will contain ready-to-run executables for every platform. Plug it 
 | **System** | BIOS version, board model, serial number, OS |
 | **Manual checks** | LCD, keyboard (every key), touchpad, speakers, USB-A/C, HDMI, webcam |
 
-Each test produces a **pass / warn / fail** result with the raw data captured. Run a **Before repair** job and an **After repair** job — the app generates a side-by-side comparison report automatically.
+Each test produces a **pass / warn / fail** result with the raw data captured.
+
+Run a **Before repair** job and an **After repair** job — the app generates a side-by-side comparison report automatically.
+
+---
+
+## Test modes
+
+| Mode | Duration | Use case |
+|---|---|---|
+| **Quick** | ~5 min | Fast sanity check — intake or quick turnaround |
+| **Full** | ~30 min | Thorough stress test — catches intermittent faults |
 
 ---
 
@@ -97,12 +122,14 @@ chmod +x touchstone_linux_x86_64 && sudo ./touchstone_linux_x86_64
 
 ---
 
-## Test modes
+## Requirements on the target machine
 
-| Mode | Duration | Use case |
+| Tool | Required for | How to get |
 |---|---|---|
-| **Quick** | ~5 min | Fast sanity check — intake or quick turnaround |
-| **Full** | ~30 min | Thorough stress test — catches intermittent faults |
+| `smartctl` | SMART storage health | [smartmontools.org](https://www.smartmontools.org) — or bundled with the binary |
+| Admin / root | SMART data, system info, RAM scan | Run as Administrator / sudo |
+
+The app detects missing tools at startup and shows install instructions before proceeding.
 
 ---
 
@@ -113,7 +140,7 @@ Requires [UV](https://docs.astral.sh/uv/getting-started/installation/).
 ```bash
 git clone https://github.com/RJS138/touchstone.git
 cd automated-computer-testing
-uv sync          # creates .venv, installs all dependencies
+uv sync            # creates .venv, installs all dependencies
 uv run touchstone  # launch the app
 ```
 
@@ -137,17 +164,6 @@ Releases are built automatically by [GitHub Actions](.github/workflows/release.y
 ```bash
 git tag v1.0.0 && git push origin v1.0.0
 ```
-
----
-
-## Requirements on the target machine
-
-| Tool | Required for | How to get |
-| --- | --- | --- |
-| `smartctl` | SMART storage health | [smartmontools.org](https://www.smartmontools.org) — or bundled with the binary |
-| Admin / root | SMART data, system info, RAM scan | Run as Administrator / sudo |
-
-The app detects missing tools at startup and shows install instructions before proceeding.
 
 ---
 
