@@ -11,6 +11,8 @@ _DEFAULTS: dict[str, str] = {
     "theme": "dark",
     "output_format": "html_pdf",
     "save_path": "",
+    "company_name": "",
+    "company_logo_path": "",
 }
 
 
@@ -29,9 +31,22 @@ def load_prefs() -> dict[str, str]:
         return dict(_DEFAULTS)
 
 
-def save_prefs(*, theme: str, output_format: str, save_path: str) -> None:
+def save_prefs(
+    *,
+    theme: str,
+    output_format: str,
+    save_path: str,
+    company_name: str = "",
+    company_logo_path: str = "",
+) -> None:
     """Persist all prefs to ~/.touchstone/prefs.json. All args keyword-only."""
     _PREFS_PATH.parent.mkdir(parents=True, exist_ok=True)
     _PREFS_PATH.write_text(
-        json.dumps({"theme": theme, "output_format": output_format, "save_path": save_path})
+        json.dumps({
+            "theme": theme,
+            "output_format": output_format,
+            "save_path": save_path,
+            "company_name": company_name,
+            "company_logo_path": company_logo_path,
+        })
     )

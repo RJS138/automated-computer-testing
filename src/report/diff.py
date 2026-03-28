@@ -123,6 +123,10 @@ def generate_comparison(job_dir: Path, job: JobInfo) -> str | None:
         autoescape=select_autoescape(["html"]),
     )
     template = env.get_template("comparison.html.j2")
+
+    from .html_render import _load_branding
+    branding_name, branding_logo = _load_branding()
+
     return template.render(
         job=job,
         rows=diff_rows,
@@ -132,4 +136,6 @@ def generate_comparison(job_dir: Path, job: JobInfo) -> str | None:
         before_data=before_data,
         after_data=after_data,
         comparison_json=comparison_json,
+        branding_name=branding_name,
+        branding_logo=branding_logo,
     )

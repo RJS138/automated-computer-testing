@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PC Diagnostic Report — {{ report.job.customer_name }}</title>
+  <title>Touchstone Diagnostic Report — {{ report.job.customer_name }}</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -153,11 +153,17 @@
 
   <!-- Header -->
   <div class="header">
-    <div>
-      <h1>PC Diagnostic Report</h1>
-      <div class="meta">
-        Generated: {{ report.generated_at.strftime('%Y-%m-%d %H:%M:%S') }}<br>
-        Mode: {{ report.job.test_mode.value | upper }}
+    <div style="display:flex;align-items:center;gap:16px;">
+      {% if branding_logo %}
+      <img src="{{ branding_logo }}" alt="Logo" style="height:48px;border-radius:4px;flex-shrink:0;">
+      {% endif %}
+      <div>
+        <h1>{% if branding_name %}{{ branding_name }}{% else %}Touchstone{% endif %}</h1>
+        <div class="meta">
+          Diagnostic Report<br>
+          Generated: {{ report.generated_at.strftime('%Y-%m-%d %H:%M:%S') }}<br>
+          Mode: {{ report.job.test_mode.value | upper }}
+        </div>
       </div>
     </div>
     <div class="report-type-badge">{{ report.job.report_type.value | upper }} REPAIR</div>
@@ -726,7 +732,7 @@
 
   <!-- Footer -->
   <div class="footer">
-    <span>PC Tester — Automated Diagnostic Report</span>
+    <span>Touchstone — Automated Diagnostic Report{% if branding_name %} &nbsp;·&nbsp; Prepared by {{ branding_name }}{% endif %}</span>
     <span>{{ report.generated_at.strftime('%Y-%m-%d %H:%M') }}</span>
   </div>
 

@@ -107,6 +107,23 @@ class SettingsDialog(QDialog):
         path_row.addWidget(browse_btn)
         root.addLayout(path_row)
 
+        # ── Report Branding ───────────────────────────────────────────────────
+        root.addWidget(self._section_label("Report Branding"))
+
+        self._company_name_edit = QLineEdit(settings.company_name)
+        self._company_name_edit.setPlaceholderText("Company name (shown in report header)")
+        root.addWidget(self._company_name_edit)
+
+        logo_row = QHBoxLayout()
+        logo_row.setSpacing(6)
+        self._logo_path_edit = QLineEdit(settings.company_logo_path)
+        self._logo_path_edit.setPlaceholderText("Logo image path (PNG or JPG) — optional")
+        logo_row.addWidget(self._logo_path_edit, stretch=1)
+        logo_browse_btn = QPushButton("Browse\u2026")
+        logo_browse_btn.clicked.connect(self._browse_logo)
+        logo_row.addWidget(logo_browse_btn)
+        root.addLayout(logo_row)
+
         # ── Technician Notes ──────────────────────────────────────────────────
         root.addWidget(self._section_label("Technician Notes"))
         self._notes_edit = QPlainTextEdit(settings.notes)
@@ -161,6 +178,14 @@ class SettingsDialog(QDialog):
         )
         if path:
             self._path_edit.setText(path)
+
+    def _browse_logo(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Select Logo Image", self._logo_path_edit.text(),
+            "Images (*.png *.jpg *.jpeg *.webp)"
+        )
+        if path:
+            self._logo_path_edit.setText(path)
 
     def reject(self) -> None:
         """Revert live preview theme before dismissing (Cancel or X button)."""
@@ -222,4 +247,7 @@ class SettingsDialog(QDialog):
             output_format=self._settings.output_format,
             save_path=self._path_edit.text().strip(),
             notes=self._notes_edit.toPlainText(),
+            company_name=self._company_name_edit.text().strip(),
+            company_logo_path=self._logo_path_edit.text().strip(),
         )
+

@@ -695,6 +695,8 @@ class TestDashboardPage(QWidget):
                 theme=self._window.theme,
                 output_format=new_settings.output_format,
                 save_path=new_settings.save_path,
+                company_name=new_settings.company_name,
+                company_logo_path=new_settings.company_logo_path,
             )
 
     # ── Dev helper ────────────────────────────────────────────────────────────

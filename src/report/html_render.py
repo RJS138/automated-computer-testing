@@ -184,6 +184,34 @@ def _cpu_temp_svg(
     return "\n".join(parts)
 
 
+def _load_branding() -> tuple[str, str]:
+    """
+    Return (company_name, logo_b64) from saved prefs.
+
+    logo_b64 is a data-URL string ready for use in an <img src="..."> tag,
+    e.g. "data:image/png;base64,<data>". Returns empty strings when no logo
+    is configured or the file cannot be read.
+    """
+    try:
+        from ..utils.prefs import load_prefs
+        prefs = load_prefs()
+        company_name = prefs.get("company_name", "")
+        logo_path = prefs.get("company_logo_path", "")
+        logo_b64 = ""
+        if logo_path:
+            from pathlib import Path
+            import base64
+            p = Path(logo_path)
+            if p.is_file():
+                ext = p.suffix.lower().lstrip(".")
+                mime = {"jpg": "jpeg", "jpeg": "jpeg", "png": "png", "webp": "webp"}.get(ext, "png")
+                data = base64.b64encode(p.read_bytes()).decode("ascii")
+                logo_b64 = f"data:image/{mime};base64,{data}"
+        return company_name, logo_b64
+    except Exception:
+        return "", ""
+
+
 def render_html(report: FullReport) -> str:
     """Render a single report (before or after) to HTML string."""
     env = _get_jinja_env()
@@ -201,8 +229,12 @@ def render_html(report: FullReport) -> str:
                 grad_id="tcg_cpu",
             )
 
+    company_name, logo_b64 = _load_branding()
+
     return template.render(
         report=report,
         report_json=_report_to_json(report),
         temp_svgs=temp_svgs,
+        branding_name=company_name,
+        branding_logo=logo_b64,
     )

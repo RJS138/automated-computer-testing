@@ -121,11 +121,18 @@
 
   <!-- Header -->
   <div class="header">
-    <h1>Before / After Comparison Report</h1>
-    <div class="meta">
-      Customer: {{ job.customer_name }} &nbsp;|&nbsp;
-      Device: {{ job.device_description }} &nbsp;|&nbsp;
-      Job #{{ job.job_number }}
+    <div style="display:flex;align-items:center;gap:16px;">
+      {% if branding_logo %}
+      <img src="{{ branding_logo }}" alt="Logo" style="height:48px;border-radius:4px;flex-shrink:0;">
+      {% endif %}
+      <div>
+        <h1>{% if branding_name %}{{ branding_name }} — {% endif %}Before / After Comparison</h1>
+        <div class="meta">
+          Customer: {{ job.customer_name }} &nbsp;|&nbsp;
+          Device: {{ job.device_description }} &nbsp;|&nbsp;
+          Job #{{ job.job_number }}
+        </div>
+      </div>
     </div>
   </div>
 
@@ -187,7 +194,7 @@
 
   <!-- Footer -->
   <div class="footer">
-    <span>PC Tester — Before/After Comparison Report</span>
+    <span>Touchstone — Before/After Comparison Report{% if branding_name %} &nbsp;·&nbsp; Prepared by {{ branding_name }}{% endif %}</span>
     <span>{{ job.customer_name }} | {{ job.job_number }}</span>
   </div>
 

@@ -34,6 +34,8 @@ class TouchstoneWindow(QMainWindow):
         self._theme = prefs["theme"]
         self.settings.output_format = prefs["output_format"]
         self.settings.save_path = prefs["save_path"]
+        self.settings.company_name = prefs["company_name"]
+        self.settings.company_logo_path = prefs["company_logo_path"]
         self._apply_theme(self._theme)
 
         self.setWindowTitle("Touchstone")
