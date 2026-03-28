@@ -51,6 +51,7 @@ function Get-GitHubLatestTag {
 }
 
 function Invoke-Download {
+    # Silent download for small metadata files (SHA256SUMS, hash files, API responses)
     param([string]$Url, [string]$Dest)
     $ProgressPreference = 'SilentlyContinue'
     try {
@@ -58,6 +59,27 @@ function Invoke-Download {
         return $true
     } catch {
         return $false
+    }
+}
+
+function Invoke-DownloadWithProgress {
+    # Download with a visible progress bar for large binaries.
+    # Prefers curl.exe (ships with Windows 10 1803+) for a clean bar;
+    # falls back to Invoke-WebRequest with PowerShell's native progress display.
+    param([string]$Url, [string]$Dest)
+    $curlExe = Get-Command curl.exe -ErrorAction SilentlyContinue
+    if ($curlExe) {
+        & curl.exe -fSL --progress-bar $Url -o $Dest
+        return $LASTEXITCODE -eq 0
+    } else {
+        # Fallback: PowerShell native progress (slower rendering, but visible)
+        try {
+            $ProgressPreference = 'Continue'
+            Invoke-WebRequest -Uri $Url -OutFile $Dest -UseBasicParsing
+            return $true
+        } catch {
+            return $false
+        }
     }
 }
 
@@ -157,7 +179,7 @@ if (-not $Update) {
     $ventoyExtDir = Join-Path $TmpDir "ventoy"
 
     Write-Info "Downloading Ventoy..."
-    if (-not (Invoke-Download $ventoyZipUrl $ventoyZip)) {
+    if (-not (Invoke-DownloadWithProgress $ventoyZipUrl $ventoyZip)) {
         Fail "Failed to download Ventoy from $ventoyZipUrl"
     }
 
@@ -252,7 +274,7 @@ $assets = @(
 
 foreach ($a in $assets) {
     Write-Info "Downloading $($a.Name)..."
-    if (Invoke-Download "$BaseUrl/$($a.Name)" $a.Dest) {
+    if (Invoke-DownloadWithProgress "$BaseUrl/$($a.Name)" $a.Dest) {
         Confirm-FileHash -FilePath $a.Dest -FileName $a.Name -SumsFile $SumsFile
     } else {
         Write-Warn "$($a.Name) not found in latest release (skipped)."

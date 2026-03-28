@@ -136,7 +136,7 @@ if [[ "$SKIP_VENTOY" == false ]]; then
 
     VENTOY_URL="https://github.com/ventoy/ventoy/releases/download/v${VENTOY_VER}/ventoy-${VENTOY_VER}-linux.tar.gz"
     info "Downloading Ventoy..."
-    curl -fsSL --progress-bar "$VENTOY_URL" -o "$TMP/ventoy.tar.gz" \
+    curl -fSL --progress-bar "$VENTOY_URL" -o "$TMP/ventoy.tar.gz" \
         || die "Failed to download Ventoy from $VENTOY_URL"
 
     # Verify Ventoy archive integrity against its published SHA-256
@@ -280,7 +280,7 @@ _verify_file() {
 _dl() {
     local name="$1" dest="$2"
     info "Downloading $name..."
-    if curl -fsSL --progress-bar -L "$BASE_URL/$name" -o "$dest" 2>&1; then
+    if curl -fSL --progress-bar "$BASE_URL/$name" -o "$dest"; then
         _verify_file "$dest" "$name"
     else
         warn "$name not found in latest release (skipped)."
