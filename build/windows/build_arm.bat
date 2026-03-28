@@ -77,6 +77,11 @@ uv run pyinstaller ^
   --hidden-import jinja2 ^
   --collect-all PySide6 ^
   --collect-all reportlab ^
+  --collect-submodules src.tests ^
+  --collect-submodules src.ui ^
+  --collect-submodules src.report ^
+  --collect-submodules src.models ^
+  --collect-submodules src.utils ^
   main.py
 
 if %ERRORLEVEL% neq 0 (

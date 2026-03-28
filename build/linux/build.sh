@@ -57,6 +57,11 @@ uv run pyinstaller \
   --collect-all PySide6 \
   --collect-all reportlab \
   --collect-all cv2 \
+  --collect-submodules src.tests \
+  --collect-submodules src.ui \
+  --collect-submodules src.report \
+  --collect-submodules src.models \
+  --collect-submodules src.utils \
   main.py
 
 echo ""
