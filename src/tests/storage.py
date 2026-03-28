@@ -185,8 +185,109 @@ def _drives_macos() -> list[dict]:
     return drives
 
 
-def _drives_windows() -> list[dict]:
-    """Enumerate physical drives on Windows via WMI."""
+def _drives_windows_ps() -> list[dict]:
+    """
+    Primary Windows drive enumeration via PowerShell Get-PhysicalDisk.
+
+    Win32_DiskDrive.InterfaceType returns "SCSI" for NVMe (WMI routes everything
+    through the SCSI translation layer). Get-PhysicalDisk exposes the real BusType
+    (NVMe=17, SATA=11, USB=5, etc.) and correct MediaType (HDD=3, SSD=4).
+
+    Used/free is resolved by walking the physical disk → partition → volume chain
+    via Get-Disk / Get-Partition / Get-Volume.
+    """
+    import json as _json2
+
+    script = r"""
+$ErrorActionPreference = 'SilentlyContinue'
+$BusTypeMap  = @{0='Unknown';3='ATA';4='ATAPI';5='USB';6='SCSI';7='RAID';8='FC';9='iSCSI';10='SAS';11='SATA';17='NVMe';18='SD';19='MMC'}
+$MediaTypeMap = @{0='Unknown';3='HDD';4='SSD';5='SCM'}
+$result = @()
+foreach ($pd in Get-PhysicalDisk) {
+    $disk     = Get-Disk -PhysicalDisk $pd -ErrorAction SilentlyContinue
+    $diskNum  = if ($disk) { [int]$disk.DiskNumber } else { $null }
+    $devPath  = if ($diskNum -ne $null) { "\\.\PhysicalDrive$diskNum" } else { $null }
+    $usedBytes = $null
+    $freeBytes = $null
+    if ($disk) {
+        $totalUsed = [long]0
+        $totalFree = [long]0
+        $hasVol    = $false
+        foreach ($part in @(Get-Partition -DiskNumber $disk.DiskNumber -ErrorAction SilentlyContinue)) {
+            $vol = Get-Volume -Partition $part -ErrorAction SilentlyContinue
+            if ($vol -and $vol.Size -gt 0) {
+                $totalUsed += ($vol.Size - $vol.SizeRemaining)
+                $totalFree += $vol.SizeRemaining
+                $hasVol = $true
+            }
+        }
+        if ($hasVol) { $usedBytes = $totalUsed; $freeBytes = $totalFree }
+    }
+    $busNum   = [int]$pd.BusType
+    $mediaN   = [int]$pd.MediaType
+    $result += [PSCustomObject]@{
+        device     = $devPath
+        model      = ($pd.FriendlyName + '').Trim()
+        serial     = ($pd.SerialNumber + '').Trim()
+        firmware   = ($pd.FirmwareVersion + '').Trim()
+        size_bytes = [long]$pd.Size
+        bus_type   = if ($BusTypeMap[$busNum])  { $BusTypeMap[$busNum]  } else { 'Unknown' }
+        media_type = if ($MediaTypeMap[$mediaN]) { $MediaTypeMap[$mediaN] } else { 'Unknown' }
+        used_bytes = $usedBytes
+        free_bytes = $freeBytes
+    }
+}
+$result | ConvertTo-Json -Depth 2
+"""
+    drives: list[dict] = []
+    try:
+        import base64
+        encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
+        r = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
+            capture_output=True, text=True, timeout=30,
+        )
+        out = r.stdout.strip()
+        if not out:
+            return drives
+
+        raw = _json2.loads(out)
+        # ConvertTo-Json returns a single object (not array) when there is only one disk
+        if isinstance(raw, dict):
+            raw = [raw]
+
+        for d in raw:
+            cap = d.get("size_bytes") or 0
+            cap = int(cap) if cap else None
+            used = d.get("used_bytes")
+            free = d.get("free_bytes")
+            drives.append(
+                {
+                    "device": d.get("device") or "Unknown",
+                    "model": d.get("model") or "Unknown",
+                    "serial": d.get("serial") or "Unknown",
+                    "firmware": d.get("firmware") or "Unknown",
+                    "capacity_bytes": cap,
+                    "total_gb": round(cap / 1e9, 1) if cap else None,
+                    "used_gb": round(int(used) / 1e9, 1) if used else None,
+                    "free_gb": round(int(free) / 1e9, 1) if free else None,
+                    "interface": d.get("bus_type") or "Unknown",
+                    "medium_type": d.get("media_type") or "Unknown",
+                    "smart_status": "Unknown",
+                    "power_on_hours": None,
+                    "temp_c": None,
+                    "reallocated_sectors": None,
+                    "percentage_used": None,
+                }
+            )
+    except Exception:
+        pass
+
+    return drives
+
+
+def _drives_windows_wmi() -> list[dict]:
+    """Fallback Windows drive enumeration via WMI Win32_DiskDrive."""
     drives: list[dict] = []
     try:
         import wmi  # type: ignore
@@ -194,17 +295,22 @@ def _drives_windows() -> list[dict]:
         c = wmi.WMI()
         for disk in c.Win32_DiskDrive():
             cap = int(disk.Size) if disk.Size else None
+            model = (disk.Model or "").strip()
+            # Win32_DiskDrive.InterfaceType returns "SCSI" for NVMe — infer from model name
+            iface = disk.InterfaceType or "Unknown"
+            if iface.upper() == "SCSI" and "nvme" in model.lower():
+                iface = "NVMe"
             drives.append(
                 {
                     "device": disk.DeviceID,
-                    "model": disk.Model or "Unknown",
+                    "model": model or "Unknown",
                     "serial": (disk.SerialNumber or "").strip() or "Unknown",
                     "firmware": disk.FirmwareRevision or "Unknown",
                     "capacity_bytes": cap,
                     "total_gb": round(cap / 1e9, 1) if cap else None,
                     "used_gb": None,
                     "free_gb": None,
-                    "interface": disk.InterfaceType or "Unknown",
+                    "interface": iface,
                     "medium_type": "Unknown",
                     "smart_status": "Unknown",
                     "power_on_hours": None,
@@ -216,8 +322,60 @@ def _drives_windows() -> list[dict]:
     except Exception:
         pass
 
-    # Add used/free from psutil — match by size
-    _fill_usage_from_psutil(drives)
+    return drives
+
+
+def _fill_usage_windows_logical(drives: list[dict]) -> None:
+    """
+    Fill used/free for Windows drives where the PS tier didn't populate them.
+
+    Queries Win32_LogicalDisk (all drive letters) and sums usage across all
+    partitions that belong to each physical disk via WMI association chain.
+    Falls back to summing all local fixed disks onto the first physical drive.
+    """
+    try:
+        import wmi  # type: ignore
+
+        c = wmi.WMI()
+        # Build a map: DeviceID of physical disk → (used_bytes, free_bytes)
+        phy_usage: dict[str, list[int]] = {}
+
+        for disk in c.Win32_DiskDrive():
+            for part_assoc in disk.associators("Win32_DiskDriveToDiskPartition"):
+                for logical_assoc in part_assoc.associators("Win32_LogicalDiskToPartition"):
+                    ld = logical_assoc
+                    size = int(ld.Size) if ld.Size else 0
+                    free = int(ld.FreeSpace) if ld.FreeSpace else 0
+                    used = size - free
+                    entry = phy_usage.setdefault(disk.DeviceID, [0, 0])
+                    entry[0] += used
+                    entry[1] += free
+
+        for drv in drives:
+            if drv.get("used_gb") is not None:
+                continue
+            usage = phy_usage.get(drv["device"])
+            if usage and (usage[0] + usage[1]) > 0:
+                drv["used_gb"] = round(usage[0] / 1e9, 1)
+                drv["free_gb"] = round(usage[1] / 1e9, 1)
+
+    except Exception:
+        pass
+
+
+def _drives_windows() -> list[dict]:
+    """
+    Enumerate physical drives on Windows.
+
+    Primary: PowerShell Get-PhysicalDisk — correct NVMe/SATA bus type, media type
+             (SSD/HDD), and used/free via Get-Partition + Get-Volume chain.
+    Fallback: WMI Win32_DiskDrive + logical disk association for used/free.
+    """
+    drives = _drives_windows_ps()
+    if not drives:
+        drives = _drives_windows_wmi()
+        if drives:
+            _fill_usage_windows_logical(drives)
     return drives
 
 
