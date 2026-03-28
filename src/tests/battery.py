@@ -256,13 +256,324 @@ def _get_battery_details_powercfg() -> dict:
     return details
 
 
+def _get_battery_details_windows_mfr() -> dict:
+    """
+    Manufacturer-specific WMI battery queries via PowerShell.
+
+    Many OEM laptops expose proprietary WMI namespaces that return accurate
+    capacity data even when standard Win32_Battery / BatteryStaticData return 0.
+    Detects manufacturer from Win32_ComputerSystem and tries the known namespace
+    for that vendor.
+
+    Covered: Lenovo, Dell (Command Monitor), HP, ASUS, Samsung, Acer/Gateway,
+             Toshiba/Dynabook, Panasonic.
+    """
+    import json
+
+    details: dict = {}
+
+    script = r"""
+$ErrorActionPreference = 'SilentlyContinue'
+$mfr = ((Get-CimInstance Win32_ComputerSystem).Manufacturer + '').ToLower()
+$design = 0
+$full   = 0
+$cycle  = $null
+
+if ($mfr -like '*lenovo*') {
+    $b = Get-CimInstance -Namespace root\WMI -ClassName LENOVO_BATTERY_INFORMATION -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($b) {
+        if ([int]$b.DesignCapacity   -gt 0) { $design = [int]$b.DesignCapacity }
+        if ([int]$b.FullChargeCapacity -gt 0) { $full  = [int]$b.FullChargeCapacity }
+        if ([int]$b.CycleCount       -gt 0) { $cycle = [int]$b.CycleCount }
+    }
+} elseif ($mfr -like '*dell*') {
+    # Requires Dell Command Monitor to be installed
+    $b = Get-CimInstance -Namespace root\dcim\sysman -ClassName DCIM_Battery -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($b) {
+        if ([int]$b.DesignCapacity    -gt 0) { $design = [int]$b.DesignCapacity }
+        if ([int]$b.FullChargeCapacity -gt 0) { $full  = [int]$b.FullChargeCapacity }
+    }
+} elseif ($mfr -like '*hp*' -or $mfr -like '*hewlett*') {
+    $b = Get-CimInstance -Namespace root\WMI -ClassName HP_BatteryInformation -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($b) {
+        if ([int]$b.DesignCapacity    -gt 0) { $design = [int]$b.DesignCapacity }
+        if ([int]$b.FullChargeCapacity -gt 0) { $full  = [int]$b.FullChargeCapacity }
+    }
+} elseif ($mfr -like '*asus*') {
+    $b = Get-CimInstance -Namespace root\WMI -ClassName ASUS_BatteryHealth -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($b) {
+        if ([int]$b.DesignedCapacity  -gt 0) { $design = [int]$b.DesignedCapacity }
+        if ([int]$b.FullChargeCapacity -gt 0) { $full  = [int]$b.FullChargeCapacity }
+    }
+} elseif ($mfr -like '*samsung*') {
+    $b = Get-CimInstance -Namespace root\WMI -ClassName SamsungBattery -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($b) {
+        if ([int]$b.DesignCapacity    -gt 0) { $design = [int]$b.DesignCapacity }
+        if ([int]$b.FullChargeCapacity -gt 0) { $full  = [int]$b.FullChargeCapacity }
+    }
+} elseif ($mfr -like '*acer*' -or $mfr -like '*gateway*') {
+    $b = Get-CimInstance -Namespace root\WMI -ClassName Acer_WMI_Battery -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($b) {
+        if ([int]$b.DesignCapacity    -gt 0) { $design = [int]$b.DesignCapacity }
+        if ([int]$b.FullChargeCapacity -gt 0) { $full  = [int]$b.FullChargeCapacity }
+    }
+} elseif ($mfr -like '*toshiba*' -or $mfr -like '*dynabook*') {
+    $b = Get-CimInstance -Namespace root\WMI -ClassName Toshiba_Battery -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($b) {
+        if ([int]$b.DesignCapacity    -gt 0) { $design = [int]$b.DesignCapacity }
+        if ([int]$b.FullChargeCapacity -gt 0) { $full  = [int]$b.FullChargeCapacity }
+    }
+} elseif ($mfr -like '*panasonic*') {
+    $b = Get-CimInstance -Namespace root\WMI -ClassName Panasonic_BatteryInformation -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($b) {
+        if ([int]$b.DesignCapacity    -gt 0) { $design = [int]$b.DesignCapacity }
+        if ([int]$b.FullChargeCapacity -gt 0) { $full  = [int]$b.FullChargeCapacity }
+    }
+}
+
+[PSCustomObject]@{
+    design_mwh  = $design
+    full_mwh    = $full
+    cycle_count = $cycle
+} | ConvertTo-Json
+"""
+
+    try:
+        out = _run_powershell(script, timeout=15)
+        if not out:
+            return details
+
+        d = json.loads(out)
+        design = d.get("design_mwh") or 0
+        full = d.get("full_mwh") or 0
+
+        if design > 0:
+            details["design_capacity_mwh"] = int(design)
+        if full > 0:
+            details["full_charge_capacity_mwh"] = int(full)
+
+        cycle = d.get("cycle_count")
+        if cycle is not None and int(cycle) > 0:
+            details["cycle_count"] = int(cycle)
+
+        if design > 0 and full > 0:
+            details["health_pct"] = round((full / design) * 100, 1)
+
+    except Exception:
+        pass
+
+    return details
+
+
+def _get_battery_details_windows_ioctl() -> dict:
+    """
+    Read battery capacity via IOCTL_BATTERY_QUERY_INFORMATION (Windows kernel API).
+
+    Uses SetupDi to enumerate battery device interfaces, then DeviceIoControl to
+    query the BATTERY_INFORMATION struct directly from the battery miniclass driver.
+    This is the most universal method — it works on any OEM laptop (MSI, Razer,
+    Gigabyte, etc.) without proprietary WMI namespaces or third-party tools.
+    Requires no elevation beyond what the process already has.
+    """
+    import ctypes
+    import ctypes.wintypes as wintypes
+    import struct as _struct
+
+    details: dict = {}
+
+    try:
+        setupapi = ctypes.WinDLL("setupapi", use_last_error=True)
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+
+        class GUID(ctypes.Structure):
+            _fields_ = [
+                ("Data1", wintypes.DWORD),
+                ("Data2", wintypes.WORD),
+                ("Data3", wintypes.WORD),
+                ("Data4", ctypes.c_ubyte * 8),
+            ]
+
+        # Battery device interface GUID: {72631e54-78a4-11d0-bcf7-00aa00b7b32a}
+        BATTERY_GUID = GUID(
+            0x72631E54,
+            0x78A4,
+            0x11D0,
+            (ctypes.c_ubyte * 8)(0xBC, 0xF7, 0x00, 0xAA, 0x00, 0xB7, 0xB3, 0x2A),
+        )
+
+        DIGCF_PRESENT = 0x00000002
+        DIGCF_DEVICEINTERFACE = 0x00000010
+        GENERIC_READ = 0x80000000
+        GENERIC_WRITE = 0x40000000
+        FILE_SHARE_READ = 0x00000001
+        FILE_SHARE_WRITE = 0x00000002
+        OPEN_EXISTING = 3
+        IOCTL_BATTERY_QUERY_TAG = 0x00294040
+        IOCTL_BATTERY_QUERY_INFORMATION = 0x00294044
+        BATTERY_INFORMATION_LEVEL = 1
+
+        class SP_DEVICE_INTERFACE_DATA(ctypes.Structure):
+            _fields_ = [
+                ("cbSize", wintypes.DWORD),
+                ("InterfaceClassGuid", GUID),
+                ("Flags", wintypes.DWORD),
+                ("Reserved", ctypes.POINTER(ctypes.c_ulong)),
+            ]
+
+        class SP_DEVICE_INTERFACE_DETAIL_DATA_W(ctypes.Structure):
+            _fields_ = [
+                ("cbSize", wintypes.DWORD),
+                ("DevicePath", ctypes.c_wchar * 1024),
+            ]
+
+        class BATTERY_QUERY_INFORMATION(ctypes.Structure):
+            _fields_ = [
+                ("BatteryTag", wintypes.ULONG),
+                ("InformationLevel", wintypes.DWORD),
+                ("AtRate", wintypes.LONG),
+            ]
+
+        class BATTERY_INFORMATION(ctypes.Structure):
+            _fields_ = [
+                ("Capabilities", wintypes.ULONG),
+                ("Technology", ctypes.c_ubyte),
+                ("Reserved", ctypes.c_ubyte * 3),
+                ("Chemistry", ctypes.c_ubyte * 4),
+                ("DesignedCapacity", wintypes.ULONG),
+                ("FullChargedCapacity", wintypes.ULONG),
+                ("DefaultAlert1", wintypes.ULONG),
+                ("DefaultAlert2", wintypes.ULONG),
+                ("CriticalBias", wintypes.ULONG),
+                ("CycleCount", wintypes.ULONG),
+            ]
+
+        setupapi.SetupDiGetClassDevsW.restype = ctypes.c_void_p
+        setupapi.SetupDiGetClassDevsW.argtypes = [
+            ctypes.POINTER(GUID), wintypes.LPCWSTR, wintypes.HWND, wintypes.DWORD,
+        ]
+        kernel32.CreateFileW.restype = ctypes.c_void_p
+
+        INVALID_HANDLE = ctypes.c_void_p(-1).value
+
+        hdev = setupapi.SetupDiGetClassDevsW(
+            ctypes.byref(BATTERY_GUID),
+            None,
+            None,
+            DIGCF_PRESENT | DIGCF_DEVICEINTERFACE,
+        )
+        if hdev == INVALID_HANDLE or hdev is None:
+            return details
+
+        try:
+            iface = SP_DEVICE_INTERFACE_DATA()
+            iface.cbSize = ctypes.sizeof(SP_DEVICE_INTERFACE_DATA)
+            # cbSize for SP_DEVICE_INTERFACE_DETAIL_DATA_W: 8 on 64-bit, 6 on 32-bit
+            detail_cb = 8 if _struct.calcsize("P") == 8 else 6
+
+            index = 0
+            while True:
+                ok = setupapi.SetupDiEnumDeviceInterfaces(
+                    hdev, None, ctypes.byref(BATTERY_GUID), index, ctypes.byref(iface),
+                )
+                if not ok:
+                    break
+
+                detail = SP_DEVICE_INTERFACE_DETAIL_DATA_W()
+                detail.cbSize = detail_cb
+                ok2 = setupapi.SetupDiGetDeviceInterfaceDetailW(
+                    hdev,
+                    ctypes.byref(iface),
+                    ctypes.byref(detail),
+                    ctypes.sizeof(detail),
+                    None,
+                    None,
+                )
+                if not ok2:
+                    index += 1
+                    continue
+
+                hbat = kernel32.CreateFileW(
+                    detail.DevicePath,
+                    GENERIC_READ | GENERIC_WRITE,
+                    FILE_SHARE_READ | FILE_SHARE_WRITE,
+                    None,
+                    OPEN_EXISTING,
+                    0,
+                    None,
+                )
+                if hbat == INVALID_HANDLE or hbat is None:
+                    index += 1
+                    continue
+
+                try:
+                    bat_tag = wintypes.ULONG(0)
+                    wait_timeout = wintypes.ULONG(0)
+                    bytes_returned = wintypes.DWORD(0)
+
+                    ok3 = kernel32.DeviceIoControl(
+                        hbat,
+                        IOCTL_BATTERY_QUERY_TAG,
+                        ctypes.byref(wait_timeout),
+                        ctypes.sizeof(wait_timeout),
+                        ctypes.byref(bat_tag),
+                        ctypes.sizeof(bat_tag),
+                        ctypes.byref(bytes_returned),
+                        None,
+                    )
+                    if not ok3 or bat_tag.value == 0:
+                        index += 1
+                        continue
+
+                    bqi = BATTERY_QUERY_INFORMATION()
+                    bqi.BatteryTag = bat_tag.value
+                    bqi.InformationLevel = BATTERY_INFORMATION_LEVEL
+                    bqi.AtRate = 0
+
+                    bi = BATTERY_INFORMATION()
+                    ok4 = kernel32.DeviceIoControl(
+                        hbat,
+                        IOCTL_BATTERY_QUERY_INFORMATION,
+                        ctypes.byref(bqi),
+                        ctypes.sizeof(bqi),
+                        ctypes.byref(bi),
+                        ctypes.sizeof(bi),
+                        ctypes.byref(bytes_returned),
+                        None,
+                    )
+                    if ok4:
+                        if bi.DesignedCapacity > 0:
+                            details["design_capacity_mwh"] = bi.DesignedCapacity
+                        if bi.FullChargedCapacity > 0:
+                            details["full_charge_capacity_mwh"] = bi.FullChargedCapacity
+                        if bi.CycleCount > 0:
+                            details.setdefault("cycle_count", bi.CycleCount)
+                        if details.get("design_capacity_mwh") and details.get("full_charge_capacity_mwh"):
+                            details["health_pct"] = round(
+                                (details["full_charge_capacity_mwh"] / details["design_capacity_mwh"]) * 100, 1
+                            )
+                        break  # first battery is sufficient
+                finally:
+                    kernel32.CloseHandle(hbat)
+
+                index += 1
+        finally:
+            setupapi.SetupDiDestroyDeviceInfoList(hdev)
+
+    except Exception:
+        pass
+
+    return details
+
+
 def _get_battery_details_windows() -> dict:
     """
-    Collect battery capacity on Windows using a four-tier fallback chain:
+    Collect battery capacity on Windows using a six-tier fallback chain:
       1. PowerShell WMI  (BatteryStaticData / BatteryFullChargedCapacity)
-      2. LHM SensorDump  (works on most OEM laptops where WMI returns 0)
-      3. powercfg /batteryreport XML  (reliable on all Windows laptops)
-      4. wmic CLI fallback
+      2. Manufacturer WMI  (Lenovo, Dell, HP, ASUS, Samsung, Acer, Toshiba, Panasonic)
+      3. IOCTL ctypes  (universal kernel-level driver query — works on MSI, Razer, etc.)
+      4. LHM SensorDump  (LibreHardwareMonitor sensor bridge)
+      5. powercfg /batteryreport XML  (reliable on all Windows laptops)
+      6. wmic CLI fallback
     Tiers merge into the same result dict — non-capacity fields (chemistry,
     cycle count) collected in tier 1 are preserved regardless of which tier
     provides the capacity.
@@ -270,13 +581,20 @@ def _get_battery_details_windows() -> dict:
     details = _get_battery_details_windows_ps()
 
     if not details.get("design_capacity_mwh") or not details.get("full_charge_capacity_mwh"):
-        for tier_fn in (_get_battery_details_lhm, _get_battery_details_powercfg):
+        for tier_fn in (
+            _get_battery_details_windows_mfr,
+            _get_battery_details_windows_ioctl,
+            _get_battery_details_lhm,
+            _get_battery_details_powercfg,
+        ):
             tier = tier_fn()
             if tier.get("design_capacity_mwh") and tier.get("full_charge_capacity_mwh"):
-                # Merge capacity + health; preserve chemistry/cycles from PS tier
                 details["design_capacity_mwh"] = tier["design_capacity_mwh"]
                 details["full_charge_capacity_mwh"] = tier["full_charge_capacity_mwh"]
                 details["health_pct"] = tier["health_pct"]
+                # Merge cycle count from this tier if PS tier didn't get one
+                if "cycle_count" in tier:
+                    details.setdefault("cycle_count", tier["cycle_count"])
                 break
 
     if not details.get("design_capacity_mwh") and not details.get("full_charge_capacity_mwh"):
