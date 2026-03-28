@@ -166,12 +166,125 @@ def _get_battery_details_windows_wmic() -> dict:
     return details
 
 
+def _get_battery_details_lhm() -> dict:
+    """
+    Read design and full-charge capacity from LibreHardwareMonitor via SensorDump.
+
+    LHM exposes battery Data sensors ("Designed Capacity", "Full Charged Capacity")
+    in Wh on most OEM laptops where WMI DesignCapacity/FullChargeCapacity returns 0.
+    """
+    details: dict = {}
+    try:
+        from ..utils.lhm_sensor import get_all_sensors
+
+        for s in get_all_sensors(timeout=10):
+            if s.get("type") != "Data":
+                continue
+            name = (s.get("name") or "").lower()
+            value = s.get("value")
+            if not value or float(value) <= 0:
+                continue
+            # LHM reports battery capacity in Wh — convert to mWh
+            if "design" in name and "capacity" in name:
+                details["design_capacity_mwh"] = round(float(value) * 1000)
+            elif "full" in name and "capacity" in name:
+                details["full_charge_capacity_mwh"] = round(float(value) * 1000)
+    except Exception:
+        pass
+
+    design = details.get("design_capacity_mwh", 0)
+    full = details.get("full_charge_capacity_mwh", 0)
+    if design > 0 and full > 0:
+        details["health_pct"] = round((full / design) * 100, 1)
+
+    return details
+
+
+def _get_battery_details_powercfg() -> dict:
+    """
+    Parse powercfg /batteryreport XML for design and full-charge capacity.
+
+    Reliable across virtually all Windows laptops including OEM models where
+    WMI capacity fields return 0.
+    """
+    import os
+    import tempfile
+    import xml.etree.ElementTree as ET
+    from pathlib import Path
+
+    details: dict = {}
+    tmp = Path(tempfile.gettempdir()) / f"touchstone_batteryreport_{os.getpid()}.xml"
+    try:
+        subprocess.run(
+            ["powercfg", "/batteryreport", "/xml", "/output", str(tmp)],
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+        if not tmp.exists():
+            return details
+
+        tree = ET.parse(str(tmp))
+        root = tree.getroot()
+
+        # Strip XML namespaces so we can query tag names directly
+        for elem in root.iter():
+            elem.tag = elem.tag.split("}", 1)[-1]
+
+        for bat in root.findall(".//Battery"):
+            design_str = bat.findtext("DesignCapacity") or ""
+            full_str = bat.findtext("FullChargeCapacity") or ""
+            if design_str.isdigit() and int(design_str) > 0:
+                details["design_capacity_mwh"] = int(design_str)
+            if full_str.isdigit() and int(full_str) > 0:
+                details["full_charge_capacity_mwh"] = int(full_str)
+            break  # first battery only
+
+    except Exception:
+        pass
+    finally:
+        try:
+            tmp.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    design = details.get("design_capacity_mwh", 0)
+    full = details.get("full_charge_capacity_mwh", 0)
+    if design > 0 and full > 0:
+        details["health_pct"] = round((full / design) * 100, 1)
+
+    return details
+
+
 def _get_battery_details_windows() -> dict:
-    """Try PowerShell first, fall back to wmic CLI."""
+    """
+    Collect battery capacity on Windows using a four-tier fallback chain:
+      1. PowerShell WMI  (BatteryStaticData / BatteryFullChargedCapacity)
+      2. LHM SensorDump  (works on most OEM laptops where WMI returns 0)
+      3. powercfg /batteryreport XML  (reliable on all Windows laptops)
+      4. wmic CLI fallback
+    Tiers merge into the same result dict — non-capacity fields (chemistry,
+    cycle count) collected in tier 1 are preserved regardless of which tier
+    provides the capacity.
+    """
     details = _get_battery_details_windows_ps()
-    if details.get("design_capacity_mwh") or details.get("full_charge_capacity_mwh"):
-        return details
-    return _get_battery_details_windows_wmic()
+
+    if not details.get("design_capacity_mwh") or not details.get("full_charge_capacity_mwh"):
+        for tier_fn in (_get_battery_details_lhm, _get_battery_details_powercfg):
+            tier = tier_fn()
+            if tier.get("design_capacity_mwh") and tier.get("full_charge_capacity_mwh"):
+                # Merge capacity + health; preserve chemistry/cycles from PS tier
+                details["design_capacity_mwh"] = tier["design_capacity_mwh"]
+                details["full_charge_capacity_mwh"] = tier["full_charge_capacity_mwh"]
+                details["health_pct"] = tier["health_pct"]
+                break
+
+    if not details.get("design_capacity_mwh") and not details.get("full_charge_capacity_mwh"):
+        wmic = _get_battery_details_windows_wmic()
+        for k, v in wmic.items():
+            details.setdefault(k, v)
+
+    return details
 
 
 def _get_battery_details_linux() -> dict:
@@ -418,7 +531,7 @@ class BatteryTest(BaseTest):
                 cycle_issue = "warn"
 
         # Build shared display strings
-        health_str = f"{health_pct:.0f}%" if health_pct is not None else "?"
+        health_str = f"{health_pct:.0f}%" if health_pct is not None else "Cannot determine"
         cycle_str = f"{cycle_count} cycles" if cycle_count is not None else ""
         charged_str = f"{data['percent_charged']:.0f}% charged"
         charger_str = (
@@ -455,7 +568,10 @@ class BatteryTest(BaseTest):
                 data=data,
             )
         else:
-            summary_parts = [f"Health {health_str}"]
+            if health_pct is not None:
+                summary_parts = [f"Health {health_str}"]
+            else:
+                summary_parts = ["Health: Cannot determine"]
             if cycle_str:
                 summary_parts.append(cycle_str)
             self.result.mark_pass(
