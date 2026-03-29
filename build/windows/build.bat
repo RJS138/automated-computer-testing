@@ -17,6 +17,8 @@ set REPO_ROOT=%~dp0..\..
 set DIST_DIR=%REPO_ROOT%\dist\windows
 set SENSOR_DUMP_SRC=%REPO_ROOT%\tools\windows\sensor_dump
 set SENSOR_DUMP_OUT=%SENSOR_DUMP_SRC%\publish\x64
+set SMARTCTL_DIR=%REPO_ROOT%\tools\windows\smartctl
+set SMARTCTL_BIN=%SMARTCTL_DIR%\smartctl.exe
 
 echo === Touchstone — Windows Build ===
 echo Repo root: %REPO_ROOT%
@@ -33,9 +35,33 @@ if %ERRORLEVEL% neq 0 (
     exit /b 1
 )
 
+REM Locate smartctl.exe — bundled copy takes priority, then PATH
+REM smartmontools is GPL v2 (https://www.smartmontools.org) — free to bundle.
+REM In CI: the workflow installs smartmontools via choco and copies smartctl.exe here.
+REM Locally: if smartmontools is installed, the script copies it automatically.
+echo.
+echo [2/5] Locating smartctl.exe (smartmontools, GPL v2)...
+if not exist "%SMARTCTL_DIR%" mkdir "%SMARTCTL_DIR%"
+if exist "%SMARTCTL_BIN%" (
+    echo   Found pre-staged smartctl.exe in tools\windows\smartctl\
+) else (
+    where smartctl.exe >nul 2>&1
+    if %ERRORLEVEL% equ 0 (
+        for /f "delims=" %%P in ('where smartctl.exe') do (
+            copy "%%P" "%SMARTCTL_BIN%" >nul
+            echo   Copied smartctl.exe from %%P
+            goto :smartctl_ok
+        )
+    )
+    echo   WARNING: smartctl.exe not found. SMART drive health data will be unavailable.
+    echo            Install smartmontools: winget install -e --id smartmontools.smartmontools
+    set SMARTCTL_BIN=
+)
+:smartctl_ok
+
 REM Build SensorDump.exe — LibreHardwareMonitor sensor bridge (MIT)
 echo.
-echo [2/4] Building SensorDump.exe (LibreHardwareMonitor bridge)...
+echo [3/5] Building SensorDump.exe (LibreHardwareMonitor bridge)...
 dotnet publish "%SENSOR_DUMP_SRC%\SensorDump.csproj" ^
   -c Release ^
   -r win-x64 ^
@@ -50,11 +76,16 @@ if %ERRORLEVEL% neq 0 (
 )
 
 echo.
-echo [3/4] Running PyInstaller...
+echo [4/5] Running PyInstaller...
 if defined SENSOR_DUMP_OUT (
     set SENSOR_DUMP_ARG=--add-data "%SENSOR_DUMP_OUT%\SensorDump.exe;tools/windows"
 ) else (
     set SENSOR_DUMP_ARG=
+)
+if defined SMARTCTL_BIN (
+    set SMARTCTL_ARG=--add-data "%SMARTCTL_BIN%;."
+) else (
+    set SMARTCTL_ARG=
 )
 
 uv run pyinstaller ^
@@ -68,6 +99,7 @@ uv run pyinstaller ^
   --add-data "%REPO_ROOT%\src\report\templates;src/report/templates" ^
   --add-data "%REPO_ROOT%\src\ui\keyboards;src/ui/keyboards" ^
   %SENSOR_DUMP_ARG% ^
+  %SMARTCTL_ARG% ^
   --hidden-import psutil ^
   --hidden-import cpuinfo ^
   --hidden-import pySMART ^
@@ -91,7 +123,7 @@ if %ERRORLEVEL% neq 0 (
 )
 
 echo.
-echo [4/4] Done.
+echo [5/5] Done.
 echo Output: "%DIST_DIR%\%APP_NAME%.exe"
 
 endlocal

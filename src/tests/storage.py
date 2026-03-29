@@ -24,11 +24,12 @@ from .base import BaseTest
 
 def _get_smartctl_bin() -> str:
     """Return path to smartctl: bundled copy inside PyInstaller _MEIPASS, or system PATH."""
+    exe = "smartctl.exe" if _sys.platform == "win32" else "smartctl"
     if getattr(_sys, "frozen", False) and hasattr(_sys, "_MEIPASS"):
-        bundled = os.path.join(_sys._MEIPASS, "smartctl")
+        bundled = os.path.join(_sys._MEIPASS, exe)
         if os.path.isfile(bundled):
             return bundled
-    return "smartctl"
+    return exe
 
 
 def _smartctl_json(device: str) -> dict:

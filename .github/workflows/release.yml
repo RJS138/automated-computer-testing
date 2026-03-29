@@ -165,6 +165,14 @@ jobs:
         with:
           dotnet-version: "6.0.x"
 
+      - name: Install smartmontools and stage smartctl.exe
+        shell: cmd
+        run: |
+          choco install smartmontools -y --no-progress
+          if not exist "tools\windows\smartctl" mkdir "tools\windows\smartctl"
+          copy "C:\Program Files\smartmontools\bin\smartctl.exe" "tools\windows\smartctl\smartctl.exe"
+          echo Staged smartctl.exe for bundling.
+
       - name: Build
         shell: cmd
         run: build\windows\build.bat
@@ -195,6 +203,14 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "6.0.x"
+
+      - name: Install smartmontools and stage smartctl.exe
+        shell: cmd
+        run: |
+          choco install smartmontools -y --no-progress
+          if not exist "tools\windows\smartctl" mkdir "tools\windows\smartctl"
+          copy "C:\Program Files\smartmontools\bin\smartctl.exe" "tools\windows\smartctl\smartctl.exe"
+          echo Staged smartctl.exe for bundling.
 
       - name: Build
         shell: cmd
