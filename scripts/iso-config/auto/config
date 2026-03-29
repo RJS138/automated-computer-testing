@@ -1,6 +1,6 @@
 #!/bin/sh
 # live-build auto/config
-# Sets all build options for the PC Tester live ISO.
+# Sets all build options for the Touchstone live ISO.
 # Called automatically by lb config.
 
 lb config noauto \
