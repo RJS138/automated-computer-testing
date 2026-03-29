@@ -1,0 +1,33 @@
+name: Release Please
+
+# Triggered on every push to main.
+# release-please maintains a "Release PR" that tracks unreleased changes,
+# auto-bumps the version in pyproject.toml, and generates CHANGELOG.md.
+# Merging that PR creates the git tag, which triggers release.yml to build.
+#
+# Commit message format (Conventional Commits):
+#   feat: ...        -> minor bump  (0.1.x -> 0.2.0)
+#   fix: ...         -> patch bump  (0.1.9 -> 0.1.10)
+#   feat!: ...       -> major bump  (0.1.9 -> 1.0.0)
+#   chore/docs/...   -> no version bump (still appears in changelog)
+#
+# See: https://www.conventionalcommits.org/
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write       # to create tags and update files in the Release PR
+  pull-requests: write  # to open/update the Release PR
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json

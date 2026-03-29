@@ -1,6 +1,6 @@
 [project]
 name = "touchstone"
-dynamic = ["version"]
+version = "0.1.9"
 description = "Portable PC hardware diagnostic tool for repair technicians"
 requires-python = ">=3.13"
 dependencies = [
@@ -30,14 +30,8 @@ build = ["pyinstaller>=6.0.0"]
 lint = ["ruff>=0.9.0", "ty>=0.0.1a7"]
 
 [build-system]
-requires = ["hatchling", "hatch-vcs"]
+requires = ["hatchling"]
 build-backend = "hatchling.build"
-
-[tool.hatch.version]
-source = "vcs"
-
-[tool.hatch.build.hooks.vcs]
-version-file = "src/_version.py"
 
 [tool.hatch.build.targets.wheel]
 # Include src/ package and the Jinja2 templates inside it

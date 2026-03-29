@@ -1,5 +1,8 @@
 name: Build and Release Touchstone
 
+# Triggered automatically when release-please merges its Release PR,
+# which creates a v*.*.* tag.  Can also be triggered manually for
+# one-off builds (e.g. hotfix before release-please PR is ready).
 on:
   workflow_dispatch:
   push:
