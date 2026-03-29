@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/RJS138/touchstone/compare/v0.2.1...v0.2.2) (2026-03-29)
+
+
+### Bug Fixes
+
+* retry hdiutil DMG creation up to 5 times to handle CI resource busy ([45219c1](https://github.com/RJS138/touchstone/commit/45219c1cdeffdb80097afc78081a04b2e8d78d8e))
+
 ## [0.2.1](https://github.com/RJS138/touchstone/compare/v0.2.0...v0.2.1) (2026-03-29)
 
 
