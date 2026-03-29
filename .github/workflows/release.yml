@@ -1,26 +1,23 @@
-name: Build and Release Touchstone
+name: Manual Build (Hotfix)
 
-# ── Triggers ──────────────────────────────────────────────────────────────────
-# Normal path:   release-please merges its Release PR → creates v*.*.* tag → this runs.
-# Hotfix path:   manually dispatch with an optional version override.
+# ── Manual hotfix builds only ─────────────────────────────────────────────────
+# Normal releases go through release-please.yml (automated).
 #
-# The "Stamp version" step in every build job reads GITHUB_REF (for tag runs)
-# or INPUT_VERSION (for manual runs) via build/stamp_version.py.  No untrusted
-# content is ever interpolated directly into shell — all ${{ }} values are
-# passed through environment variables and validated with a regex.
+# Tags created by release-please use GITHUB_TOKEN, which GitHub blocks from
+# triggering push:tags workflows — so that trigger has been removed.
+# Use this workflow only for emergency hotfix builds outside the normal cycle.
+#
+# The "Stamp version" step reads INPUT_VERSION via build/stamp_version.py.
+# No untrusted content is interpolated directly into shell commands.
 
 on:
   workflow_dispatch:
     inputs:
       version:
         description: >
-          Version to stamp (e.g. 1.2.3). Leave empty to use pyproject.toml.
-          Only needed for dev/hotfix builds — normal releases use release-please tags.
+          Version to stamp (e.g. 1.2.3). Leave empty to use pyproject.toml version.
         required: false
         type: string
-  push:
-    tags:
-      - "v[0-9]+.[0-9]+.[0-9]*"
 
 jobs:
   # ── Linux x86 ─────────────────────────────────────────────────────────────

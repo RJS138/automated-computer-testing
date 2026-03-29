@@ -1,15 +1,22 @@
-name: Release Please
+name: Release Please + Build
 
-# Triggered on every push to main.
-# release-please maintains a "Release PR" that tracks unreleased changes,
-# auto-bumps the version in pyproject.toml, and generates CHANGELOG.md.
-# Merging that PR creates the git tag, which triggers release.yml to build.
+# Every push to main runs the release-please job (fast, ~10 seconds).
+# It maintains the open Release PR and does nothing else on normal commits.
+#
+# When the Release PR is MERGED, release-please creates the tag and GitHub
+# Release, then sets release_created=true in its outputs.  Only then do the
+# build jobs run — they are gated on that output.
+#
+# Why builds live here instead of release.yml:
+#   Tags created by GITHUB_TOKEN do not trigger push:tags workflows (GitHub
+#   security policy to prevent recursive runs).  Wiring builds as downstream
+#   jobs in this same workflow is the standard release-please pattern.
 #
 # Commit message format (Conventional Commits):
-#   feat: ...        -> minor bump  (0.1.x -> 0.2.0)
-#   fix: ...         -> patch bump  (0.1.9 -> 0.1.10)
-#   feat!: ...       -> major bump  (0.1.9 -> 1.0.0)
-#   chore/docs/...   -> no version bump (still appears in changelog)
+#   feat: ...       -> minor bump  (0.1.x -> 0.2.0)
+#   fix: ...        -> patch bump  (0.1.9 -> 0.1.10)
+#   feat!: ...      -> major bump  (0.1.9 -> 1.0.0)
+#   chore/docs/...  -> no bump, still logged in changelog
 #
 # See: https://www.conventionalcommits.org/
 
@@ -18,17 +25,413 @@ on:
     branches: [main]
   workflow_dispatch:
 
-permissions:
-  contents: write       # to create tags and update files in the Release PR
-  pull-requests: write  # to open/update the Release PR
-
 jobs:
+  # ── Release Please ──────────────────────────────────────────────────────────
   release-please:
+    name: Release Please
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: write       # create tags, update Release PR files
+      pull-requests: write  # open/update the Release PR
+
+    outputs:
+      release_created: ${{ steps.rp.outputs.release_created }}
+      tag_name:        ${{ steps.rp.outputs.tag_name }}
 
     steps:
       - uses: googleapis/release-please-action@v4
+        id: rp
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # Build jobs — only run when release-please actually created a release.
+  # Each job stamps src/_version.py from the release tag before building.
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  # ── Linux x86 ───────────────────────────────────────────────────────────────
+  build-linux-x86:
+    name: Build Linux (x86)
+    needs: release-please
+    if: needs.release-please.outputs.release_created
+    # Use oldest supported Ubuntu for lowest glibc requirement (~2.35).
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stamp version
+        shell: bash
+        env:
+          GITHUB_REF: ${{ github.ref }}
+          INPUT_VERSION: ${{ needs.release-please.outputs.tag_name }}
+        run: python3 build/stamp_version.py
+
+      - name: Install UV and patchelf
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          mkdir -p /tmp/patchelf_install
+          curl -L -o /tmp/patchelf.tar.gz \
+            https://github.com/NixOS/patchelf/releases/download/0.18.0/patchelf-0.18.0-x86_64.tar.gz
+          tar xzf /tmp/patchelf.tar.gz -C /tmp/patchelf_install
+          sudo install /tmp/patchelf_install/bin/patchelf /usr/local/bin/patchelf
+          patchelf --version
+
+      - name: Build
+        run: |
+          chmod +x build/linux/build.sh
+          bash build/linux/build.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: touchstone-linux-x86
+          path: dist/linux/touchstone_linux_x86_64
+          if-no-files-found: error
+
+  # ── Linux ARM ───────────────────────────────────────────────────────────────
+  build-linux-arm:
+    name: Build Linux (ARM)
+    needs: release-please
+    if: needs.release-please.outputs.release_created
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stamp version
+        shell: bash
+        env:
+          GITHUB_REF: ${{ github.ref }}
+          INPUT_VERSION: ${{ needs.release-please.outputs.tag_name }}
+        run: python3 build/stamp_version.py
+
+      - name: Install UV and patchelf
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          mkdir -p /tmp/patchelf_install
+          curl -L -o /tmp/patchelf.tar.gz \
+            https://github.com/NixOS/patchelf/releases/download/0.18.0/patchelf-0.18.0-aarch64.tar.gz
+          tar xzf /tmp/patchelf.tar.gz -C /tmp/patchelf_install
+          sudo install /tmp/patchelf_install/bin/patchelf /usr/local/bin/patchelf
+          patchelf --version
+
+      - name: Build
+        run: |
+          chmod +x build/linux/build.sh
+          bash build/linux/build.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: touchstone-linux-arm
+          path: dist/linux/touchstone_linux_arm64
+          if-no-files-found: error
+
+  # ── macOS Apple Silicon ─────────────────────────────────────────────────────
+  build-macos-apple-silicon:
+    name: Build macOS (Apple Silicon)
+    needs: release-please
+    if: needs.release-please.outputs.release_created
+    runs-on: macos-14
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stamp version
+        shell: bash
+        env:
+          GITHUB_REF: ${{ github.ref }}
+          INPUT_VERSION: ${{ needs.release-please.outputs.tag_name }}
+        run: python3 build/stamp_version.py
+
+      - name: Install UV
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install Tcl/Tk
+        run: brew install tcl-tk
+
+      - name: Build
+        run: |
+          chmod +x build/macos/build.sh
+          bash build/macos/build.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: touchstone-macos-apple-silicon
+          path: dist/macos/touchstone_macos_arm64.dmg
+          if-no-files-found: error
+
+  # ── macOS Intel (self-hosted) ───────────────────────────────────────────────
+  # Self-hosted runner — uploads directly to the release when it completes.
+  # Intentionally not in create-release's needs: runner may be slow to pick up.
+  build-macos-intel:
+    name: Build macOS (Intel, self-hosted)
+    needs: release-please
+    if: needs.release-please.outputs.release_created
+    runs-on: [self-hosted, macos, x86_64]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stamp version
+        shell: bash
+        env:
+          GITHUB_REF: ${{ github.ref }}
+          INPUT_VERSION: ${{ needs.release-please.outputs.tag_name }}
+        run: python3 build/stamp_version.py
+
+      - name: Install UV
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install Tcl/Tk
+        run: brew install tcl-tk
+
+      - name: Build
+        run: |
+          chmod +x build/macos/build.sh
+          bash build/macos/build.sh
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.release-please.outputs.tag_name }}
+          files: dist/macos/touchstone_macos_x86_64.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── Windows x64 ─────────────────────────────────────────────────────────────
+  build-windows-x64:
+    name: Build Windows (x64)
+    needs: release-please
+    if: needs.release-please.outputs.release_created
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stamp version
+        shell: bash
+        env:
+          GITHUB_REF: ${{ github.ref }}
+          INPUT_VERSION: ${{ needs.release-please.outputs.tag_name }}
+        run: python3 build/stamp_version.py
+
+      - name: Install UV
+        shell: powershell
+        run: |
+          irm https://astral.sh/uv/install.ps1 | iex
+          "$env:USERPROFILE\.local\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install .NET 6 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "6.0.x"
+
+      - name: Install smartmontools and stage smartctl.exe
+        shell: cmd
+        run: |
+          choco install smartmontools -y --no-progress
+          if not exist "tools\windows\smartctl" mkdir "tools\windows\smartctl"
+          copy "C:\Program Files\smartmontools\bin\smartctl.exe" "tools\windows\smartctl\smartctl.exe"
+
+      - name: Build
+        shell: cmd
+        run: build\windows\build.bat
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: touchstone-windows-x64
+          path: "dist\\windows\\Touchstone (Windows x64).exe"
+          if-no-files-found: error
+
+  # ── Windows ARM ─────────────────────────────────────────────────────────────
+  build-windows-arm:
+    name: Build Windows (ARM)
+    needs: release-please
+    if: needs.release-please.outputs.release_created
+    runs-on: windows-11-arm
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stamp version
+        shell: bash
+        env:
+          GITHUB_REF: ${{ github.ref }}
+          INPUT_VERSION: ${{ needs.release-please.outputs.tag_name }}
+        run: python3 build/stamp_version.py
+
+      - name: Install UV
+        shell: powershell
+        run: |
+          irm https://astral.sh/uv/install.ps1 | iex
+          "$env:USERPROFILE\.local\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install .NET 6 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "6.0.x"
+
+      - name: Install smartmontools and stage smartctl.exe
+        shell: cmd
+        run: |
+          choco install smartmontools -y --no-progress
+          if not exist "tools\windows\smartctl" mkdir "tools\windows\smartctl"
+          copy "C:\Program Files\smartmontools\bin\smartctl.exe" "tools\windows\smartctl\smartctl.exe"
+
+      - name: Build
+        shell: cmd
+        run: build\windows\build_arm.bat
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: touchstone-windows-arm
+          path: "dist\\windows\\Touchstone (Windows ARM).exe"
+          if-no-files-found: error
+
+  # ── Live Linux ISO ───────────────────────────────────────────────────────────
+  build-live-iso:
+    name: Build Live ISO (Linux x86)
+    needs: release-please
+    if: needs.release-please.outputs.release_created
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stamp version
+        shell: bash
+        env:
+          GITHUB_REF: ${{ github.ref }}
+          INPUT_VERSION: ${{ needs.release-please.outputs.tag_name }}
+        run: python3 build/stamp_version.py
+
+      - name: Build live ISO
+        run: |
+          chmod +x scripts/build-iso.sh
+          bash scripts/build-iso.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: touchstone-live-iso
+          path: dist/iso/touchstone-live.iso
+          if-no-files-found: error
+
+  # ── Publish release assets ───────────────────────────────────────────────────
+  create-release:
+    name: Publish Release Assets
+    needs:
+      - release-please
+      - build-linux-x86
+      - build-linux-arm
+      - build-macos-apple-silicon
+      - build-windows-x64
+      - build-windows-arm
+      - build-live-iso
+    if: needs.release-please.outputs.release_created
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Stage release assets
+        run: |
+          mkdir release
+          cp artifacts/touchstone-linux-x86/touchstone_linux_x86_64          release/touchstone_linux_x86_64
+          cp artifacts/touchstone-linux-arm/touchstone_linux_arm64            release/touchstone_linux_arm64
+          cp artifacts/touchstone-macos-apple-silicon/touchstone_macos_arm64.dmg release/touchstone_macos_arm64.dmg
+          cp "artifacts/touchstone-windows-x64/Touchstone (Windows x64).exe" release/touchstone_windows_x64.exe
+          cp "artifacts/touchstone-windows-arm/Touchstone (Windows ARM).exe" release/touchstone_windows_arm64.exe
+          cp artifacts/touchstone-live-iso/touchstone-live.iso                release/touchstone-live.iso
+          chmod +x release/touchstone_linux_x86_64 release/touchstone_linux_arm64
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            release/touchstone_linux_x86_64
+            release/touchstone_linux_arm64
+            release/touchstone_macos_arm64.dmg
+            release/touchstone_windows_x64.exe
+            release/touchstone_windows_arm64.exe
+            release/touchstone-live.iso
+
+      - name: Generate SHA256 checksums
+        run: |
+          cd release
+          sha256sum \
+            touchstone_linux_x86_64 \
+            touchstone_linux_arm64 \
+            touchstone_macos_arm64.dmg \
+            touchstone_windows_x64.exe \
+            touchstone_windows_arm64.exe \
+            touchstone-live.iso \
+            > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Upload assets to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.release-please.outputs.tag_name }}
+          # release-please wrote the changelog as the release body —
+          # append_body: true adds the download table after it.
+          append_body: true
+          body: |
+
+            ---
+
+            ## Platform Downloads
+
+            | Platform | File |
+            |----------|------|
+            | macOS (Apple Silicon / M-series) | `touchstone_macos_arm64.dmg` |
+            | macOS (Intel — runs via Rosetta 2) | `touchstone_macos_arm64.dmg` |
+            | Linux x86 | `touchstone_linux_x86_64` |
+            | Linux ARM | `touchstone_linux_arm64` |
+            | Windows x64 | `touchstone_windows_x64.exe` |
+            | Windows ARM | `touchstone_windows_arm64.exe` |
+            | **Live Linux USB** (Ventoy bootable) | `touchstone-live.iso` |
+
+            ### macOS — first run
+            1. Download `touchstone_macos_arm64.dmg` and double-click to open
+            2. Right-click `Touchstone` → **Open** to bypass Gatekeeper on first launch
+            > Intel Mac users: the Apple Silicon DMG runs transparently via Rosetta 2.
+
+            ### Linux — first run
+            ```
+            chmod +x touchstone_linux_x86_64   # or touchstone_linux_arm64
+            sudo ./touchstone_linux_x86_64
+            ```
+
+            ### Windows — first run
+            Run `touchstone_windows_x64.exe` (or `touchstone_windows_arm64.exe`) as Administrator.
+
+            ### Live Linux USB
+            Use `scripts/create_usb.sh` or `scripts/create_usb.ps1` — the ISO is downloaded automatically.
+          files: |
+            release/touchstone_macos_arm64.dmg
+            release/touchstone_linux_x86_64
+            release/touchstone_linux_arm64
+            release/touchstone_windows_x64.exe
+            release/touchstone_windows_arm64.exe
+            release/touchstone-live.iso
+            release/SHA256SUMS
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
