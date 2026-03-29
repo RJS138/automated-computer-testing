@@ -1,13 +1,26 @@
 name: Build and Release Touchstone
 
-# Triggered automatically when release-please merges its Release PR,
-# which creates a v*.*.* tag.  Can also be triggered manually for
-# one-off builds (e.g. hotfix before release-please PR is ready).
+# ── Triggers ──────────────────────────────────────────────────────────────────
+# Normal path:   release-please merges its Release PR → creates v*.*.* tag → this runs.
+# Hotfix path:   manually dispatch with an optional version override.
+#
+# The "Stamp version" step in every build job reads GITHUB_REF (for tag runs)
+# or INPUT_VERSION (for manual runs) via build/stamp_version.py.  No untrusted
+# content is ever interpolated directly into shell — all ${{ }} values are
+# passed through environment variables and validated with a regex.
+
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: >
+          Version to stamp (e.g. 1.2.3). Leave empty to use pyproject.toml.
+          Only needed for dev/hotfix builds — normal releases use release-please tags.
+        required: false
+        type: string
   push:
     tags:
-      - "v*.*.*"
+      - "v[0-9]+.[0-9]+.[0-9]*"
 
 jobs:
   # ── Linux x86 ─────────────────────────────────────────────────────────────
@@ -21,8 +34,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Stamp version from tag
-        run: python3 -c "v='${{ github.ref_name }}'.lstrip('v'); open('src/_version.py','w').write(f'__version__ = \"{v}\"\n')"
+      - name: Stamp version
+        shell: bash
+        env:
+          GITHUB_REF: ${{ github.ref }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: python3 build/stamp_version.py
 
       - name: Install UV and patchelf
         run: |
@@ -60,8 +77,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Stamp version from tag
-        run: python3 -c "v='${{ github.ref_name }}'.lstrip('v'); open('src/_version.py','w').write(f'__version__ = \"{v}\"\n')"
+      - name: Stamp version
+        shell: bash
+        env:
+          GITHUB_REF: ${{ github.ref }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: python3 build/stamp_version.py
 
       - name: Install UV and patchelf
         run: |
@@ -96,8 +117,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Stamp version from tag
-        run: python3 -c "v='${{ github.ref_name }}'.lstrip('v'); open('src/_version.py','w').write(f'__version__ = \"{v}\"\n')"
+      - name: Stamp version
+        shell: bash
+        env:
+          GITHUB_REF: ${{ github.ref }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: python3 build/stamp_version.py
 
       - name: Install UV
         run: |
@@ -125,8 +150,11 @@ jobs:
   # To register a self-hosted Intel Mac runner:
   #   Settings → Actions → Runners → New self-hosted runner
   #   Labels: [self-hosted, macos, x86_64]
-  # This job is NOT in create-release's needs — it uploads to the release
-  # independently once the runner picks it up.
+  #
+  # This job is intentionally NOT in create-release's needs list because
+  # self-hosted runners may pick up the job later than GitHub-hosted ones.
+  # softprops/action-gh-release will append the DMG to the existing release
+  # (already created by release-please + create-release) whenever it completes.
   build-macos-intel:
     name: Build macOS (Intel, self-hosted)
     runs-on: [self-hosted, macos, x86_64]
@@ -136,8 +164,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Stamp version from tag
-        run: python3 -c "v='${{ github.ref_name }}'.lstrip('v'); open('src/_version.py','w').write(f'__version__ = \"{v}\"\n')"
+      - name: Stamp version
+        shell: bash
+        env:
+          GITHUB_REF: ${{ github.ref }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: python3 build/stamp_version.py
 
       - name: Install UV
         run: |
@@ -157,6 +189,7 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           files: dist/macos/touchstone_macos_x86_64.dmg
+          # append_body not set — we do not change the release body set by release-please
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -169,8 +202,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Stamp version from tag
-        run: python -c "v='${{ github.ref_name }}'.lstrip('v'); open('src/_version.py','w').write(f'__version__ = \"{v}\"\n')"
+      - name: Stamp version
+        shell: bash
+        env:
+          GITHUB_REF: ${{ github.ref }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: python3 build/stamp_version.py
 
       - name: Install UV
         shell: powershell
@@ -211,8 +248,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Stamp version from tag
-        run: python -c "v='${{ github.ref_name }}'.lstrip('v'); open('src/_version.py','w').write(f'__version__ = \"{v}\"\n')"
+      - name: Stamp version
+        shell: bash
+        env:
+          GITHUB_REF: ${{ github.ref }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: python3 build/stamp_version.py
 
       - name: Install UV
         shell: powershell
@@ -253,8 +294,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Stamp version from tag
-        run: python3 -c "v='${{ github.ref_name }}'.lstrip('v'); open('src/_version.py','w').write(f'__version__ = \"{v}\"\n')"
+      - name: Stamp version
+        shell: bash
+        env:
+          GITHUB_REF: ${{ github.ref }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: python3 build/stamp_version.py
 
       - name: Build live ISO
         run: |
@@ -279,7 +324,9 @@ jobs:
       - build-windows-x64
       - build-windows-arm
       - build-live-iso
-    # Only run when a version tag is pushed
+    # Only run when a version tag is pushed — not on manual workflow_dispatch.
+    # release-please has already created the GitHub Release with the changelog
+    # body; this job downloads all artifacts and appends them to that release.
     if: startsWith(github.ref, 'refs/tags/v')
 
     permissions:
@@ -328,15 +375,18 @@ jobs:
             > SHA256SUMS
           cat SHA256SUMS
 
-      - name: Create GitHub Release
+      - name: Upload assets to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: Touchstone ${{ github.ref_name }}
-          draft: false
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          # release-please already set the release name and changelog body —
+          # append_body: true adds the download table after the changelog.
+          append_body: true
           body: |
-            ## Downloads
+
+            ---
+
+            ## Platform Downloads
 
             | Platform | File |
             |----------|------|
@@ -363,8 +413,7 @@ jobs:
             Run `touchstone_windows_x64.exe` (or `touchstone_windows_arm64.exe`) as Administrator.
 
             ### Live Linux USB
-            The `touchstone-live.iso` boots directly on any x86 PC via Ventoy and auto-launches Touchstone.
-            Use `scripts/create_usb.sh` or `scripts/create_usb.ps1` to set up a Ventoy USB — the ISO is downloaded automatically.
+            Use `scripts/create_usb.sh` or `scripts/create_usb.ps1` — the ISO is downloaded automatically.
           files: |
             release/touchstone_macos_arm64.dmg
             release/touchstone_linux_x86_64

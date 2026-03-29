@@ -1,0 +1,48 @@
+name: PR Title Check
+
+# Validates that pull request titles follow Conventional Commits format.
+# GitHub squash-merges use the PR title as the commit message, so this
+# ensures release-please can correctly parse every commit into the changelog
+# and determine the version bump.
+#
+# Valid types: feat, fix, chore, docs, refactor, test, perf, ci, build, revert
+# Examples:
+#   feat: add battery cycle count display
+#   fix: crash on startup when no network
+#   feat!: new report format  (! = breaking change -> major bump)
+#   feat(storage): NVMe detection on Windows
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+# Read-only: only needs to read PR metadata, no write access required.
+permissions:
+  pull-requests: read
+
+jobs:
+  check-title:
+    name: Conventional Commit title
+    runs-on: ubuntu-latest
+
+    steps:
+      # amannn/action-semantic-pull-request reads the PR title via the
+      # GITHUB_TOKEN API — it does NOT interpolate PR title into shell commands.
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            chore
+            docs
+            refactor
+            test
+            perf
+            ci
+            build
+            revert
+          requireScope: false
+          disallowScopes: |
+            release
