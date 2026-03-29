@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.2.0](https://github.com/RJS138/touchstone/compare/v0.1.9...v0.2.0) (2026-03-29)
+
+
+### Features
+
+* -&gt; minor bump | fix: -&gt; patch bump | feat!: -&gt; major bump ([fdce051](https://github.com/RJS138/touchstone/commit/fdce051bf4da04867a2a43d659ca99ca11956d70))
+* derive app version from git tag — no more manual version bumps ([6fdd1ed](https://github.com/RJS138/touchstone/commit/6fdd1edfb13ebf814e344ddf44732826b71443ab))
+* download touchstone-live.iso onto Ventoy USB so live Linux boot works ([527266c](https://github.com/RJS138/touchstone/commit/527266c6ae0d669879f895afb6d46e116c2b4a85))
+
+
+### Bug Fixes
+
+* harden release CI — safe version stamping, PR title enforcement, release body ([c3a0960](https://github.com/RJS138/touchstone/commit/c3a096056b13ed1887ef7de329b0d0c463137e0c))
+* rename PC Tester to Touchstone in live ISO build config comment ([1021a07](https://github.com/RJS138/touchstone/commit/1021a07dcb9759b1baaa1ff26803d10be9c414fe))
+* restore packages block in release-please config and set bootstrap-sha ([f278eea](https://github.com/RJS138/touchstone/commit/f278eead57decf8b330f83c3714051a7ea019c72))
+
+## Changelog
+
 All notable changes to Touchstone are documented here.
 release-please maintains this file automatically — do not edit by hand.
 
