@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1](https://github.com/RJS138/touchstone/compare/v0.2.0...v0.2.1) (2026-03-29)
+
+
+### Bug Fixes
+
+* hotfix workflow create-release gated on version input, not tag ref ([863ed4e](https://github.com/RJS138/touchstone/commit/863ed4e2952ef44752b16e5b9f49ede3e8f38055))
+* wire build pipeline into release-please workflow ([0191881](https://github.com/RJS138/touchstone/commit/019188137e2e7d1bbe7a1fd615b9bafbdf447e3c))
+
 ## [0.2.0](https://github.com/RJS138/touchstone/compare/v0.1.9...v0.2.0) (2026-03-29)
 
 
