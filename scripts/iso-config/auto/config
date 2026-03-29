@@ -7,7 +7,7 @@ lb config noauto \
   --architectures amd64 \
   --distribution bookworm \
   --debian-installer none \
-  --bootappend-live "boot=live quiet" \
+  --bootappend-live "boot=live quiet hostname=touchstone username=root" \
   --binary-images iso-hybrid \
   --memtest none \
   --win32-loader false \

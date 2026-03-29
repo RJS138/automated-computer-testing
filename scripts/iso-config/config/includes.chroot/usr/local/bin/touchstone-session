@@ -1,0 +1,10 @@
+#!/bin/sh
+# Touchstone X11 session — launched by xinit.
+# Starts a minimal window manager then runs the app.
+# When Touchstone exits, the WM is killed and the X session ends.
+
+# Minimal openbox with no autostart or panel
+openbox --config-file /dev/null &
+
+# Launch Touchstone (running as root from root autologin — no sudo needed)
+exec /usr/local/bin/touchstone

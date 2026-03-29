@@ -1,0 +1,6 @@
+#!/bin/sh
+# Touchstone live ISO — post-chroot hook.
+# Ensures the binary and session launcher are executable.
+set -e
+chmod +x /usr/local/bin/touchstone
+chmod +x /usr/local/bin/touchstone-session
