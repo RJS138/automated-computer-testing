@@ -223,6 +223,27 @@ jobs:
           path: "dist\\windows\\Touchstone (Windows ARM).exe"
           if-no-files-found: error
 
+  # ── Live Linux ISO ────────────────────────────────────────────────────────
+  build-live-iso:
+    name: Build Live ISO (Linux x86)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build live ISO
+        run: |
+          chmod +x scripts/build-iso.sh
+          bash scripts/build-iso.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: touchstone-live-iso
+          path: dist/iso/touchstone-live.iso
+          if-no-files-found: error
+
   # ── Create GitHub Release ─────────────────────────────────────────────────
   create-release:
     name: Create Release
@@ -233,6 +254,7 @@ jobs:
       - build-macos-apple-silicon
       - build-windows-x64
       - build-windows-arm
+      - build-live-iso
     # Only run when a version tag is pushed
     if: startsWith(github.ref, 'refs/tags/v')
 
@@ -255,6 +277,7 @@ jobs:
           cp artifacts/touchstone-macos-apple-silicon/touchstone_macos_arm64.dmg release/touchstone_macos_arm64.dmg
           cp "artifacts/touchstone-windows-x64/Touchstone (Windows x64).exe" release/touchstone_windows_x64.exe
           cp "artifacts/touchstone-windows-arm/Touchstone (Windows ARM).exe" release/touchstone_windows_arm64.exe
+          cp artifacts/touchstone-live-iso/touchstone-live.iso                release/touchstone-live.iso
           chmod +x release/touchstone_linux_x86_64 release/touchstone_linux_arm64
 
       - name: Attest build provenance
@@ -266,6 +289,7 @@ jobs:
             release/touchstone_macos_arm64.dmg
             release/touchstone_windows_x64.exe
             release/touchstone_windows_arm64.exe
+            release/touchstone-live.iso
 
       - name: Generate SHA256 checksums
         run: |
@@ -276,6 +300,7 @@ jobs:
             touchstone_macos_arm64.dmg \
             touchstone_windows_x64.exe \
             touchstone_windows_arm64.exe \
+            touchstone-live.iso \
             > SHA256SUMS
           cat SHA256SUMS
 
@@ -297,6 +322,7 @@ jobs:
             | Linux ARM | `touchstone_linux_arm64` |
             | Windows x64 | `touchstone_windows_x64.exe` |
             | Windows ARM | `touchstone_windows_arm64.exe` |
+            | **Live Linux USB** (Ventoy bootable) | `touchstone-live.iso` |
 
             ### macOS — first run
             1. Download `touchstone_macos_arm64.dmg` and double-click to open
@@ -311,12 +337,17 @@ jobs:
 
             ### Windows — first run
             Run `touchstone_windows_x64.exe` (or `touchstone_windows_arm64.exe`) as Administrator.
+
+            ### Live Linux USB
+            The `touchstone-live.iso` boots directly on any x86 PC via Ventoy and auto-launches Touchstone.
+            Use `scripts/create_usb.sh` or `scripts/create_usb.ps1` to set up a Ventoy USB — the ISO is downloaded automatically.
           files: |
             release/touchstone_macos_arm64.dmg
             release/touchstone_linux_x86_64
             release/touchstone_linux_arm64
             release/touchstone_windows_x64.exe
             release/touchstone_windows_arm64.exe
+            release/touchstone-live.iso
             release/SHA256SUMS
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

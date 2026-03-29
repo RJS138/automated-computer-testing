@@ -120,7 +120,7 @@ try {
 # ═════════════════════════════════════════════════════════════════════════════
 # STEP 1 — Select USB disk
 # ═════════════════════════════════════════════════════════════════════════════
-Write-Step "[1/5] Select USB drive"
+Write-Step "[1/6] Select USB drive"
 Write-Host ""
 
 $usbDisks = @(Get-Disk | Where-Object { $_.BusType -eq 'USB' -and $_.Size -gt 0 })
@@ -164,7 +164,7 @@ if (-not $Update) {
 $VentoyDrive = $null
 
 if (-not $Update) {
-    Write-Step "[2/5] Installing Ventoy"
+    Write-Step "[2/6] Installing Ventoy"
 
     Write-Info "Fetching latest Ventoy version..."
     try {
@@ -232,7 +232,7 @@ if (-not $Update) {
     }
 
 } else {
-    Write-Step "[2/5] Locating VENTOY drive"
+    Write-Step "[2/6] Locating VENTOY drive"
     $vol = Get-Volume -FileSystemLabel "VENTOY" -ErrorAction SilentlyContinue
     if ($vol) {
         $VentoyDrive = "$($vol.DriveLetter):"
@@ -248,7 +248,7 @@ Write-Ok "VENTOY drive: $VentoyDrive"
 # ═════════════════════════════════════════════════════════════════════════════
 # STEP 4 — Download executables
 # ═════════════════════════════════════════════════════════════════════════════
-Write-Step "[3/5] Downloading latest PC Tester release"
+Write-Step "[3/6] Downloading latest Touchstone release"
 Write-Info "Source: https://github.com/$GithubRepo/releases/latest"
 
 $BaseUrl = "https://github.com/$GithubRepo/releases/latest/download"
@@ -282,9 +282,32 @@ foreach ($a in $assets) {
 }
 
 # ═════════════════════════════════════════════════════════════════════════════
+# STEP 4 — Download live Linux ISO
+# ═════════════════════════════════════════════════════════════════════════════
+Write-Step "[4/6] Downloading Touchstone live Linux ISO"
+
+$IsoDir  = "$VentoyDrive\iso"
+$IsoDest = "$IsoDir\touchstone-live.iso"
+New-Item -ItemType Directory -Path $IsoDir -Force | Out-Null
+
+if ($Update -and (Test-Path $IsoDest)) {
+    Write-Ok "Live ISO already present — skipping. Delete $IsoDest to force re-download."
+} else {
+    Write-Info "Downloading touchstone-live.iso (may be 500 MB-1 GB — please wait)..."
+    if (Invoke-DownloadWithProgress "$BaseUrl/touchstone-live.iso" $IsoDest) {
+        Confirm-FileHash -FilePath $IsoDest -FileName "touchstone-live.iso" -SumsFile $SumsFile
+        Write-Ok "Live ISO downloaded."
+    } else {
+        Write-Warn "touchstone-live.iso not found in latest release (skipped)."
+        Write-Warn "Boot-from-USB (live Linux) will not be available on this drive."
+        Remove-Item -Path $IsoDest -Force -ErrorAction SilentlyContinue
+    }
+}
+
+# ═════════════════════════════════════════════════════════════════════════════
 # STEP 5 — Marker + README
 # ═════════════════════════════════════════════════════════════════════════════
-Write-Step "[4/5] Writing marker and README"
+Write-Step "[5/6] Writing marker and README"
 
 New-Item -ItemType File -Path "$VentoyDrive\$UsbMarker" -Force | Out-Null
 
@@ -292,23 +315,35 @@ New-Item -ItemType File -Path "$VentoyDrive\$UsbMarker" -Force | Out-Null
 Touchstone USB Drive
 ===================
 
-WINDOWS
+BOOT FROM USB (Live Linux - recommended for bare-metal testing)
+  Plug this USB into any x86 PC and boot from it.
+  Ventoy will show "touchstone-live.iso" in the menu - select it.
+  Touchstone launches automatically. No OS installation required.
+
+WINDOWS (x64)
   Run: windows\touchstone_windows_x64.exe
   Right-click -> "Run as Administrator"
 
+WINDOWS (ARM)
+  Run: windows\touchstone_windows_arm64.exe
+  Right-click -> "Run as Administrator"
+
 MACOS (Apple Silicon / M-series)
-  Run: macos/touchstone_macos_arm64
-  First run - remove quarantine flag:
-    xattr -d com.apple.quarantine macos/touchstone_macos_arm64
+  Double-click: macos\touchstone_macos_arm64.dmg
+  Right-click Touchstone -> Open on first launch to bypass Gatekeeper.
 
 MACOS (Intel)
-  Use macos/touchstone_macos_arm64 - runs via Rosetta 2 automatically.
+  Use macos\touchstone_macos_arm64.dmg - runs via Rosetta 2 automatically.
 
-LINUX
-  Run: linux/touchstone_linux_x86_64  (requires sudo)
+LINUX (x86)
+  Run: linux\touchstone_linux_x86_64  (requires sudo)
 
-Reports are saved automatically to the reports/ folder on this drive.
+LINUX (ARM)
+  Run: linux\touchstone_linux_arm64  (requires sudo)
+
+Reports are saved automatically to the reports\ folder on this drive.
 To update executables: run scripts\create_usb.ps1 -Update
+  (The live ISO is kept as-is on update unless manually deleted.)
 "@ | Out-File -FilePath "$VentoyDrive\README.txt" -Encoding utf8
 
 Write-Ok "Marker and README written."
@@ -316,7 +351,7 @@ Write-Ok "Marker and README written."
 # ═════════════════════════════════════════════════════════════════════════════
 # STEP 6 — Done
 # ═════════════════════════════════════════════════════════════════════════════
-Write-Step "[5/5] Done"
+Write-Step "[6/6] Done"
 Write-Host ""
 Write-Host "  USB drive is ready at $VentoyDrive" -ForegroundColor Green
 Write-Host "  Safely eject the drive before unplugging." -ForegroundColor Gray

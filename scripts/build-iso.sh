@@ -38,9 +38,9 @@ if [ "$HOST_ARCH" != "x86_64" ] && [ "$HOST_ARCH" != "amd64" ]; then
     DOCKER_PLATFORM_FLAG="--platform=linux/amd64"
 fi
 
-echo "=== PC Tester — Live ISO Build ==="
+echo "=== Touchstone — Live ISO Build ==="
 echo "Repo root : $REPO_ROOT"
-echo "Output    : $DIST_ISO_DIR/pctester-live.iso"
+echo "Output    : $DIST_ISO_DIR/touchstone-live.iso"
 
 # --- Prerequisite check ---
 if ! command -v docker &>/dev/null; then
@@ -153,15 +153,15 @@ mkdir -p "$DIST_ISO_DIR"
             echo 'ERROR: No ISO produced by lb build.'
             exit 1
         fi
-        cp \"\$ISO_FILE\" /workspace/dist/iso/pctester-live.iso
-        echo \"ISO copied: \$ISO_FILE -> dist/iso/pctester-live.iso\"
+        cp \"\$ISO_FILE\" /workspace/dist/iso/touchstone-live.iso
+        echo \"ISO copied: \$ISO_FILE -> dist/iso/touchstone-live.iso\"
     "
 
 echo ""
 echo "[4/4] Done."
-echo "Output : $DIST_ISO_DIR/pctester-live.iso"
+echo "Output : $DIST_ISO_DIR/touchstone-live.iso"
 echo ""
 echo "Next steps:"
 echo "  • Test in VirtualBox / UTM: boot from the ISO"
-echo "  • Copy ISO to Ventoy USB: cp $DIST_ISO_DIR/pctester-live.iso /Volumes/Ventoy/iso/"
-echo "  • Populate full USB:       ./scripts/create-usb.sh"
+echo "  • Copy ISO to Ventoy USB: cp $DIST_ISO_DIR/touchstone-live.iso /Volumes/Ventoy/iso/"
+echo "  • Populate full USB:       ./scripts/create_usb.sh"

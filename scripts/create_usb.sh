@@ -73,7 +73,7 @@ echo "  OS   : $OS"
 # ═════════════════════════════════════════════════════════════════════════════
 # STEP 1 — Select USB drive
 # ═════════════════════════════════════════════════════════════════════════════
-step "[1/5] Select USB drive"
+step "[1/6] Select USB drive"
 echo ""
 
 if [[ "$OS" == "Darwin" ]]; then
@@ -126,7 +126,7 @@ fi
 MOUNT_POINT=""
 
 if [[ "$SKIP_VENTOY" == false ]]; then
-    step "[2/5] Installing Ventoy"
+    step "[2/6] Installing Ventoy"
 
     info "Fetching latest Ventoy version..."
     VENTOY_VER=$(curl -fsSL "https://api.github.com/repos/ventoy/ventoy/releases/latest" \
@@ -212,7 +212,7 @@ if [[ "$SKIP_VENTOY" == false ]]; then
 
 else
     # --update: find the already-mounted VENTOY partition
-    step "[2/5] Locating VENTOY partition"
+    step "[2/6] Locating VENTOY partition"
 
     if [[ "$OS" == "Darwin" ]]; then
         [[ -d "/Volumes/VENTOY" ]] \
@@ -232,7 +232,7 @@ ok "VENTOY partition at: $MOUNT_POINT"
 # ═════════════════════════════════════════════════════════════════════════════
 # STEP 4 — Download latest executables
 # ═════════════════════════════════════════════════════════════════════════════
-step "[3/5] Downloading latest PC Tester release"
+step "[3/6] Downloading latest Touchstone release"
 info "Source: https://github.com/$GITHUB_REPO/releases/latest"
 
 BASE_URL="https://github.com/$GITHUB_REPO/releases/latest/download"
@@ -302,15 +302,42 @@ chmod +x \
     2>/dev/null || true
 
 # ═════════════════════════════════════════════════════════════════════════════
+# STEP 4 — Download live Linux ISO
+# ═════════════════════════════════════════════════════════════════════════════
+step "[4/6] Downloading Touchstone live Linux ISO"
+
+ISO_DEST="$MOUNT_POINT/iso/touchstone-live.iso"
+mkdir -p "$MOUNT_POINT/iso"
+
+if [[ "$SKIP_VENTOY" == true && -f "$ISO_DEST" ]]; then
+    ok "Live ISO already present — skipping. Delete $ISO_DEST to force re-download."
+else
+    info "Downloading touchstone-live.iso (may be 500 MB–1 GB — please wait)..."
+    if curl -fSL --progress-bar "$BASE_URL/touchstone-live.iso" -o "$ISO_DEST"; then
+        _verify_file "$ISO_DEST" "touchstone-live.iso"
+        ok "Live ISO downloaded."
+    else
+        warn "touchstone-live.iso not found in latest release (skipped)."
+        warn "Boot-from-USB (live Linux) will not be available on this drive."
+        rm -f "$ISO_DEST"
+    fi
+fi
+
+# ═════════════════════════════════════════════════════════════════════════════
 # STEP 5 — Marker file and README
 # ═════════════════════════════════════════════════════════════════════════════
-step "[4/5] Writing marker and README"
+step "[5/6] Writing marker and README"
 
 touch "$MOUNT_POINT/$USB_MARKER"
 
 cat > "$MOUNT_POINT/README.txt" << 'EOF'
 Touchstone USB Drive
 ===================
+
+BOOT FROM USB (Live Linux — recommended for bare-metal testing)
+  Plug this USB into any x86 PC and boot from it.
+  Ventoy will show "touchstone-live.iso" in the menu — select it.
+  Touchstone launches automatically. No OS installation required.
 
 WINDOWS (x64)
   Run: windows\touchstone_windows_x64.exe
@@ -334,7 +361,8 @@ LINUX (ARM)
   Run: linux/touchstone_linux_arm64  (requires sudo)
 
 Reports are saved automatically to the reports/ folder on this drive.
-To update the executables, re-run: sudo scripts/create_usb.sh --update
+To update the executables: sudo create_usb.sh --update
+  (The live ISO is kept as-is on update unless manually deleted.)
 EOF
 
 ok "Marker and README written."
@@ -342,7 +370,7 @@ ok "Marker and README written."
 # ═════════════════════════════════════════════════════════════════════════════
 # STEP 6 — Eject
 # ═════════════════════════════════════════════════════════════════════════════
-step "[5/5] Ejecting"
+step "[6/6] Ejecting"
 
 if [[ "$OS" == "Darwin" ]]; then
     diskutil eject "$DRIVE" &>/dev/null \
