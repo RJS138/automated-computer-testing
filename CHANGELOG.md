@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.0](https://github.com/RJS138/touchstone/compare/v0.2.2...v0.3.0) (2026-03-29)
+
+
+### Features
+
+* rewrite live ISO for PySide6/Qt — X11 session, Qt system libs, root autologin ([3a8a4eb](https://github.com/RJS138/touchstone/commit/3a8a4eb900da95825609f10530c50e4a060f439f))
+
+
+### Bug Fixes
+
+* retry smartctl with explicit -d nvme/-d sat on Windows when auto-detect returns no SMART data ([508246d](https://github.com/RJS138/touchstone/commit/508246d3d530507fe335008dec9b8fb03a7c19c3))
+* show 'run as Administrator' when smartctl is present but SMART data missing ([9d1fc1c](https://github.com/RJS138/touchstone/commit/9d1fc1c4c11a205cc5aea5959a1650426224f228))
+
 ## [0.2.2](https://github.com/RJS138/touchstone/compare/v0.2.1...v0.2.2) (2026-03-29)
 
 
