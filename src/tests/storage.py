@@ -41,14 +41,20 @@ def _smartctl_available() -> bool:
     return shutil.which(bin_path) is not None
 
 
-def _smartctl_json(device: str) -> dict:
-    """Run `smartctl -a --json <device>` and return parsed output or {}."""
+def _smartctl_json(device: str, extra_args: list[str] | None = None) -> dict:
+    """Run `smartctl -a --json [extra_args] <device>` and return parsed output or {}."""
     try:
+        cmd = [_get_smartctl_bin(), "-a", "--json"]
+        if extra_args:
+            cmd.extend(extra_args)
+        cmd.append(device)
         r = subprocess.run(
-            [_get_smartctl_bin(), "-a", "--json", device],
+            cmd,
             capture_output=True,
-            text=True,
             timeout=15,
+            # Explicit UTF-8 avoids CP1252/ANSI garbling on Windows
+            encoding="utf-8",
+            errors="replace",
         )
         return _json.loads(r.stdout)
     except Exception:
@@ -57,9 +63,25 @@ def _smartctl_json(device: str) -> dict:
 
 def _enrich_with_smartctl(drive: dict) -> None:
     """Add SMART fields to *drive* dict in-place using smartctl JSON output."""
-    d = _smartctl_json(drive.get("device", ""))
+    device = drive.get("device", "")
+    d = _smartctl_json(device)
     if not d:
         return
+
+    # On Windows, NVMe/SATA auto-detect can silently fail. If the initial call
+    # returned JSON but no SMART health result, retry with explicit device type
+    # hints before giving up.
+    if _sys.platform == "win32" and "smart_status" not in d:
+        iface = drive.get("interface", "").upper()
+        hints = ["-d", "nvme"] if iface in ("NVME", "UNKNOWN") else ["-d", "sat"]
+        d2 = _smartctl_json(device, hints)
+        if d2 and "smart_status" in d2:
+            d = d2
+        elif iface in ("NVME", "UNKNOWN"):
+            # try sat as second fallback
+            d2 = _smartctl_json(device, ["-d", "sat"])
+            if d2 and "smart_status" in d2:
+                d = d2
 
     # Overall SMART health
     smart = d.get("smart_status", {})
