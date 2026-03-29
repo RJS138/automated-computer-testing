@@ -16,6 +16,7 @@ name: Release Please
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write       # to create tags and update files in the Release PR
