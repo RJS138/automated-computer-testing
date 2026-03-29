@@ -4,7 +4,7 @@ import json
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from ..config import TEMPLATES_DIR
+from ..config import APP_VERSION, TEMPLATES_DIR
 from ..models.report import FullReport
 
 
@@ -237,4 +237,5 @@ def render_html(report: FullReport) -> str:
         temp_svgs=temp_svgs,
         branding_name=company_name,
         branding_logo=logo_b64,
+        app_version=APP_VERSION,
     )

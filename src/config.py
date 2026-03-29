@@ -4,7 +4,8 @@ import sys
 from pathlib import Path
 
 APP_NAME = "Touchstone"
-APP_VERSION = "1.0.0"
+APP_VERSION = "0.1.8"
+GITHUB_REPO = "RJS138/touchstone"
 
 # Test durations (seconds)
 CPU_STRESS_QUICK = 30

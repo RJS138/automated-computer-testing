@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import sys
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QObject, QThread, QTimer, Signal
 from PySide6.QtGui import QColor, QPalette
-from PySide6.QtWidgets import QApplication, QMainWindow, QStackedWidget
+from PySide6.QtWidgets import QApplication, QDialog, QMainWindow, QStackedWidget
 
 from src.models.job import JobInfo, ReportType
 from src.models.settings import Settings
@@ -15,6 +15,17 @@ from src.ui.pages.job_setup_page import JobSetupPage
 from src.ui.pages.test_dashboard_page import TestDashboardPage
 from src.ui.stylesheet import QSS_DARK, QSS_LIGHT, refresh_style
 from src.utils.prefs import load_prefs
+
+
+class _VersionCheckWorker(QObject):
+    """Background worker that fetches the latest GitHub release version."""
+
+    finished = Signal(str)  # emits latest version string, or "" on failure
+
+    def run(self) -> None:
+        from src.utils.updater import fetch_latest_version
+        result = fetch_latest_version(timeout=5)
+        self.finished.emit(result or "")
 
 
 class TouchstoneWindow(QMainWindow):
@@ -64,6 +75,9 @@ class TouchstoneWindow(QMainWindow):
             self._start_dev_manual()
         else:
             self._stack.setCurrentIndex(0)
+
+        # Version check — runs 2 s after startup so the UI is fully loaded first
+        QTimer.singleShot(2000, self._start_version_check)
 
     # ── Navigation ────────────────────────────────────────────────────────────
 
@@ -149,6 +163,30 @@ class TouchstoneWindow(QMainWindow):
         pal.setColor(QPalette.ColorRole.HighlightedText, QColor("#ffffff"))
         pal.setColor(QPalette.ColorRole.BrightText,      QColor("#ffffff"))
         return pal
+
+    # ── Version check ─────────────────────────────────────────────────────────
+
+    def _start_version_check(self) -> None:
+        """Spin up a background thread to fetch the latest GitHub release."""
+        self._vc_thread = QThread()
+        self._vc_worker = _VersionCheckWorker()
+        self._vc_worker.moveToThread(self._vc_thread)
+        self._vc_thread.started.connect(self._vc_worker.run)
+        self._vc_worker.finished.connect(self._on_version_result)
+        self._vc_worker.finished.connect(self._vc_thread.quit)
+        self._vc_thread.start()
+
+    def _on_version_result(self, latest: str) -> None:
+        """Called on the main thread when the version check completes."""
+        if not latest:
+            return
+        from src.config import APP_VERSION
+        from src.utils.updater import is_update_available
+        if not is_update_available(APP_VERSION, latest):
+            return
+        from src.ui.widgets.update_dialog import UpdateDialog
+        dlg = UpdateDialog(APP_VERSION, latest, theme=self._theme, parent=self)
+        dlg.exec()
 
     # ── Admin check ───────────────────────────────────────────────────────────
 

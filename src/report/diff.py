@@ -5,7 +5,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from ..config import TEMPLATES_DIR
+from ..config import APP_VERSION, TEMPLATES_DIR
 from ..models.job import JobInfo
 from ..models.test_result import TestStatus
 
@@ -138,4 +138,5 @@ def generate_comparison(job_dir: Path, job: JobInfo) -> str | None:
         comparison_json=comparison_json,
         branding_name=branding_name,
         branding_logo=branding_logo,
+        app_version=APP_VERSION,
     )
