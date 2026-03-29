@@ -91,12 +91,24 @@ PLIST
 
 echo ""
 echo "[4/4] Creating DMG..."
-hdiutil create \
-  -volname "Touchstone" \
-  -srcfolder "$APP_DIR" \
-  -ov \
-  -format UDZO \
-  "$DIST_DIR/$DMG_NAME.dmg"
+# hdiutil can transiently fail with "Resource busy" on CI runners (Spotlight
+# or Finder touching the output path).  Retry up to 5 times.
+for attempt in 1 2 3 4 5; do
+  if hdiutil create \
+       -volname "Touchstone" \
+       -srcfolder "$APP_DIR" \
+       -ov \
+       -format UDZO \
+       "$DIST_DIR/$DMG_NAME.dmg"; then
+    break
+  fi
+  echo "hdiutil attempt $attempt failed — retrying in 5 s..."
+  sleep 5
+  if [ "$attempt" -eq 5 ]; then
+    echo "hdiutil failed after 5 attempts" >&2
+    exit 1
+  fi
+done
 
 echo ""
 echo "Output : $DIST_DIR/$DMG_NAME.dmg"
