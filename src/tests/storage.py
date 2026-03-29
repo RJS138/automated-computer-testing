@@ -32,6 +32,15 @@ def _get_smartctl_bin() -> str:
     return exe
 
 
+def _smartctl_available() -> bool:
+    """Return True if smartctl can be found and executed (regardless of permissions)."""
+    import shutil
+    bin_path = _get_smartctl_bin()
+    if os.path.isfile(bin_path):
+        return True
+    return shutil.which(bin_path) is not None
+
+
 def _smartctl_json(device: str) -> dict:
     """Run `smartctl -a --json <device>` and return parsed output or {}."""
     try:
@@ -683,8 +692,12 @@ class StorageTest(BaseTest):
             )
         elif no_smart:
             data["card_sub_detail"] = speed_str or data["card_sub_detail"]
+            if _smartctl_available():
+                no_smart_msg = "No SMART data — run as Administrator"
+            else:
+                no_smart_msg = "No SMART data — install smartmontools"
             self.result.mark_warn(
-                summary="No SMART data — install smartmontools",
+                summary=no_smart_msg,
                 data=data,
             )
         else:
