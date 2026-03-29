@@ -18,6 +18,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Stamp version from tag
+        run: python3 -c "v='${{ github.ref_name }}'.lstrip('v'); open('src/_version.py','w').write(f'__version__ = \"{v}\"\n')"
+
       - name: Install UV and patchelf
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -54,6 +57,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Stamp version from tag
+        run: python3 -c "v='${{ github.ref_name }}'.lstrip('v'); open('src/_version.py','w').write(f'__version__ = \"{v}\"\n')"
+
       - name: Install UV and patchelf
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -86,6 +92,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Stamp version from tag
+        run: python3 -c "v='${{ github.ref_name }}'.lstrip('v'); open('src/_version.py','w').write(f'__version__ = \"{v}\"\n')"
 
       - name: Install UV
         run: |
@@ -124,6 +133,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Stamp version from tag
+        run: python3 -c "v='${{ github.ref_name }}'.lstrip('v'); open('src/_version.py','w').write(f'__version__ = \"{v}\"\n')"
+
       - name: Install UV
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -153,6 +165,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Stamp version from tag
+        run: python -c "v='${{ github.ref_name }}'.lstrip('v'); open('src/_version.py','w').write(f'__version__ = \"{v}\"\n')"
 
       - name: Install UV
         shell: powershell
@@ -193,6 +208,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Stamp version from tag
+        run: python -c "v='${{ github.ref_name }}'.lstrip('v'); open('src/_version.py','w').write(f'__version__ = \"{v}\"\n')"
+
       - name: Install UV
         shell: powershell
         run: |
@@ -231,6 +249,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Stamp version from tag
+        run: python3 -c "v='${{ github.ref_name }}'.lstrip('v'); open('src/_version.py','w').write(f'__version__ = \"{v}\"\n')"
 
       - name: Build live ISO
         run: |

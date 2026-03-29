@@ -236,5 +236,8 @@ scripts/iso-config/config/includes.chroot/usr/.worktrees/
 # smartmontools binaries — downloaded at build time, not tracked in git
 tools/windows/smartctl/
 
+# Version file — generated from git tag by hatch-vcs (uv sync) or CI stamp step
+src/_version.py
+
 # Git worktrees
 .worktrees/

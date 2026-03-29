@@ -4,8 +4,14 @@ import sys
 from pathlib import Path
 
 APP_NAME = "Touchstone"
-APP_VERSION = "0.1.8"
 GITHUB_REPO = "RJS138/touchstone"
+
+# Version is stamped into src/_version.py at build time (CI) or by hatch-vcs
+# (local dev after `uv sync`).  Falls back to "dev" if neither has run yet.
+try:
+    from ._version import __version__ as APP_VERSION
+except ImportError:
+    APP_VERSION = "dev"
 
 # Test durations (seconds)
 CPU_STRESS_QUICK = 30
