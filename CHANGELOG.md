@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/RJS138/touchstone/compare/v0.3.0...v0.4.0) (2026-04-08)
+
+
+### Features
+
+* add fullscreen utility for QDialog across multiple dialogs ([b7ebf5b](https://github.com/RJS138/touchstone/commit/b7ebf5be95ec916908083a5c6c8e1dba9ab14082))
+
 ## [0.3.0](https://github.com/RJS138/touchstone/compare/v0.2.2...v0.3.0) (2026-03-29)
 
 
