@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ._utils import make_dialog_btn
+from ._utils import make_dialog_btn, show_fullscreen
 
 # ── Visual constants ─────────────────────────────────────────────────────
 
@@ -322,7 +322,7 @@ class TouchpadDialog(QDialog):
 
     def run(self) -> int:
         """Show full-screen and run the dialog. Use instead of QDialog.exec()."""
-        self.showFullScreen()
+        show_fullscreen(self)
         return super().exec()
 
     def keyPressEvent(self, event) -> None:

@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ._utils import make_dialog_btn
+from ._utils import make_dialog_btn, show_fullscreen
 
 _KEYBOARDS_DIR = Path(__file__).resolve().parent.parent / "keyboards"
 _LAYOUT_ORDER = ["macbook_us", "tkl_us", "full_us"]
@@ -476,8 +476,8 @@ class KeyboardDialog(QDialog):
     # ── events ─────────────────────────────────────────────────────────
 
     def run(self) -> int:
-        """Show full-screen and run the dialog. Use instead of exec()."""
-        self.showFullScreen()
+        """Show full-screen and run the dialog."""
+        show_fullscreen(self)
         return super().exec()  # Qt dialog event loop, not shell
 
     def showEvent(self, event) -> None:

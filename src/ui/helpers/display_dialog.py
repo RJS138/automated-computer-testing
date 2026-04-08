@@ -15,6 +15,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ._utils import show_fullscreen
+
 _COLORS: list[tuple[str, str]] = [
     ("Black", "#000000"),
     ("White", "#FFFFFF"),
@@ -163,8 +165,8 @@ class DisplayDialog(QDialog):
     # ── events ─────────────────────────────────────────────────────────
 
     def run(self) -> int:
-        """Show full-screen and run the dialog. Use instead of exec()."""
-        self.showFullScreen()
+        """Show full-screen and run the dialog. Use instead of QDialog.exec()."""
+        show_fullscreen(self)
         return super().exec()
 
     def keyPressEvent(self, event: QKeyEvent) -> None:

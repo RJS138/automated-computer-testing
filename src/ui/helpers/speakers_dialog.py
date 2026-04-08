@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ._utils import make_dialog_btn
+from ._utils import make_dialog_btn, show_fullscreen
 
 # ── Audio generation (copied from _speakers_helper.py) ─────────────────
 
@@ -132,6 +132,7 @@ def _tts_speak(text: str):
             ["powershell", "-NoProfile", "-Command", script],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            creationflags=subprocess.CREATE_NO_WINDOW,
         )
         return p, True
     else:
@@ -608,7 +609,7 @@ class SpeakersDialog(QDialog):
 
     def run(self) -> int:
         """Show full-screen and run the dialog. Use instead of QDialog.exec()."""
-        self.showFullScreen()
+        show_fullscreen(self)
         return super().exec()
 
     def keyPressEvent(self, event) -> None:

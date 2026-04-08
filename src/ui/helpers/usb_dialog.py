@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ._utils import make_dialog_btn
+from ._utils import make_dialog_btn, show_fullscreen
 
 # ── USB enumeration (copied from _usb_helper.py) ─────────────────────────
 
@@ -93,6 +93,7 @@ def _enumerate_usb() -> list[dict]:
                 ["powershell", "-NoProfile", "-Command", ps_cmd],
                 timeout=15,
                 stderr=subprocess.DEVNULL,
+                creationflags=subprocess.CREATE_NO_WINDOW,
             )
             raw = json.loads(out.decode("utf-8", errors="replace"))
             if isinstance(raw, dict):
@@ -280,7 +281,7 @@ class UsbDialog(QDialog):
 
     def run(self) -> int:
         """Show full-screen and run the dialog. Use instead of QDialog.exec()."""
-        self.showFullScreen()
+        show_fullscreen(self)
         return super().exec()
 
     def keyPressEvent(self, event) -> None:
